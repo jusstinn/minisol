@@ -2,9 +2,9 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import type { OwnedToolView, SuggestionView } from "@/agent/types";
+import type { OwnedToolView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
-import type { CategoryId, Lang } from "@/domain/types";
+import type { CategoryId, Lang, QualityTier } from "@/domain/types";
 import { int, lei, monthYear } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet } from "../ui/icons";
@@ -45,6 +45,9 @@ export default function QuotePanel({
   onMoveStore,
   tenant,
   projectTitle,
+  tiers,
+  quality,
+  onTier,
 }: {
   quote: Quote;
   suggestions: SuggestionView[];
@@ -57,6 +60,9 @@ export default function QuotePanel({
   onMoveStore: (storeId: string) => void;
   tenant: Tenant;
   projectTitle: string;
+  tiers?: QualityOption[];
+  quality?: QualityTier;
+  onTier?: (o: QualityOption) => void;
 }) {
   const [walletOpen, setWalletOpen] = useState(false);
   const [redeem, setRedeem] = useState(false);
@@ -122,6 +128,41 @@ export default function QuotePanel({
           )}
         </div>
       </div>
+
+      {/* quality tiers */}
+      {tiers && tiers.length > 1 && (
+        <div className="mt-6">
+          <div className="label mb-2">{lang === "en" ? "Same project, three quality levels" : "Același proiect, trei niveluri de calitate"}</div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {tiers.map((t, i) => {
+              const max = Math.max(...tiers.map((x) => x.total));
+              const active = (quality ?? "standard") === t.quality;
+              const label = { budget: lang === "en" ? "Budget" : "Economic", standard: "Standard", premium: "Premium" }[t.quality];
+              return (
+                <button
+                  key={t.quality}
+                  onClick={() => !active && onTier?.(t)}
+                  className={`group rounded-xl border p-3 text-left transition ${active ? "border-ink bg-ink text-paper" : "border-rule hover:border-ink"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10.5px] uppercase tracking-[0.14em]">{label}</span>
+                    {active && <IconCheck size={14} className="text-accent" />}
+                  </div>
+                  <div className="num mt-1 text-[16px] font-semibold">{lei(t.total, lang)}</div>
+                  <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${active ? "bg-paper/20" : "bg-paper-2"}`}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(t.total / max) * 100}%` }}
+                      transition={{ duration: 0.9, delay: 0.1 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                      className={`h-full rounded-full ${active ? "bg-accent" : "bg-ink/70"}`}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* category bar */}
       <div className="mt-6">

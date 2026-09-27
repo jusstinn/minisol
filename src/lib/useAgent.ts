@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { AgentEvent, Card, SessionState } from "@/agent/types";
+import type { AgentEvent, Card, QualityOption, SessionState } from "@/agent/types";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 
@@ -54,7 +54,11 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   }, []);
 
   const putCard = useCallback((card: Card) => {
-    setBoard((b) => ({ ...b, [card.kind]: card, last: card.kind, version: b.version + 1 }));
+    setBoard((b) => {
+      // A re-priced basket (modify_basket) keeps the tier comparison of the same project.
+      const next = card.kind === "quote" && !card.tiers && b.quote?.tiers ? { ...card, tiers: b.quote.tiers, quality: b.quote.quality } : card;
+      return { ...b, [card.kind]: next, last: card.kind, version: b.version + 1 };
+    });
     if (card.kind === "quote") setPointsDelta(card.quote.points.earned);
   }, []);
 
@@ -201,6 +205,16 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
 
   const moveStore = useCallback((storeId: string) => reprice(stateRef.current.basket, storeId), [reprice]);
 
+  /** Switch the whole basket to another quality tier (already priced by calculate_project). */
+  const applyTier = useCallback(
+    (option: QualityOption) => {
+      stateRef.current = { ...stateRef.current, quality: option.quality };
+      setBoard((b) => (b.quote ? { ...b, quote: { ...b.quote, quality: option.quality } } : b));
+      return reprice(option.basket);
+    },
+    [reprice],
+  );
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     stateRef.current = { basket: [] };
@@ -210,5 +224,5 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     setPointsDelta(null);
   }, []);
 
-  return { messages, board, busy, send, setQty, addItem, moveStore, reset, pointsDelta, state: stateRef, mode };
+  return { messages, board, busy, send, setQty, addItem, moveStore, applyTier, reset, pointsDelta, state: stateRef, mode };
 }

@@ -106,6 +106,7 @@ export default function Workspace({
                 onQty={agent.setQty}
                 onAdd={agent.addItem}
                 onMoveStore={agent.moveStore}
+                onTier={agent.applyTier}
                 inline
               />
             )
@@ -122,6 +123,7 @@ export default function Workspace({
             onQty={agent.setQty}
             onAdd={agent.addItem}
             onMoveStore={agent.moveStore}
+            onTier={agent.applyTier}
           />
         </div>
         )}
@@ -172,6 +174,7 @@ export default function Workspace({
               onQty={agent.setQty}
               onAdd={agent.addItem}
               onMoveStore={agent.moveStore}
+              onTier={agent.applyTier}
             />
           </motion.div>
         )}

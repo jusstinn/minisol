@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
-import type { Card } from "@/agent/types";
+import type { Card, QualityOption } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
 import type { BasketItem } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
@@ -25,13 +25,14 @@ interface Props {
   onQty: (sku: string, qty: number) => void;
   onAdd: (item: BasketItem) => void;
   onMoveStore: (storeId: string) => void;
+  onTier?: (o: QualityOption) => void;
   /** Mobile: render only these cards, inline in the conversation. */
   onlyCards?: Card[];
   inline?: boolean;
 }
 
 export default function Board(props: Props) {
-  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onlyCards, inline } = props;
+  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onlyCards, inline } = props;
 
   if (onlyCards) {
     return (
@@ -70,6 +71,9 @@ export default function Board(props: Props) {
             onMoveStore={onMoveStore}
             tenant={tenant}
             projectTitle={board.project?.project.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
+            tiers={c.tiers}
+            quality={c.quality}
+            onTier={onTier}
           />
         );
       case "stock":

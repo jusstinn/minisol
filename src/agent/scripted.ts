@@ -198,7 +198,7 @@ export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, t
   }
   parts.push(stockSentence(q, lang));
   if (card.suggestions.length) {
-    const s = card.suggestions.slice(0, 2).map((x) => shortName(x.name));
+    const s = [...new Set(card.suggestions.map((x) => shortName(x.name)))].slice(0, 2);
     parts.push(en ? `Optional: ${s.join(" and ")} — want me to add them?` : `Opțional: ${s.join(" și ")} — le adaug?`);
   }
   return parts.join(" ");

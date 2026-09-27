@@ -11,7 +11,7 @@ import { resolveRequirements } from "@/domain/resolve";
 import type { CategoryId, Customer, Lang, MaterialRole, Product, QualityTier } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
-import type { Card, OwnedToolView, SessionState, StockStoreView, SuggestionView } from "./types";
+import type { Card, OwnedToolView, QualityOption, SessionState, StockStoreView, SuggestionView } from "./types";
 
 export interface ToolContext {
   sources: DataSources;
@@ -376,24 +376,32 @@ const handlers: Record<string, Handler> = {
     const store = await storeIdOrDefault(ctx, args.storeId);
     const roles = [...new Set(calc.requirements.map((r) => r.role))];
     const [catalog, owned] = await Promise.all([ctx.sources.catalog.byRoles(roles), ownedTools(ctx)]);
-    const resolved = resolveRequirements(calc.requirements, catalog, {
-      quality,
-      owned,
-      includeOptional: args.includeOptional === true,
-    });
-    const basket: BasketItem[] = resolved.lines.map((l) => ({ sku: l.sku, qty: l.qty, role: l.role, basis: l.basis, isTool: l.isTool }));
-    // If a WalletLoop bundle makes an optional item free, include it — the member would want it.
     const offers = eligibleOffers(await ctx.sources.loyalty.getOffers(ctx.customer.memberId), ctx.customer, ctx.now);
-    for (const o of offers) {
-      if (o.kind !== "bundle_free_role" || !o.bundle) continue;
-      const units = basket.filter((b) => b.role === o.bundle!.requiresRole).reduce((s, b) => s + b.qty, 0);
-      const idx = resolved.suggestions.findIndex((s) => s.role === o.bundle!.freeRole);
-      if (units >= o.bundle.requiresQty && idx >= 0) {
-        const s = resolved.suggestions.splice(idx, 1)[0];
-        basket.push({ sku: s.sku, qty: s.qty, role: s.role, basis: s.basis, isTool: s.isTool });
+    const basketFor = (tier: QualityTier) => {
+      const res = resolveRequirements(calc.requirements, catalog, { quality: tier, owned, includeOptional: args.includeOptional === true });
+      const items: BasketItem[] = res.lines.map((l) => ({ sku: l.sku, qty: l.qty, role: l.role, basis: l.basis, isTool: l.isTool }));
+      // If a WalletLoop bundle makes an optional item free, include it — the member would want it.
+      for (const o of offers) {
+        if (o.kind !== "bundle_free_role" || !o.bundle) continue;
+        const units = items.filter((b) => b.role === o.bundle!.requiresRole).reduce((s, b) => s + b.qty, 0);
+        const idx = res.suggestions.findIndex((s) => s.role === o.bundle!.freeRole);
+        if (units >= o.bundle.requiresQty && idx >= 0) {
+          const s = res.suggestions.splice(idx, 1)[0];
+          items.push({ sku: s.sku, qty: s.qty, role: s.role, basis: s.basis, isTool: s.isTool });
+        }
       }
-    }
+      return { resolved: res, basket: items };
+    };
+    const { resolved, basket } = basketFor(quality);
     const quote = await priceBasket(ctx, basket, store.id);
+    // Price the other quality tiers too, so the customer can compare and switch instantly.
+    const tiers: QualityOption[] = await Promise.all(
+      QUALITIES.map(async (tier) => {
+        if (tier === quality) return { quality: tier, total: quote.total, basket };
+        const alt = basketFor(tier).basket;
+        return { quality: tier, total: (await priceBasket(ctx, alt, store.id)).total, basket: alt };
+      }),
+    );
     const bySku = new Map(catalog.map((p) => [p.sku, p]));
 
     const suggestions: SuggestionView[] = resolved.suggestions.map((s) => {
@@ -423,7 +431,7 @@ const handlers: Record<string, Handler> = {
       state,
       cards: [
         { kind: "project", id: cardId("project"), project },
-        { kind: "quote", id: cardId("quote"), quote, suggestions, owned: ownedViews },
+        { kind: "quote", id: cardId("quote"), quote, suggestions, owned: ownedViews, tiers, quality },
       ],
       forModel: {
         storeWarning: store.error,

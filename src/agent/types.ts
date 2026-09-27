@@ -30,6 +30,12 @@ export interface SuggestionView {
   isTool: boolean;
 }
 
+export interface QualityOption {
+  quality: QualityTier;
+  total: number;
+  basket: BasketItem[];
+}
+
 export interface OwnedToolView {
   roleLabel: string;
   productName: string;
@@ -80,7 +86,16 @@ export interface PlanView {
 
 export type Card =
   | { kind: "project"; id: string; project: ProjectSnapshot }
-  | { kind: "quote"; id: string; quote: Quote; suggestions: SuggestionView[]; owned: OwnedToolView[] }
+  | {
+      kind: "quote";
+      id: string;
+      quote: Quote;
+      suggestions: SuggestionView[];
+      owned: OwnedToolView[];
+      /** Same project priced at every quality tier (from calculate_project). */
+      tiers?: QualityOption[];
+      quality?: QualityTier;
+    }
   | { kind: "stock"; id: string; stores: StockStoreView[] }
   | { kind: "offers"; id: string; offers: OfferView[] }
   | { kind: "products"; id: string; query: string; products: ProductView[] }
