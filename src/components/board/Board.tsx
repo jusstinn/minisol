@@ -39,6 +39,15 @@ export default function Board(props: Props) {
         {onlyCards.map((c) => (
           <div key={c.id}>{renderCard(c.kind === "quote" && board.quote?.id === c.id ? board.quote : c)}</div>
         ))}
+        {onlyCards.some((c) => c.kind === "plan") && board.project && board.quote && ["deck", "fence", "lawn"].includes(board.project.project.type) && (
+          <WeatherPanel
+            lat={board.quote.quote.availability.origin.lat}
+            lng={board.quote.quote.availability.origin.lng}
+            city={board.quote.quote.availability.origin.city}
+            type={board.project.project.type}
+            lang={lang}
+          />
+        )}
       </div>
     );
   }
