@@ -71,3 +71,12 @@ describe("resolveRequirements", () => {
     expect(r.skipped[0].reason).toBe("no_product");
   });
 });
+
+describe("optimisePacks performance", () => {
+  it("stays fast for very large needs", () => {
+    const line = [paint(2.5, 40), paint(5, 70), paint(10, 120), paint(15, 160)];
+    const t0 = performance.now();
+    optimisePacks(3500, line);
+    expect(performance.now() - t0).toBeLessThan(250);
+  });
+});

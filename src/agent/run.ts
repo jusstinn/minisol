@@ -7,6 +7,7 @@ import { TOOL_DEFINITIONS, TOOL_STATUS, executeTool } from "./tools";
 import { projectReply } from "./scripted";
 import type { AgentEvent, Card, SessionState } from "./types";
 import { verifyReply } from "./verify";
+import { LOYALTY } from "@/domain/loyalty";
 
 export interface RunOptions {
   llm: LlmClient;
@@ -82,7 +83,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   }
 
   // Guard: every amount in the reply must come from the quote engine.
-  const check = verifyReply(turnText, lastQuote?.quote);
+  // Amounts the tools legitimately handed the model besides the quote itself.
+  const offerAmounts = (await opts.sources.loyalty.getOffers(opts.customer.memberId)).flatMap((o) => [o.minSpend ?? 0, o.amount ?? 0]);
+  const extra = [
+    ...offerAmounts,
+    ...(lastQuote?.suggestions ?? []).flatMap((s) => [s.total, s.unitPrice]),
+    ...(lastQuote?.tiers ?? []).map((t) => t.total),
+    Math.round(opts.customer.points * LOYALTY.pointValueRon * 100) / 100,
+  ];
+  const check = verifyReply(turnText, lastQuote?.quote, extra);
   if (!check.ok && turnText) {
     console.warn("[agent] reply failed verification", { invented: check.invented, garbage: check.garbage });
     const safe =
@@ -92,7 +101,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
           ? "Here's your updated plan — all figures are in the cards on the right."
           : "Iată planul actualizat — toate cifrele sunt în cardurile din dreapta.";
     yield { type: "replace_text", text: safe };
-    input.push({ role: "assistant", content: `(Corrected reply shown to the customer) ${safe}` });
+    // Drop the rejected reply from the history so the model doesn't see its own invented numbers next turn.
+    for (let i = input.length - 1; i >= 0; i--) {
+      const it = input[i] as { type?: string; role?: string };
+      if (it.type === "message" && it.role === "assistant") {
+        input.splice(i, 1);
+        break;
+      }
+    }
+    input.push({ role: "assistant", content: safe });
     yield { type: "verified", ok: true, checked: check.checked, replaced: true };
   } else if (turnText) {
     yield { type: "verified", ok: check.ok, checked: check.checked };

@@ -314,6 +314,16 @@ function highlights(p: Product): string[] {
     .map(([k, v]) => `${k}: ${typeof v === "boolean" ? (v ? "da" : "nu") : v}`);
 }
 
+/** One entry per SKU (a replace can otherwise leave duplicates that edit inconsistently). */
+export function mergeBasket(items: BasketItem[]): BasketItem[] {
+  const out = new Map<string, BasketItem>();
+  for (const it of items) {
+    const prev = out.get(it.sku);
+    out.set(it.sku, prev ? { ...prev, qty: Math.min(999, prev.qty + it.qty) } : { ...it });
+  }
+  return [...out.values()];
+}
+
 function cleanParams(params: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (params && typeof params === "object") {
@@ -488,7 +498,7 @@ const handlers: Record<string, Handler> = {
           // Keep the same amount of material when pack sizes differ (e.g. 10 l → 15 l buckets).
           const sameUnit = oldP.content.unit === newP.content.unit && !oldP.isTool;
           const newQty = qty ?? (sameUnit ? Math.max(1, Math.ceil((basket[idx].qty * oldP.content.amount) / newP.content.amount - 1e-9)) : basket[idx].qty);
-          basket[idx] = { ...basket[idx], sku: withSku, qty: newQty, isTool: newP.isTool };
+          basket[idx] = { ...basket[idx], sku: withSku, qty: newQty, role: newP.roles[0], isTool: newP.isTool };
           changes.push(`${oldP.name} → ${newQty}× ${newP.name}`);
           break;
         }
@@ -496,6 +506,7 @@ const handlers: Record<string, Handler> = {
           errors.push(`Unknown op ${String(o.op)}`);
       }
     }
+    basket = mergeBasket(basket);
     const store = await storeIdOrDefault(ctx, args.storeId);
     if (store.error) errors.push(store.error);
     const quote = await priceBasket(ctx, basket, store.id);
@@ -593,7 +604,7 @@ const handlers: Record<string, Handler> = {
     let applied = new Set<string>();
     if (basketSkus.length) {
       const q = await priceBasket(ctx, ctx.state.basket, ctx.state.storeId ?? ctx.customer.homeStoreId);
-      applied = new Set(q.discounts.map((d) => d.offerId).concat(q.points.bonusNotes.length ? eligible.filter((o) => q.points.bonusNotes.includes(o.title)).map((o) => o.id) : []));
+      applied = new Set(q.discounts.map((d) => d.offerId).concat(q.points.bonusNotes.length ? eligible.filter((o) => q.points.bonusNotes.includes(t(ctx.lang, o.title, o.titleEn))).map((o) => o.id) : []));
     }
     const views = eligible.map((o) => ({
       id: o.id,

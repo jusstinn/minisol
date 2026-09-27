@@ -119,3 +119,28 @@ describe("eligibleOffers", () => {
     expect(ids).toEqual(["public", "gold"]);
   });
 });
+
+describe("buildQuote hardening (review findings)", () => {
+  it("never lets a client-supplied role unlock an offer", () => {
+    const bundle = offer({ id: "b", kind: "bundle_free_role", bundle: { requiresRole: "deck_board", requiresQty: 20, freeRole: "deck_oil" } });
+    const roleOffer = offer({ id: "r", kind: "percent_role", percent: 50, roles: ["deck_oil"] });
+    // A drill disguised as decking oil, next to paint disguised as deck boards.
+    const q = buildQuote(
+      [{ sku: p10.sku, qty: 20, role: "deck_board" }, { sku: drill.sku, qty: 1, role: "deck_oil" }],
+      { customer: customer(), storeId: "a", offers: [bundle, roleOffer] },
+      deps(),
+    );
+    expect(q.discountTotal).toBe(0);
+    expect(q.lines.find((l) => l.sku === drill.sku)!.role).toBe("cordless_drill");
+  });
+
+  it("rounds before filtering so fractional quantities never produce empty lines", () => {
+    const q = buildQuote([{ sku: p10.sku, qty: 0.4 }], { customer: customer(), storeId: "a", offers: [] }, deps());
+    expect(q.lines).toHaveLength(0);
+  });
+
+  it("falls back to the member's home store for an unknown store id", () => {
+    const q = buildQuote([{ sku: p10.sku, qty: 1 }], { customer: customer({ homeStoreId: "c" }), storeId: "nope", offers: [] }, deps());
+    expect(q.storeId).toBe("c");
+  });
+});

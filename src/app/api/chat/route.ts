@@ -61,10 +61,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // Session state comes from the browser: validate it before any tool sees it.
+  const stores = await sources.stores.list();
+  const rawBasket = Array.isArray(body.state?.basket) ? body.state!.basket.slice(0, 80) : [];
   const state: SessionState = {
-    basket: Array.isArray(body.state?.basket) ? body.state!.basket.slice(0, 80) : [],
-    storeId: body.state?.storeId,
-    quality: body.state?.quality,
+    basket: rawBasket
+      .filter((i) => i && typeof i.sku === "string")
+      .map((i) => ({ sku: i.sku, qty: Math.min(999, Math.round(Number(i.qty))), role: i.role, basis: typeof i.basis === "string" ? i.basis.slice(0, 200) : undefined }))
+      .filter((i) => i.qty > 0),
+    storeId: stores.some((s) => s.id === body.state?.storeId) ? body.state!.storeId : undefined,
+    quality: (["budget", "standard", "premium"] as const).includes(body.state?.quality as never) ? body.state!.quality : undefined,
     project: body.state?.project,
   };
   const history = Array.isArray(body.history) ? body.history : [];

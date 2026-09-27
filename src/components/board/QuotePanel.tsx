@@ -55,7 +55,7 @@ export default function QuotePanel({
   lang: Lang;
   highlight: string | null;
   onHighlight: (l: string | null) => void;
-  onQty: (sku: string, qty: number) => void;
+  onQty: (sku: string, delta: number) => void;
   onAdd: (item: BasketItem) => void;
   onMoveStore: (storeId: string) => void;
   tenant: Tenant;
@@ -325,7 +325,7 @@ function LineGroup({
   lang: Lang;
   highlight: string | null;
   onHighlight: (l: string | null) => void;
-  onQty: (sku: string, qty: number) => void;
+  onQty: (sku: string, delta: number) => void;
 }) {
   return (
     <div className="mt-6">
@@ -342,11 +342,11 @@ function LineGroup({
             className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg py-2.5 transition-colors ${highlight && highlight === l.role ? "bg-accent/10" : ""}`}
           >
             <div className="flex items-center rounded-lg border border-rule bg-paper">
-              <button onClick={() => onQty(l.sku, l.qty - 1)} className="grid h-7 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
+              <button onClick={() => onQty(l.sku, -1)} className="grid h-7 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
                 <IconMinus size={13} />
               </button>
               <span className="num w-7 text-center text-[13px] font-semibold">{l.qty}</span>
-              <button onClick={() => onQty(l.sku, l.qty + 1)} className="grid h-7 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
+              <button onClick={() => onQty(l.sku, 1)} className="grid h-7 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
                 <IconPlus size={13} />
               </button>
             </div>

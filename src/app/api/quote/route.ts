@@ -14,11 +14,14 @@ export async function POST(req: Request) {
   const sources = getDataSources(tenant.id);
   const customer = await sources.loyalty.getMember(body.memberId);
   if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
+  // Round before filtering so 0.4 never becomes a zero-quantity line; roles are re-checked in the quote engine.
   const items = body.items
-    .filter((i) => typeof i?.sku === "string" && Number(i.qty) > 0)
+    .filter((i) => typeof i?.sku === "string")
     .slice(0, 80)
-    .map((i) => ({ sku: i.sku, qty: Math.min(999, Math.round(Number(i.qty))), role: i.role, basis: i.basis, isTool: i.isTool }));
-  const storeId = body.storeId ?? customer.homeStoreId;
+    .map((i) => ({ sku: i.sku, qty: Math.min(999, Math.round(Number(i.qty))), role: i.role, basis: typeof i.basis === "string" ? i.basis.slice(0, 200) : undefined }))
+    .filter((i) => i.qty > 0);
+  const stores = await sources.stores.list();
+  const storeId = stores.some((s) => s.id === body.storeId) ? body.storeId! : customer.homeStoreId;
   const quote = await priceBasket(
     { sources, customer, state: { basket: items, storeId }, lang: body.lang ?? customer.language, now: new Date() },
     items,

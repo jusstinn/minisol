@@ -230,9 +230,9 @@ export interface ScriptedOptions {
 
 export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<AgentEvent> {
   const started = Date.now();
-  const lang: Lang = /\b(the|want|need|build|my|how|what|would|like|please|i'm|with|and)\b/i.test(opts.message)
+  const lang: Lang = /\b(the|want|need|build|building|my|how|what|would|like|please|i'm|i am|with|and|to|for|is)\b/i.test(opts.message)
     ? "en"
-    : /[ăâîșțş]|\b(vreau|și|sau|pentru|cum|unde|îmi|imi|am|ce)\b/i.test(opts.message)
+    : /[ăâîșțş]|\b(vreau|și|sau|pentru|cum|unde|îmi|imi|doresc|trebuie)\b/i.test(opts.message)
       ? "ro"
       : opts.lang;
   let state: SessionState = { ...opts.state, basket: opts.state.basket ?? [] };

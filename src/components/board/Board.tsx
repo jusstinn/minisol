@@ -22,7 +22,7 @@ interface Props {
   lang: Lang;
   highlight: string | null;
   onHighlight: (l: string | null) => void;
-  onQty: (sku: string, qty: number) => void;
+  onQty: (sku: string, delta: number) => void;
   onAdd: (item: BasketItem) => void;
   onMoveStore: (storeId: string) => void;
   onTier?: (o: QualityOption) => void;

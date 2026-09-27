@@ -96,8 +96,11 @@ export function optimisePacks(needed: number, packs: Product[]): { sku: string; 
   }
   let best: { cost: number; counts: number[]; over: number } | null = null;
   const counts = new Array(sizes.length).fill(0);
+  // Cheapest price per unit among sizes i..end: a lower bound on what the rest will cost.
+  const minUnitFrom = sizes.map((_, i) => Math.min(...sizes.slice(i).map((p) => p.price / p.content.amount)));
   const search = (i: number, remaining: number, cost: number) => {
-    if (best && cost >= best.cost + 1e-9) return;
+    const bound = i < sizes.length ? cost + Math.max(0, remaining) * minUnitFrom[i] : cost;
+    if (best && bound >= best.cost + 1e-9) return;
     if (remaining <= 1e-9) {
       const over = -remaining;
       if (!best || cost < best.cost - 1e-9 || (Math.abs(cost - best.cost) < 1e-9 && over < best.over)) {
@@ -133,7 +136,7 @@ export function chooseLine(req: Requirement, catalog: Product[], quality: Qualit
   }
   const matching = all.filter((p) => matchesSpecs(p, req.match));
   const pool = matching.length > 0 ? matching : all;
-  const tierOrder = req.isTool ? TIER_FALLBACK.standard : TIER_FALLBACK[quality];
+  const tierOrder = req.isTool ? TIER_FALLBACK.standard : (TIER_FALLBACK[quality] ?? TIER_FALLBACK.standard);
   for (const tier of tierOrder) {
     const inTier = pool.filter((p) => p.quality === tier);
     if (inTier.length === 0) continue;

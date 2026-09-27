@@ -113,9 +113,10 @@ function stockStatus(available: number, qty: number): StockStatus {
   return "in_stock";
 }
 
-function offerAppliesToLine(o: Offer, p: Product, role: MaterialRole | undefined): boolean {
+/** Offers match on catalogue data only — never on client-supplied basket fields. */
+function offerAppliesToLine(o: Offer, p: Product): boolean {
   if (o.kind === "percent_category") return Boolean(o.categories?.includes(p.category));
-  if (o.kind === "percent_role") return p.roles.some((r) => o.roles?.includes(r)) || (role ? Boolean(o.roles?.includes(role)) : false);
+  if (o.kind === "percent_role") return p.roles.some((r) => o.roles?.includes(r));
   return false;
 }
 
@@ -124,14 +125,19 @@ export function buildQuote(
   ctx: { customer: Customer; storeId: string; offers: Offer[]; lang?: Lang },
   deps: QuoteDeps,
 ): Quote {
-  const store = deps.stores.find((s) => s.id === ctx.storeId) ?? deps.stores[0];
+  const store =
+    deps.stores.find((s) => s.id === ctx.storeId) ?? deps.stores.find((s) => s.id === ctx.customer.homeStoreId) ?? deps.stores[0];
 
   // Merge duplicate SKUs so one product = one line.
   const merged = new Map<string, BasketItem>();
   for (const it of items) {
-    if (!deps.products.has(it.sku) || !(it.qty > 0)) continue;
+    const p = deps.products.get(it.sku);
+    const qty = Math.min(999, Math.round(Number(it.qty)));
+    if (!p || !(qty > 0)) continue;
+    // A basket item's role is only a hint from the client: keep it only if the product really has it.
+    const role = it.role && p.roles.includes(it.role) ? it.role : p.roles[0];
     const prev = merged.get(it.sku);
-    merged.set(it.sku, prev ? { ...prev, qty: prev.qty + Math.round(it.qty) } : { ...it, qty: Math.round(it.qty) });
+    merged.set(it.sku, prev ? { ...prev, qty: Math.min(999, prev.qty + qty) } : { ...it, role, qty, isTool: p.isTool });
   }
 
   const ot = (o: Offer) => (ctx.lang === "en" ? o.titleEn : o.title);
@@ -142,7 +148,7 @@ export function buildQuote(
     // Best single percentage offer per line — offers never stack on one line.
     let best: { offer: Offer; amount: number } | undefined;
     for (const o of percentOffers) {
-      if (!offerAppliesToLine(o, p, it.role)) continue;
+      if (!offerAppliesToLine(o, p)) continue;
       const amount = money((lineTotal * (o.percent ?? 0)) / 100);
       if (!best || amount > best.amount) best = { offer: o, amount };
     }
@@ -159,9 +165,9 @@ export function buildQuote(
       discount: best?.amount ?? 0,
       netTotal: money(lineTotal - (best?.amount ?? 0)),
       offerId: best?.offer.id,
-      role: it.role ?? p.roles[0],
+      role: it.role,
       basis: it.basis,
-      isTool: it.isTool ?? p.isTool,
+      isTool: p.isTool,
       bulky: Boolean(p.bulky),
       stock: { available, status: stockStatus(available, it.qty) },
       aisle: deps.aisleOf(p),
@@ -182,9 +188,10 @@ export function buildQuote(
   // Bundle: buy N units of role A → one unit of the cheapest role-B line free.
   for (const o of ctx.offers.filter((x) => x.kind === "bundle_free_role" && x.bundle)) {
     const b = o.bundle!;
-    const units = lines.filter((l) => l.role === b.requiresRole).reduce((s, l) => s + l.qty, 0);
+    const has = (l: QuoteLine, role: MaterialRole) => deps.products.get(l.sku)!.roles.includes(role);
+    const units = lines.filter((l) => has(l, b.requiresRole)).reduce((s, l) => s + l.qty, 0);
     if (units < b.requiresQty) continue;
-    const freeCandidates = lines.filter((l) => l.role === b.freeRole && l.qty > 0);
+    const freeCandidates = lines.filter((l) => has(l, b.freeRole) && l.qty > 0);
     if (freeCandidates.length === 0) {
       hints.push({ offerId: o.id, kind: "bundle_missing_free_item", title: ot(o), role: b.freeRole });
       continue;

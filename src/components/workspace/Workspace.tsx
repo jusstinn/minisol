@@ -103,7 +103,7 @@ export default function Workspace({
                 lang={lang}
                 highlight={highlight}
                 onHighlight={setHighlight}
-                onQty={agent.setQty}
+                onQty={agent.changeQty}
                 onAdd={agent.addItem}
                 onMoveStore={agent.moveStore}
                 onTier={agent.applyTier}
@@ -120,7 +120,7 @@ export default function Workspace({
             lang={lang}
             highlight={highlight}
             onHighlight={setHighlight}
-            onQty={agent.setQty}
+            onQty={agent.changeQty}
             onAdd={agent.addItem}
             onMoveStore={agent.moveStore}
             onTier={agent.applyTier}
@@ -171,7 +171,7 @@ export default function Workspace({
               lang={lang}
               highlight={highlight}
               onHighlight={setHighlight}
-              onQty={agent.setQty}
+              onQty={agent.changeQty}
               onAdd={agent.addItem}
               onMoveStore={agent.moveStore}
               onTier={agent.applyTier}

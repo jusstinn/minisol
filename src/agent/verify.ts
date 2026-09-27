@@ -20,7 +20,16 @@ export function moneyAmounts(text: string): number[] {
 }
 
 export function allowedAmounts(q: Quote, extra: number[] = []): number[] {
-  const s = new Set<number>([q.total, q.subtotal, q.discountTotal, q.points.redeemableValue, q.points.totalIfRedeemed, q.delivery.fee, ...extra]);
+  const s = new Set<number>([
+    q.total,
+    q.subtotal,
+    q.discountTotal,
+    q.points.redeemableValue,
+    q.points.totalIfRedeemed,
+    q.delivery.fee,
+    ...(q.delivery.freeFrom ? [q.delivery.freeFrom] : []),
+    ...extra,
+  ]);
   for (const l of q.lines) [l.unitPrice, l.lineTotal, l.netTotal, l.discount].forEach((v) => s.add(v));
   for (const d of q.discounts) s.add(d.amount);
   for (const h of q.hints) if (h.amountToGo) s.add(h.amountToGo);

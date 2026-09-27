@@ -39,6 +39,15 @@ export interface Board {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+function mergeItems(items: BasketItem[]): BasketItem[] {
+  const out = new Map<string, BasketItem>();
+  for (const it of items) {
+    const prev = out.get(it.sku);
+    out.set(it.sku, prev ? { ...prev, qty: prev.qty + it.qty } : { ...it });
+  }
+  return [...out.values()].filter((i) => i.qty > 0);
+}
+
 export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; forceScripted?: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [board, setBoard] = useState<Board>({ version: 0 });
@@ -53,12 +62,14 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     setMessages((ms) => ms.map((m) => (m.id === id ? fn(m) : m)));
   }, []);
 
+  const busyRef = useRef(false);
+  const repriceSeq = useRef(0);
+  /** Latest basket the user asked for (optimistic) — rapid taps build on it, failures revert it. */
+  const pendingRef = useRef<BasketItem[] | null>(null);
+
   const putCard = useCallback((card: Card) => {
-    setBoard((b) => {
-      // A re-priced basket (modify_basket) keeps the tier comparison of the same project.
-      const next = card.kind === "quote" && !card.tiers && b.quote?.tiers ? { ...card, tiers: b.quote.tiers, quality: b.quote.quality } : card;
-      return { ...b, [card.kind]: next, last: card.kind, version: b.version + 1 };
-    });
+    // A basket changed by modify_basket no longer matches the tier comparison, so that card simply has none.
+    setBoard((b) => ({ ...b, [card.kind]: card, last: card.kind, version: b.version + 1 }));
     if (card.kind === "quote") setPointsDelta(card.quote.points.earned);
   }, []);
 
@@ -67,6 +78,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       const message = text.trim();
       if (!message || busy) return;
       setBusy(true);
+      busyRef.current = true;
       const aId = uid();
       setMessages((ms) => [
         ...ms,
@@ -123,6 +135,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 break;
               case "state":
                 stateRef.current = ev.state;
+                // The agent's basket is authoritative: drop any in-flight UI edit.
+                pendingRef.current = null;
+                repriceSeq.current++;
                 break;
               case "mode":
                 setMode({ mode: ev.mode, reason: ev.reason });
@@ -152,40 +167,64 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       } finally {
         patchAssistant(aId, (m) => ({ ...m, pending: false, log: m.log.map((l) => ({ ...l, done: true })) }));
         setBusy(false);
+        busyRef.current = false;
         abortRef.current = null;
       }
     },
     [busy, opts.memberId, opts.tenant, opts.lang, opts.forceScripted, patchAssistant, putCard],
   );
 
-  /** Re-price after a direct edit in the UI (no LLM round-trip). */
+  /**
+   * Re-price after a direct edit in the UI (no LLM round-trip). Edits are ignored
+   * while the agent is answering (its state would overwrite them), responses that
+   * arrive out of order are dropped, and local state only changes on success.
+   */
   const reprice = useCallback(
-    async (basket: BasketItem[], storeId?: string) => {
-      const sid = storeId ?? stateRef.current.storeId;
-      stateRef.current = { ...stateRef.current, basket, storeId: sid };
-      const res = await fetch("/api/quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, items: basket, storeId: sid, lang: opts.lang }),
-      });
-      if (!res.ok) return;
-      const { quote } = (await res.json()) as { quote: Quote };
-      setBoard((b) => ({
-        ...b,
-        quote: b.quote ? { ...b.quote, quote } : { kind: "quote", id: uid(), quote, suggestions: [], owned: [] },
-        last: "quote",
-        version: b.version + 1,
-      }));
-      setPointsDelta(quote.points.earned);
+    async (basket: BasketItem[], opts2: { storeId?: string; keepTiers?: boolean; quality?: QualityOption["quality"] } = {}) => {
+      if (busyRef.current) return;
+      const merged = mergeItems(basket);
+      const sid = opts2.storeId ?? stateRef.current.storeId;
+      const seq = ++repriceSeq.current;
+      pendingRef.current = merged;
+      try {
+        const res = await fetch("/api/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, items: merged, storeId: sid, lang: opts.lang }),
+        });
+        if (!res.ok) throw new Error(`quote ${res.status}`);
+        const { quote } = (await res.json()) as { quote: Quote };
+        if (seq !== repriceSeq.current) return;
+        pendingRef.current = null;
+        stateRef.current = { ...stateRef.current, basket: merged, storeId: quote.storeId, quality: opts2.quality ?? stateRef.current.quality };
+        setBoard((b) => ({
+          ...b,
+          quote: b.quote
+            ? {
+                ...b.quote,
+                quote,
+                tiers: opts2.keepTiers ? b.quote.tiers : undefined,
+                quality: opts2.quality ?? b.quote.quality,
+                suggestions: opts2.quality ? [] : b.quote.suggestions,
+              }
+            : { kind: "quote", id: uid(), quote, suggestions: [], owned: [] },
+          last: "quote",
+          version: b.version + 1,
+        }));
+        setPointsDelta(quote.points.earned);
+      } catch {
+        // Keep the last confirmed basket and quote.
+        if (seq === repriceSeq.current) pendingRef.current = null;
+      }
     },
     [opts.memberId, opts.tenant, opts.lang],
   );
 
-  const setQty = useCallback(
-    (sku: string, qty: number) => {
-      const basket = stateRef.current.basket
-        .map((b) => (b.sku === sku ? { ...b, qty } : b))
-        .filter((b) => b.qty > 0);
+  /** Change a line's quantity by `delta`, based on the real basket (not the displayed number). */
+  const changeQty = useCallback(
+    (sku: string, delta: number) => {
+      const current = pendingRef.current ?? stateRef.current.basket;
+      const basket = current.map((b) => (b.sku === sku ? { ...b, qty: b.qty + delta } : b)).filter((b) => b.qty > 0);
       return reprice(basket);
     },
     [reprice],
@@ -193,25 +232,19 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
 
   const addItem = useCallback(
     (item: BasketItem) => {
-      const existing = stateRef.current.basket.find((b) => b.sku === item.sku);
-      const basket = existing
-        ? stateRef.current.basket.map((b) => (b.sku === item.sku ? { ...b, qty: b.qty + item.qty } : b))
-        : [...stateRef.current.basket, item];
+      if (busyRef.current) return;
       setBoard((b) => (b.quote ? { ...b, quote: { ...b.quote, suggestions: b.quote.suggestions.filter((s) => s.sku !== item.sku) } } : b));
-      return reprice(basket);
+      return reprice([...(pendingRef.current ?? stateRef.current.basket), item]);
     },
     [reprice],
   );
 
-  const moveStore = useCallback((storeId: string) => reprice(stateRef.current.basket, storeId), [reprice]);
+  // Prices don't depend on the store, so the tier comparison stays valid.
+  const moveStore = useCallback((storeId: string) => reprice(pendingRef.current ?? stateRef.current.basket, { storeId, keepTiers: true }), [reprice]);
 
   /** Switch the whole basket to another quality tier (already priced by calculate_project). */
   const applyTier = useCallback(
-    (option: QualityOption) => {
-      stateRef.current = { ...stateRef.current, quality: option.quality };
-      setBoard((b) => (b.quote ? { ...b, quote: { ...b.quote, quality: option.quality } } : b));
-      return reprice(option.basket);
-    },
+    (option: QualityOption) => reprice(option.basket, { keepTiers: true, quality: option.quality }),
     [reprice],
   );
 
@@ -224,5 +257,5 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     setPointsDelta(null);
   }, []);
 
-  return { messages, board, busy, send, setQty, addItem, moveStore, applyTier, reset, pointsDelta, state: stateRef, mode };
+  return { messages, board, busy, send, changeQty, addItem, moveStore, applyTier, reset, pointsDelta, state: stateRef, mode };
 }
