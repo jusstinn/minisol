@@ -38,10 +38,11 @@ export interface Board {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export function useAgent(opts: { memberId: string; tenant: string; lang: Lang }) {
+export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; forceScripted?: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [board, setBoard] = useState<Board>({ version: 0 });
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<{ mode: "live" | "scripted"; reason?: string } | null>(null);
   const stateRef = useRef<SessionState>({ basket: [] });
   const historyRef = useRef<unknown[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -79,6 +80,8 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang })
             message,
             history: historyRef.current,
             state: stateRef.current,
+            lang: opts.lang,
+            mode: opts.forceScripted ? "scripted" : undefined,
           }),
           signal: ctrl.signal,
         });
@@ -116,6 +119,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang })
               case "state":
                 stateRef.current = ev.state;
                 break;
+              case "mode":
+                setMode({ mode: ev.mode, reason: ev.reason });
+                break;
               case "history":
                 historyRef.current = ev.items;
                 break;
@@ -138,7 +144,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang })
         abortRef.current = null;
       }
     },
-    [busy, opts.memberId, opts.tenant, patchAssistant, putCard],
+    [busy, opts.memberId, opts.tenant, opts.lang, opts.forceScripted, patchAssistant, putCard],
   );
 
   /** Re-price after a direct edit in the UI (no LLM round-trip). */
@@ -197,5 +203,5 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang })
     setPointsDelta(null);
   }, []);
 
-  return { messages, board, busy, send, setQty, addItem, moveStore, reset, pointsDelta, state: stateRef };
+  return { messages, board, busy, send, setQty, addItem, moveStore, reset, pointsDelta, state: stateRef, mode };
 }

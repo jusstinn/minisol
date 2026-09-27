@@ -263,6 +263,7 @@ function quoteForModel(q: Quote) {
     currency: "RON",
     points: {
       earned: q.points.earned,
+      earnedValueRon: Math.round(q.points.earned * LOYALTY.pointValueRon * 100) / 100,
       balance: q.points.balance,
       canRedeem: q.points.redeemablePoints,
       redeemValue: q.points.redeemableValue,
@@ -271,7 +272,8 @@ function quoteForModel(q: Quote) {
     },
     allInStockAtStore: q.availability.allInStock,
     missingAtStore: q.availability.missing,
-    storesWithEverything: q.availability.alternatives.filter((a) => a.allInStock).slice(0, 3).map((a) => ({ id: a.storeId, name: a.name, km: a.distanceKm })),
+    // Only nearby stores are a realistic pickup alternative; beyond that, suggest delivery or swaps.
+    storesWithEverything: q.availability.alternatives.filter((a) => a.allInStock && a.distanceKm <= 60).slice(0, 3).map((a) => ({ id: a.storeId, name: a.name, km: a.distanceKm })),
     delivery: q.delivery,
     offerHints: q.hints.map((h) =>
       h.kind === "threshold_close"

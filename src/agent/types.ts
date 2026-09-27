@@ -87,6 +87,7 @@ export type Card =
   | { kind: "plan"; id: string; plan: PlanView };
 
 export type AgentEvent =
+  | { type: "mode"; mode: "live" | "scripted"; reason?: string }
   | { type: "status"; tool: string; label: string }
   | { type: "text"; delta: string }
   | { type: "card"; card: Card }

@@ -6,6 +6,7 @@ import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
 import { useAgent } from "@/lib/useAgent";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { ChatMessage } from "@/lib/useAgent";
 import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
@@ -28,10 +29,12 @@ export default function Workspace({
   initialPrompt: string;
   onExit: () => void;
 }) {
-  const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang });
+  const [offline, setOffline] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo"));
+  const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline });
   const [highlight, setHighlight] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const started = useRef(false);
+  const isDesktop = useMediaQuery("(min-width: 1024px)", true);
 
   useEffect(() => {
     if (started.current) return;
@@ -53,6 +56,14 @@ export default function Workspace({
         <span className="hidden font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 md:inline">
           / {tenant.name} / {project ? project.title : "…"}
         </span>
+        <button
+          onClick={() => setOffline((o) => !o)}
+          title={agent.mode?.reason ?? ""}
+          className="ml-1 flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 transition hover:border-ink"
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${offline || agent.mode?.mode === "scripted" ? "bg-accent" : "bg-ok"} ${agent.busy ? "animate-pulse" : ""}`} />
+          {offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}
+        </button>
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden w-[250px] sm:block">
             <WalletPass member={member} tenant={tenant} lang={lang} compact pointsOverride={member.points} />
@@ -77,8 +88,8 @@ export default function Workspace({
           busy={agent.busy}
           onSend={agent.send}
           hasQuote={Boolean(quote)}
-          renderInlineBoard={(m) => (
-            <div className="lg:hidden">
+          renderInlineBoard={(m) =>
+            isDesktop ? null : (
               <Board
                 board={agent.board}
                 onlyCards={m.cards}
@@ -91,10 +102,11 @@ export default function Workspace({
                 onMoveStore={agent.moveStore}
                 inline
               />
-            </div>
-          )}
+            )
+          }
         />
-        <div className="hidden min-h-0 overflow-y-auto border-l border-rule thin-scroll lg:block">
+        {isDesktop && (
+        <div className="min-h-0 overflow-y-auto border-l border-rule thin-scroll">
           <Board
             board={agent.board}
             tenant={tenant}
@@ -106,11 +118,12 @@ export default function Workspace({
             onMoveStore={agent.moveStore}
           />
         </div>
+        )}
       </div>
 
       {/* mobile total bar */}
       <AnimatePresence>
-        {quote && (
+        {quote && !isDesktop && (
           <motion.button
             initial={{ y: 80 }}
             animate={{ y: 0 }}
@@ -130,7 +143,7 @@ export default function Workspace({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {sheetOpen && (
+        {sheetOpen && !isDesktop && (
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}

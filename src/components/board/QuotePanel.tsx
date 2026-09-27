@@ -57,7 +57,7 @@ export default function QuotePanel({
   const materials = quote.lines.filter((l) => !l.isTool);
   const tools = quote.lines.filter((l) => l.isTool);
   const total = redeem ? quote.points.totalIfRedeemed : quote.total;
-  const best = quote.availability.alternatives.find((a) => a.allInStock);
+  const best = quote.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
 
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_24px_48px_-36px_rgba(20,19,17,0.45)] sm:p-6">
