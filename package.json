@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "validate:catalog": "tsx scripts/validate-catalog.ts",
+    "eval": "tsx scripts/eval.ts"
   },
   "dependencies": {
     "next": "16.3.6",
