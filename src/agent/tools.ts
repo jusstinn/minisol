@@ -271,7 +271,7 @@ function quoteForModel(q: Quote) {
     },
     allInStockAtStore: q.availability.allInStock,
     missingAtStore: q.availability.missing,
-    storesWithEverything: q.availability.alternatives.filter((a) => a.allInStock).map((a) => ({ id: a.storeId, name: a.name, km: a.distanceKm })),
+    storesWithEverything: q.availability.alternatives.filter((a) => a.allInStock).slice(0, 3).map((a) => ({ id: a.storeId, name: a.name, km: a.distanceKm })),
     delivery: q.delivery,
     offerHints: q.hints.map((h) =>
       h.kind === "threshold_close"

@@ -1,6 +1,6 @@
 "use client";
 
-import { ContactShadows, Edges, Html, Line, OrbitControls } from "@react-three/drei";
+import { ContactShadows, Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -106,9 +106,9 @@ function PartMesh({
       <boxGeometry args={[w, h, d]} />
       {blue ? (
         <meshBasicMaterial
-          color={highlighted ? accent : part.context ? "#3b6fd8" : "#2e63d0"}
+          color={highlighted ? accent : part.context ? "#4f82ea" : "#5b8cf0"}
           transparent
-          opacity={highlighted ? 0.55 : part.context ? 0.05 : dimmed ? 0.06 : 0.2}
+          opacity={highlighted ? 0.6 : part.context ? 0.06 : dimmed ? 0.06 : 0.28}
           depthWrite={false}
         />
       ) : (
@@ -125,9 +125,10 @@ function PartMesh({
       {(blue || highlighted) && (
         <Edges
           threshold={20}
-          color={highlighted ? accent : part.context ? "#7fa6ec" : "#dce9ff"}
+          color={highlighted ? accent : part.context ? "#8fb3f2" : "#eef4ff"}
+          lineWidth={highlighted ? 1.6 : 1.1}
           transparent
-          opacity={part.context ? 0.35 : dimmed ? 0.25 : 0.95}
+          opacity={part.context ? 0.4 : dimmed ? 0.25 : 1}
         />
       )}
     </mesh>
@@ -187,37 +188,20 @@ function mulberry32(a: number) {
   };
 }
 
-function Dims({ build, mode, shared }: { build: Build; mode: ViewMode; shared: Shared }) {
-  const group = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (group.current) {
-      const t = clamp01((shared.clock.current - 0.2) / 0.8);
-      group.current.visible = t > 0;
-    }
-  });
+function DimLines({ build, mode }: { build: Build; mode: ViewMode }) {
   const color = mode === "real" ? "#141311" : "#e6efff";
   return (
-    <group ref={group}>
+    <group>
       {build.dims.map((dl, i) => {
         const dir = new THREE.Vector3(...dl.to).sub(new THREE.Vector3(...dl.from)).normalize();
         const perp = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(0.08, 0, 0) : new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(0.08);
         const a = new THREE.Vector3(...dl.from);
         const b = new THREE.Vector3(...dl.to);
-        const mid = a.clone().add(b).multiplyScalar(0.5);
         return (
           <group key={i}>
             <Line points={[dl.from, dl.to]} color={color} lineWidth={1.2} transparent opacity={0.9} />
             <Line points={[a.clone().add(perp).toArray(), a.clone().sub(perp).toArray()]} color={color} lineWidth={1.2} />
             <Line points={[b.clone().add(perp).toArray(), b.clone().sub(perp).toArray()]} color={color} lineWidth={1.2} />
-            <Html position={mid.toArray()} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-              <div
-                className={`whitespace-nowrap rounded-[4px] px-1.5 py-0.5 font-mono text-[10.5px] font-medium tracking-wide ${
-                  mode === "real" ? "bg-ink text-paper" : "bg-[#0a1f47]/85 text-[#e6efff] ring-1 ring-[#dce9ff]/40"
-                }`}
-              >
-                {dl.label}
-              </div>
-            </Html>
           </group>
         );
       })}
@@ -225,48 +209,88 @@ function Dims({ build, mode, shared }: { build: Build; mode: ViewMode; shared: S
   );
 }
 
-function LayerLabels({ build, shared }: { build: Build; shared: Shared }) {
-  const refs = useRef<(THREE.Group | null)[]>([]);
+interface OverlayLabel {
+  key: string;
+  kind: "dim" | "layer";
+  text: string;
+  /** dim: fixed world position. layer: x offset + layer index (y follows the explode factor). */
+  pos: THREE.Vector3;
+  index: number;
+}
+
+function overlayLabels(build: Build): OverlayLabel[] {
+  const dims = build.dims.map((d, i) => ({
+    key: `d${i}`,
+    kind: "dim" as const,
+    text: d.label,
+    pos: new THREE.Vector3(...d.from).add(new THREE.Vector3(...d.to)).multiplyScalar(0.5),
+    index: i,
+  }));
+  const layers = build.layers.map((l, i) => ({
+    key: `l${i}`,
+    kind: "layer" as const,
+    text: `${String(i + 1).padStart(2, "0")} ${l.label}`,
+    pos: new THREE.Vector3(build.extent[0] / 2 + 0.35, 0, 0),
+    index: i,
+  }));
+  return [...dims, ...layers];
+}
+
+/**
+ * Projects label anchors to screen space every frame and moves plain DOM nodes
+ * (rendered next to the canvas) — no per-label React roots, so no unmount races.
+ */
+function LabelProjector({ labels, els, shared }: { labels: OverlayLabel[]; els: React.RefObject<Map<string, HTMLDivElement>>; shared: Shared }) {
+  const { camera, size } = useThree();
+  const v = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
-    const e = shared.explode.current;
-    refs.current.forEach((g, i) => {
-      if (!g) return;
-      g.visible = e > 0.15;
-      g.position.y = (i + 1) * EXPLODE_GAP * e + 0.05;
-    });
+    const explode = shared.explode.current;
+    for (const l of labels) {
+      const el = els.current.get(l.key);
+      if (!el) continue;
+      v.copy(l.pos);
+      let visible: boolean;
+      if (l.kind === "layer") {
+        v.y = (l.index + 1) * EXPLODE_GAP * explode + 0.05;
+        visible = explode > 0.15;
+      } else {
+        visible = shared.clock.current > 0.5;
+      }
+      v.project(camera);
+      if (v.z > 1) visible = false;
+      const x = (v.x * 0.5 + 0.5) * size.width;
+      const y = (-v.y * 0.5 + 0.5) * size.height;
+      el.style.transform = `translate3d(${x}px, ${y}px, 0) translate(${l.kind === "dim" ? "-50%" : "0"}, -50%)`;
+      el.style.opacity = visible ? "1" : "0";
+    }
   });
-  const x = build.extent[0] / 2 + 0.35;
-  return (
-    <>
-      {build.layers.map((l, i) => (
-        <group key={l.id} ref={(g) => { refs.current[i] = g; }} position={[x, 0, 0]}>
-          <Html zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-            <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-[#e6efff]">
-              <span className="h-px w-5 bg-[#e6efff]/70" />
-              <span className="rounded-sm bg-[#0a1f47]/80 px-1 py-px">{String(i + 1).padStart(2, "0")} {l.label}</span>
-            </div>
-          </Html>
-        </group>
-      ))}
-    </>
-  );
+  return null;
 }
 
 function CameraRig({ build, compact }: { build: Build; compact: boolean }) {
-  const { camera, controls } = useThree() as unknown as { camera: THREE.PerspectiveCamera; controls: { target: THREE.Vector3; update: () => void } | null };
+  const { camera, controls, size } = useThree() as unknown as {
+    camera: THREE.PerspectiveCamera;
+    controls: { target: THREE.Vector3; update: () => void } | null;
+    size: { width: number; height: number };
+  };
   useLayoutEffect(() => {
     const [L, H, W] = build.extent;
-    const r = Math.max(L, W, H * 1.3, 2.2);
-    const k = compact ? 1.25 : 1.05;
-    camera.position.set(r * 0.95 * k, (r * 0.62 + H * 0.35) * k, r * 1.05 * k);
+    // Fit the bounding sphere into both the vertical and the horizontal field of view.
+    const radius = 0.5 * Math.sqrt(L * L + H * H + W * W) + 0.4;
+    const aspect = size.width / Math.max(1, size.height);
+    const vfov = (camera.fov * Math.PI) / 180;
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
+    const dist = (radius / Math.sin(Math.min(vfov, hfov) / 2)) * (compact ? 1.05 : 0.95);
+    const dir = new THREE.Vector3(0.9, 0.75, 1).normalize();
+    camera.position.copy(dir.multiplyScalar(dist)).add(new THREE.Vector3(0, H * 0.25, 0));
     camera.near = 0.05;
-    camera.far = 400;
+    camera.far = Math.max(400, dist * 4);
     camera.updateProjectionMatrix();
     if (controls) {
-      controls.target.set(0, H * 0.28, 0);
+      controls.target.set(0, H * 0.25, 0);
       controls.update();
     }
-  }, [build, camera, controls, compact]);
+  }, [build, camera, controls, compact, size.width, size.height]);
   return null;
 }
 
@@ -292,9 +316,12 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
   }, [build, replayKey]);
 
   const layerIndex = useMemo(() => new Map(build.layers.map((l, i) => [l.id, i])), [build]);
+  const labels = useMemo(() => overlayLabels(build), [build]);
+  const labelEls = useRef<Map<string, HTMLDivElement>>(new Map());
   const shadowSize = Math.max(build.extent[0], build.extent[2]) * 1.6 + 2;
 
   return (
+    <div className="relative h-full w-full">
     <Canvas
       dpr={[1, 2]}
       camera={{ fov: 32, position: [6, 5, 6] }}
@@ -322,8 +349,8 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
         />
       ))}
       {build.grass && <Grass grass={build.grass} shared={shared} mode={mode} />}
-      <Dims build={build} mode={mode} shared={shared} />
-      <LayerLabels build={build} shared={shared} />
+      <DimLines build={build} mode={mode} />
+      <LabelProjector labels={labels} els={labelEls} shared={shared} />
 
       {mode === "real" && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.35} blur={2.4} far={4} />}
       <OrbitControls
@@ -340,5 +367,33 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
       />
       <CameraRig build={build} compact={compact} />
     </Canvas>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {labels.map((l) => (
+          <div
+            key={l.key}
+            ref={(el) => {
+              if (el) labelEls.current.set(l.key, el);
+              else labelEls.current.delete(l.key);
+            }}
+            className="absolute left-0 top-0 opacity-0 transition-opacity duration-300 will-change-transform"
+          >
+            {l.kind === "dim" ? (
+              <div
+                className={`whitespace-nowrap rounded-[4px] px-1.5 py-0.5 font-mono text-[10.5px] font-medium tracking-wide ${
+                  mode === "real" ? "bg-ink text-paper" : "bg-[#0a1f47]/85 text-[#e6efff] ring-1 ring-[#dce9ff]/40"
+                }`}
+              >
+                {l.text}
+              </div>
+            ) : (
+              <div className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-[10px] uppercase tracking-wider ${mode === "real" ? "text-ink" : "text-[#e6efff]"}`}>
+                <span className={`h-px w-5 ${mode === "real" ? "bg-ink/60" : "bg-[#e6efff]/70"}`} />
+                <span className={`rounded-sm px-1 py-px ${mode === "real" ? "bg-white/80" : "bg-[#0a1f47]/80"}`}>{l.text}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

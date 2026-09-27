@@ -1,7 +1,7 @@
 import type { Lang } from "@/domain/types";
 
 const STRINGS = {
-  headline: { ro: ["Ce construim", "în weekendul ăsta?"], en: ["What are we", "building this weekend?"] },
+  headline: { ro: ["Construim", "în weekendul ăsta?"], en: ["Let's build", "this weekend."] },
   projects: {
     ro: ["terasa", "baia", "gardul", "dormitorul", "peretele", "gazonul", "livingul"],
     en: ["the deck", "the bathroom", "the fence", "the bedroom", "the wall", "the lawn", "the living room"],

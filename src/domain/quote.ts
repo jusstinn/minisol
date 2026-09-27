@@ -49,6 +49,8 @@ export interface StoreAvailability {
   storeId: string;
   name: string;
   city: string;
+  lat: number;
+  lng: number;
   distanceKm: number;
   allInStock: boolean;
   missingCount: number;
@@ -75,7 +77,10 @@ export interface Quote {
   availability: {
     allInStock: boolean;
     missing: { sku: string; name: string; needed: number; available: number }[];
+    /** All stores, nearest first. */
     alternatives: StoreAvailability[];
+    /** City-level origin used for distances (member location or home store). */
+    origin: { city: string; lat: number; lng: number };
   };
   categoryBreakdown: { category: CategoryId; amount: number }[];
   delivery: { fee: number; type: "courier" | "truck"; freeFrom: number | null };
@@ -245,13 +250,14 @@ export function buildQuote(
         storeId: s.id,
         name: s.name,
         city: s.city,
+        lat: s.lat,
+        lng: s.lng,
         distanceKm: distanceKm(ctx.customer.location, s),
         allInStock: missingCount === 0,
         missingCount,
       };
     })
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 5);
+    .sort((a, b) => a.distanceKm - b.distanceKm);
 
   const cats = new Map<CategoryId, number>();
   for (const l of lines) cats.set(l.category, money((cats.get(l.category) ?? 0) + l.netTotal));
@@ -280,7 +286,7 @@ export function buildQuote(
       redeemableValue,
       totalIfRedeemed: money(total - redeemableValue),
     },
-    availability: { allInStock: missing.length === 0, missing, alternatives },
+    availability: { allInStock: missing.length === 0, missing, alternatives, origin: ctx.customer.location },
     categoryBreakdown,
     delivery,
     hints,
