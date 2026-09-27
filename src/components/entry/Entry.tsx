@@ -78,7 +78,13 @@ export default function Entry({
         <span className="ml-2 hidden rounded-full border border-rule px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 sm:inline-flex">
           {lang === "en" ? "for" : "pentru"}&nbsp;<b className="font-semibold text-ink">{tenant.name}</b>
         </span>
-        <div className="ml-auto flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur">
+        <a
+          href={`/pitch?retailer=${tenant.id}&lang=${lang}`}
+          className="ml-auto hidden rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:text-ink sm:inline"
+        >
+          {lang === "en" ? "For retailers →" : "Pentru retaileri →"}
+        </a>
+        <div className="flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur sm:ml-0 max-sm:ml-auto">
           {(["ro", "en"] as const).map((l) => (
             <button
               key={l}

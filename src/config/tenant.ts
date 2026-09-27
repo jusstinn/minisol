@@ -36,7 +36,7 @@ export const TENANTS: Record<string, Tenant> = {
     storePrefix: "HORNBACH",
     accent: "#F57C00",
     onAccent: "#1A1206",
-    programName: "HORNBACH Wallet",
+    programName: "HORNBACH Club",
     country: "RO",
     currency: "RON",
   },

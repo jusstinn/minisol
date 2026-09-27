@@ -35,6 +35,10 @@ npm run dev                        # http://localhost:3000
 | `/?retailer=brico` | A third example tenant |
 | `/?demo=1` | Starts in **offline demo mode** (no LLM calls, instant, deterministic) |
 | `/?member=WL-RO-204518` | Opens with a specific demo member |
+| `/pitch?retailer=hornbach` | **Pitch page** for a retailer: problem, live project numbers, how it works, trust, ROI calculator, pilot plan (`&lang=en` for English) |
+
+Live deployment (offline demo mode until an `OPENAI_API_KEY` is added in Vercel):
+**https://blueprint-walletloop.vercel.app** · pitch: **https://blueprint-walletloop.vercel.app/pitch?retailer=hornbach**
 
 **Offline demo mode.** If there is no API key, the model is rate-limited, or you toggle the
 header badge (`AI live` ↔ `Demo offline`), a rule-based agent takes over. It uses **the same
