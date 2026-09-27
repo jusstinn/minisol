@@ -17,6 +17,10 @@ white-label: the same build demos as a neutral retailer ("Atelier"), as HORNBACH
 | ![Board](docs/screenshots/02-board.png) | ![List](docs/screenshots/03-list.png) |
 | **Exploded 3D view** | **Plan, tips & safety** |
 | ![Exploded](docs/screenshots/04-exploded.png) | ![Plan](docs/screenshots/05-plan.png) |
+| **Stock map & WalletLoop offers** | **List on the wallet pass, sorted by aisle** |
+| ![Stock](docs/screenshots/07-stock-offers.png) | ![Wallet](docs/screenshots/08-wallet.png) |
+| **Best days to build (live forecast)** | |
+| ![Weather](docs/screenshots/06-weather.png) | |
 
 ---
 
