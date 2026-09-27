@@ -5,6 +5,7 @@ import { runAgent } from "@/agent/run";
 import { runScriptedAgent } from "@/agent/scripted";
 import type { AgentEvent, SessionState } from "@/agent/types";
 import { getTenant } from "@/config/tenant";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -41,10 +42,17 @@ export async function POST(req: Request) {
   const customer = await sources.loyalty.getMember(String(body.memberId ?? ""));
   if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
 
+  const ip = clientKey(req);
+  const hard = rateLimit(`all:${ip}`, 60, 10 * 60_000);
+  if (!hard.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(hard.retryAfterS) } });
+
   let llm: LlmClient | null = null;
   let offlineReason: string | undefined;
   if (body.mode === "scripted" || process.env.AGENT_MODE === "scripted") {
     offlineReason = "forced";
+  } else if (!rateLimit(`llm:${ip}`, Number(process.env.LLM_TURNS_PER_10_MIN ?? 12), 10 * 60_000).ok) {
+    // Protect the model budget on a public demo: degrade to the offline agent, don't fail.
+    offlineReason = "per-visitor AI limit reached";
   } else {
     try {
       llm = createLlmFromEnv();
