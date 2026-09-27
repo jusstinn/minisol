@@ -9,6 +9,8 @@ import { int, lei, monthYear } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
+import WalletListModal from "./WalletListModal";
+import type { Tenant } from "@/config/tenant";
 
 export const CATEGORY_LABEL: Record<CategoryId, { ro: string; en: string }> = {
   paint: { ro: "Vopsele", en: "Paint" },
@@ -41,6 +43,8 @@ export default function QuotePanel({
   onQty,
   onAdd,
   onMoveStore,
+  tenant,
+  projectTitle,
 }: {
   quote: Quote;
   suggestions: SuggestionView[];
@@ -51,7 +55,10 @@ export default function QuotePanel({
   onQty: (sku: string, qty: number) => void;
   onAdd: (item: BasketItem) => void;
   onMoveStore: (storeId: string) => void;
+  tenant: Tenant;
+  projectTitle: string;
 }) {
+  const [walletOpen, setWalletOpen] = useState(false);
   const [redeem, setRedeem] = useState(false);
   const [sent, setSent] = useState<null | "wallet" | "reserve">(null);
   const materials = quote.lines.filter((l) => !l.isTool);
@@ -249,7 +256,7 @@ export default function QuotePanel({
             {tr("reserve", lang)}
           </button>
           <button
-            onClick={() => setSent("wallet")}
+            onClick={() => setWalletOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-accent px-3.5 py-2.5 text-[13px] font-semibold text-on-accent transition hover:brightness-95"
           >
             <IconWallet size={16} />
@@ -259,6 +266,7 @@ export default function QuotePanel({
         </div>
       </div>
       <AnimatePresence>{sent && <SentToast kind={sent} lang={lang} storeName={quote.storeName} onDone={() => setSent(null)} />}</AnimatePresence>
+      <WalletListModal open={walletOpen} onClose={() => setWalletOpen(false)} quote={quote} title={projectTitle} tenant={tenant} lang={lang} />
     </div>
   );
 }

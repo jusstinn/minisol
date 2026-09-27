@@ -59,6 +59,8 @@ export default function Board(props: Props) {
             onQty={onQty}
             onAdd={onAdd}
             onMoveStore={onMoveStore}
+            tenant={tenant}
+            projectTitle={board.project?.project.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
           />
         );
       case "stock":
