@@ -1,0 +1,18 @@
+# deps
+node_modules/
+# next
+.next/
+out/
+build/
+# env — never commit secrets
+.env
+.env.*
+!.env.example
+# misc
+.DS_Store
+*.log
+coverage/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+eval-results/
