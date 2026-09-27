@@ -284,12 +284,17 @@ function CameraRig({ build, compact }: { build: Build; compact: boolean }) {
     const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
     const dist = (radius / Math.sin(Math.min(vfov, hfov) / 2)) * (compact ? 1.05 : 0.95);
     const dir = new THREE.Vector3(0.9, 0.75, 1).normalize();
-    camera.position.copy(dir.multiplyScalar(dist)).add(new THREE.Vector3(0, H * 0.25, 0));
+    const target = new THREE.Vector3(0, H * 0.25, 0);
+    camera.position.copy(dir.multiplyScalar(dist)).add(target);
     camera.near = 0.05;
     camera.far = Math.max(400, dist * 4);
+    // On the board the title block sits top-left: shift the projection (not the orbit pivot)
+    // so the model renders lower-right and still spins around its own centre.
+    if (compact) camera.clearViewOffset();
+    else camera.setViewOffset(size.width, size.height, -size.width * 0.09, -size.height * 0.07, size.width, size.height);
     camera.updateProjectionMatrix();
     if (controls) {
-      controls.target.set(0, H * 0.25, 0);
+      controls.target.copy(target);
       controls.update();
     }
   }, [build, camera, controls, compact, size.width, size.height]);
