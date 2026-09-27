@@ -57,10 +57,17 @@ streaming.
    *free decking oil bundle*, *150 lei project discount*, *+7.641 points*, *supports short at
    Militari → Berceni has everything, 9.9 km → one tap to move*.
 4. Toggle **Real / Exploded** views; hover a shopping-list line to highlight that layer in 3D.
-5. Scroll: plan with durations, pro tips, hazard-striped safety box, **7-day weather window**.
-6. Quick replies: *"Variantă mai ieftină"* (re-prices at budget tier), *"Ce oferte am?"*
-   (coupons with personal reasons), *"Unde e totul pe stoc?"* (Romania stock map).
-7. Switch to Maria → **"Gazon nou"** (garden ×3 points), James → **"New bathroom"** in English.
+5. Tap **Economic / Standard / Premium** — the same project priced three ways, switched instantly.
+6. **"Trimite lista în Wallet"** — the pass flips over: the list sorted by aisle (a walking
+   route through the store), tick-off boxes, a QR for the till.
+7. Scroll: plan with durations, pro tips, hazard-striped safety box, **7-day weather window**
+   (live Open-Meteo forecast, best days to build).
+8. Quick replies: *"Variantă mai ieftină"*, *"Ce oferte am?"* (coupons with personal reasons),
+   *"Unde e totul pe stoc?"* (Romania stock map). Note the **"✓ N amounts verified"** badge
+   under every answer.
+9. Switch to Maria → **"Gazon nou"** (garden ×3 points), James → **"New bathroom"** in English,
+   Elena → no personalisation consent. Try the mic button (voice, ro-RO / en-GB).
+10. Close with **/pitch?retailer=hornbach** — the ROI calculator and the 6-week pilot plan.
 
 ## How it works
 
@@ -99,6 +106,7 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 | Agent tools | `src/agent/tools.ts` | `get_customer_context`, `calculate_project`, `modify_basket`, `search_products`, `check_stock`, `get_offers`, `present_plan` |
 | Agent loop | `src/agent/run.ts`, `llm.ts` | Streaming tool-use loop behind a provider-neutral `LlmClient` interface |
 | Scripted agent | `src/agent/scripted.ts` | Offline RO/EN intent parser + same tools, used as fallback |
+| Verification | `src/agent/verify.ts` | Every lei amount in the model's reply must exist in the quote; failing replies are replaced by the deterministic one |
 | 3D | `src/components/blueprint/` | Procedural assemblies for each project type, animated build, blueprint/real/exploded views |
 
 Conversation state (basket, store, project) is round-tripped by the client, so the server is
@@ -139,7 +147,7 @@ LoyaltyProvider   getMember · getOffers            // WalletLoop
 ## Scripts
 
 ```bash
-npm test                     # 62 unit tests: calculators, pack optimiser, quote engine, offers, scripted agent
+npm test                     # 67 unit tests: calculators, pack optimiser, quote engine, offers, scripted agent
 npm run typecheck
 npm run validate:catalog     # catalogue integrity (roles, units, tiers, fictional brands)
 npx tsx scripts/inspect-project.ts deck '{"lengthM":4,"widthM":3}' WL-RO-100231 premium
