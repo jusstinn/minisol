@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { AgentEvent, Card, QualityOption, SessionState } from "@/agent/types";
+import type { AgentEvent, Card, ChoiceGroup, ProductOptionView, QualityOption, SessionState } from "@/agent/types";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 
@@ -68,8 +68,12 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   const pendingRef = useRef<BasketItem[] | null>(null);
 
   const putCard = useCallback((card: Card) => {
-    // A basket changed by modify_basket no longer matches the tier comparison, so that card simply has none.
-    setBoard((b) => ({ ...b, [card.kind]: card, last: card.kind, version: b.version + 1 }));
+    // A basket changed by modify_basket no longer matches the tier comparison (that card has none),
+    // but the per-job options still belong to the same project, so they carry over.
+    setBoard((b) => {
+      const next = card.kind === "quote" && !card.choices && b.quote?.choices ? { ...card, choices: b.quote.choices } : card;
+      return { ...b, [card.kind]: next, last: card.kind, version: b.version + 1 };
+    });
     if (card.kind === "quote") setPointsDelta(card.quote.points.earned);
   }, []);
 
@@ -242,6 +246,19 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   // Prices don't depend on the store, so the tier comparison stays valid.
   const moveStore = useCallback((storeId: string) => reprice(pendingRef.current ?? stateRef.current.basket, { storeId, keepTiers: true }), [reprice]);
 
+  /** Swap the product(s) doing one job for another option (already sized for the project). */
+  const chooseOption = useCallback(
+    (group: ChoiceGroup, option: ProductOptionView) => {
+      const current = pendingRef.current ?? stateRef.current.basket;
+      // Keep the list order: the new product takes the place of the one it replaces.
+      const at = Math.max(0, current.findIndex((b) => b.role === group.role));
+      const others = current.filter((b) => b.role !== group.role);
+      const chosen = option.items.map((it) => ({ sku: it.sku, qty: it.qty, role: group.role, basis: group.basis }));
+      return reprice([...others.slice(0, at), ...chosen, ...others.slice(at)]);
+    },
+    [reprice],
+  );
+
   /** Switch the whole basket to another quality tier (already priced by calculate_project). */
   const applyTier = useCallback(
     (option: QualityOption) => reprice(option.basket, { keepTiers: true, quality: option.quality }),
@@ -257,5 +274,5 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     setPointsDelta(null);
   }, []);
 
-  return { messages, board, busy, send, changeQty, addItem, moveStore, applyTier, reset, pointsDelta, state: stateRef, mode };
+  return { messages, board, busy, send, changeQty, addItem, moveStore, applyTier, chooseOption, reset, pointsDelta, state: stateRef, mode };
 }

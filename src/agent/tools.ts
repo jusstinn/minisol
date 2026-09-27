@@ -5,13 +5,15 @@ import type { ProjectType } from "@/domain/calculators";
 import { distanceKm } from "@/domain/geo";
 import { LOYALTY } from "@/domain/loyalty";
 import { eligibleOffers } from "@/domain/offers";
-import { buildQuote } from "@/domain/quote";
+import { bestPercentOff, buildQuote } from "@/domain/quote";
 import type { BasketItem, Quote } from "@/domain/quote";
-import { resolveRequirements } from "@/domain/resolve";
-import type { CategoryId, Customer, Lang, MaterialRole, Product, QualityTier } from "@/domain/types";
+import { artOf } from "@/domain/art";
+import { specHighlights } from "@/domain/specs";
+import { lineOptions, resolveRequirements } from "@/domain/resolve";
+import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
-import type { Card, OwnedToolView, QualityOption, SessionState, StockStoreView, SuggestionView } from "./types";
+import type { Card, ChoiceGroup, OwnedToolView, QualityOption, SessionState, StockStoreView, SuggestionView } from "./types";
 
 export interface ToolContext {
   sources: DataSources;
@@ -308,11 +310,59 @@ async function ownedTools(ctx: ToolContext): Promise<Map<MaterialRole, { sku: st
   return owned;
 }
 
-function highlights(p: Product): string[] {
-  return Object.entries(p.specs)
-    .slice(0, 4)
-    .map(([k, v]) => `${k}: ${typeof v === "boolean" ? (v ? "da" : "nu") : v}`);
+const packLabel = (p: Product, qty: number) =>
+  p.content.unit === "buc" && p.content.amount === 1 ? `${qty} ${p.salesUnit}` : `${qty} × ${p.content.amount.toLocaleString("ro-RO")} ${p.content.unit}`;
+
+/**
+ * Alternatives for every job in the basket, each sized for this project and priced
+ * with the member's line-level offers — the "options" drawer on each shopping-list line.
+ */
+async function projectChoices(
+  ctx: ToolContext,
+  requirements: Requirement[],
+  basket: BasketItem[],
+  catalog: Product[],
+  offers: Offer[],
+  storeId: string,
+): Promise<ChoiceGroup[]> {
+  const bySku = new Map(catalog.map((p) => [p.sku, p]));
+  const groups = requirements
+    .filter((req) => basket.some((b) => b.role === req.role))
+    .map((req) => ({ req, options: lineOptions(req, catalog) }))
+    .filter((g) => g.options.length > 1);
+  const skus = [...new Set(groups.flatMap((g) => g.options.flatMap((o) => o.items.map((it) => it.sku))))];
+  const stock = await ctx.sources.inventory.stock([storeId], skus);
+  return groups.map(({ req, options }) => ({
+    role: req.role,
+    label: t(ctx.lang, MATERIAL_ROLES[req.role].label, MATERIAL_ROLES[req.role].labelEn),
+    basis: req.basis,
+    options: options
+      .map((o) => {
+        const listTotal = o.items.reduce((s, it) => s + bySku.get(it.sku)!.price * it.qty, 0);
+        const percentOff = bestPercentOff(o.product, offers);
+        return {
+          key: o.key,
+          sku: o.product.sku,
+          name: pn(o.product, ctx.lang).replace(/,\s*[\d.,]+\s*(l|kg|m²|m|buc)\s*$/i, ""),
+          brand: o.product.brand,
+          quality: o.product.quality,
+          rating: o.product.rating,
+          highlights: highlights(o.product, ctx.lang).slice(0, 3),
+          packLabel: o.items.map((it) => packLabel(bySku.get(it.sku)!, it.qty)).join(" + "),
+          items: o.items,
+          listTotal: Math.round(listTotal * 100) / 100,
+          percentOff,
+          total: Math.round(listTotal * (1 - percentOff / 100) * 100) / 100,
+          inStock: o.items.every((it) => (stock.get(`${storeId}:${it.sku}`) ?? 0) >= it.qty),
+          art: artOf(o.product),
+        };
+      })
+      .sort((a, b) => a.total - b.total)
+      .slice(0, 6),
+  }));
 }
+
+const highlights = (p: Product, lang: Lang) => specHighlights(p, lang);
 
 /** One entry per SKU (a replace can otherwise leave duplicates that edit inconsistently). */
 export function mergeBasket(items: BasketItem[]): BasketItem[] {
@@ -413,6 +463,7 @@ const handlers: Record<string, Handler> = {
       }),
     );
     const bySku = new Map(catalog.map((p) => [p.sku, p]));
+    const choices = await projectChoices(ctx, calc.requirements, basket, catalog, offers, store.id);
 
     const suggestions: SuggestionView[] = resolved.suggestions.map((s) => {
       const p = bySku.get(s.sku)!;
@@ -441,7 +492,7 @@ const handlers: Record<string, Handler> = {
       state,
       cards: [
         { kind: "project", id: cardId("project"), project },
-        { kind: "quote", id: cardId("quote"), quote, suggestions, owned: ownedViews, tiers, quality },
+        { kind: "quote", id: cardId("quote"), quote, suggestions, owned: ownedViews, tiers, quality, choices },
       ],
       forModel: {
         storeWarning: store.error,
@@ -450,6 +501,11 @@ const handlers: Record<string, Handler> = {
         quote: quoteForModel(quote, ctx.lang),
         ownedToolsSkipped: ownedViews.map((o) => `${o.roleLabel} (${o.productName}, bought ${o.date})`),
         optionalSuggestions: suggestions.map((s) => ({ sku: s.sku, name: s.name, qty: s.qty, total: s.total, why: s.basis })),
+        // The customer can browse these in the "options" drawer on each line; mention a notable saving/upgrade if useful.
+        productOptions: choices.map((g) => ({
+          for: g.label,
+          options: g.options.map((o) => ({ name: o.name, quality: o.quality, total: o.total, inStock: o.inStock, items: o.items })),
+        })),
         unavailableRoles: resolved.skipped.filter((s) => s.reason === "no_product").map((s) => s.role),
         uiNote: "The customer now sees a 3D blueprint + measurements card and the full priced shopping list card. Do not repeat the list in text.",
       },
@@ -537,8 +593,9 @@ const handlers: Record<string, Handler> = {
       salesUnit: p.salesUnit,
       quality: p.quality,
       rating: p.rating,
-      highlights: highlights(p),
+      highlights: highlights(p, ctx.lang),
       stockAtStore: stock.get(`${storeId}:${p.sku}`) ?? 0,
+      art: artOf(p),
     }));
     return {
       cards: views.length ? [{ kind: "products", id: cardId("products"), query: String(args.query ?? ""), products: views }] : [],

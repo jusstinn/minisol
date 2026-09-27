@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import type { OwnedToolView, QualityOption, SuggestionView } from "@/agent/types";
+import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import type { CategoryId, Lang, QualityTier } from "@/domain/types";
 import { int, lei, monthYear } from "@/lib/format";
@@ -10,6 +10,8 @@ import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
 import WalletListModal from "./WalletListModal";
+import OptionsStrip from "./OptionsStrip";
+import { ProductArt } from "../ui/ProductArt";
 import type { Tenant } from "@/config/tenant";
 
 export const CATEGORY_LABEL: Record<CategoryId, { ro: string; en: string }> = {
@@ -48,6 +50,8 @@ export default function QuotePanel({
   tiers,
   quality,
   onTier,
+  choices,
+  onChoose,
 }: {
   quote: Quote;
   suggestions: SuggestionView[];
@@ -63,6 +67,8 @@ export default function QuotePanel({
   tiers?: QualityOption[];
   quality?: QualityTier;
   onTier?: (o: QualityOption) => void;
+  choices?: ChoiceGroup[];
+  onChoose?: (g: ChoiceGroup, o: ProductOptionView) => void;
 }) {
   const [walletOpen, setWalletOpen] = useState(false);
   const [redeem, setRedeem] = useState(false);
@@ -73,7 +79,7 @@ export default function QuotePanel({
   const best = quote.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
 
   return (
-    <div className="rounded-[22px] border border-rule bg-card p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_24px_48px_-36px_rgba(20,19,17,0.45)] sm:p-6">
+    <div className="min-w-0 rounded-[22px] border border-rule bg-card p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_24px_48px_-36px_rgba(20,19,17,0.45)] sm:p-6">
       <PanelHeader
         index="02"
         title={tr("shoppingList", lang)}
@@ -206,8 +212,30 @@ export default function QuotePanel({
       )}
 
       {/* lines */}
-      <LineGroup title={lang === "en" ? "Materials" : "Materiale"} lines={materials} lang={lang} highlight={highlight} onHighlight={onHighlight} onQty={onQty} />
-      {tools.length > 0 && <LineGroup title={lang === "en" ? "Tools & protection" : "Scule & protecție"} lines={tools} lang={lang} highlight={highlight} onHighlight={onHighlight} onQty={onQty} />}
+      <LineGroup
+        title={lang === "en" ? "Materials" : "Materiale"}
+        lines={materials}
+        allLines={quote.lines}
+        lang={lang}
+        highlight={highlight}
+        onHighlight={onHighlight}
+        onQty={onQty}
+        choices={choices}
+        onChoose={onChoose}
+      />
+      {tools.length > 0 && (
+        <LineGroup
+          title={lang === "en" ? "Tools & protection" : "Scule & protecție"}
+          lines={tools}
+          allLines={quote.lines}
+          lang={lang}
+          highlight={highlight}
+          onHighlight={onHighlight}
+          onQty={onQty}
+          choices={choices}
+          onChoose={onChoose}
+        />
+      )}
 
       {/* owned */}
       {owned.length > 0 && (
@@ -315,60 +343,97 @@ export default function QuotePanel({
 function LineGroup({
   title,
   lines,
+  allLines,
   lang,
   highlight,
   onHighlight,
   onQty,
+  choices,
+  onChoose,
 }: {
   title: string;
   lines: QuoteLine[];
+  allLines: QuoteLine[];
   lang: Lang;
   highlight: string | null;
   onHighlight: (l: string | null) => void;
   onQty: (sku: string, delta: number) => void;
+  choices?: ChoiceGroup[];
+  onChoose?: (g: ChoiceGroup, o: ProductOptionView) => void;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const seenRoles = new Set<string>();
   return (
     <div className="mt-6">
       <div className="label mb-1">{title}</div>
       <ul className="divide-y divide-rule">
-        {lines.map((l, i) => (
-          <motion.li
-            key={l.sku}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i * 0.045, 0.6), duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-            onMouseEnter={() => l.role && onHighlight(l.role)}
-            onMouseLeave={() => onHighlight(null)}
-            className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg py-2.5 transition-colors ${highlight && highlight === l.role ? "bg-accent/10" : ""}`}
-          >
-            <div className="flex items-center rounded-lg border border-rule bg-paper">
-              <button onClick={() => onQty(l.sku, -1)} className="grid h-7 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
-                <IconMinus size={13} />
-              </button>
-              <span className="num w-7 text-center text-[13px] font-semibold">{l.qty}</span>
-              <button onClick={() => onQty(l.sku, 1)} className="grid h-7 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
-                <IconPlus size={13} />
-              </button>
-            </div>
-            <div className="min-w-0">
-              <div className="line-clamp-2 text-[13.5px] leading-snug text-ink">{l.name}</div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[10px] text-ink-3">
-                <StockDot status={l.stock.status} lang={lang} />
-                <span>
-                  {tr("aisle", lang)} {l.aisle}
-                </span>
-                <span>
-                  {l.qty} {l.salesUnit} × {lei(l.unitPrice, lang)}
-                </span>
-                {l.basis && l.basis !== "unealtă" && l.basis !== "tool" && <span className="hidden text-ink-3/80 sm:inline">· {l.basis}</span>}
+        {lines.map((l, i) => {
+          // The options toggle sits on the first line of each job (a job can span two pack sizes).
+          const group = l.role && !seenRoles.has(l.role) ? choices?.find((g) => g.role === l.role) : undefined;
+          if (l.role) seenRoles.add(l.role);
+          const isOpen = group && open === group.role;
+          return (
+            <motion.li
+              key={l.sku}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i * 0.045, 0.6), duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              onMouseEnter={() => l.role && onHighlight(l.role)}
+              onMouseLeave={() => onHighlight(null)}
+              className={`rounded-lg transition-colors ${highlight && highlight === l.role ? "bg-accent/10" : ""}`}
+            >
+              <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-2.5">
+                <div className="grid h-14 w-14 place-items-center rounded-xl bg-paper-2">
+                  <ProductArt art={l.art} size={50} />
+                </div>
+                <div className="min-w-0">
+                  <div className="line-clamp-2 text-[13.5px] leading-snug text-ink">{l.name}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[10px] text-ink-3">
+                    <StockDot status={l.stock.status} lang={lang} />
+                    <span>
+                      {tr("aisle", lang)} {l.aisle}
+                    </span>
+                    <span>
+                      {l.qty} {l.salesUnit} × {lei(l.unitPrice, lang)}
+                    </span>
+                    {l.basis && l.basis !== "unealtă" && l.basis !== "tool" && <span className="hidden text-ink-3/80 xl:inline">· {l.basis}</span>}
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="flex items-center rounded-lg border border-rule bg-paper">
+                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
+                        <IconMinus size={12} />
+                      </button>
+                      <span className="num w-7 text-center text-[12.5px] font-semibold">{l.qty}</span>
+                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
+                        <IconPlus size={12} />
+                      </button>
+                    </div>
+                    {group && (
+                      <button
+                        onClick={() => setOpen(isOpen ? null : group.role)}
+                        className={`flex items-center gap-1 rounded-lg px-2 py-1 font-mono text-[10.5px] uppercase tracking-wider transition ${
+                          isOpen ? "bg-ink text-paper" : "bg-accent/10 text-ink hover:bg-accent/20"
+                        }`}
+                      >
+                        ⇄ {group.options.length} {lang === "en" ? "options" : "opțiuni"}
+                        <span className={`transition-transform ${isOpen ? "rotate-180" : ""}`}>▾</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  {l.discount > 0 && <div className="num text-[11px] text-ink-3 line-through">{lei(l.lineTotal, lang)}</div>}
+                  <div className={`num text-[14px] font-semibold ${l.discount > 0 ? "text-accent" : "text-ink"}`}>
+                    {l.netTotal === 0 ? (lang === "en" ? "FREE" : "GRATUIT") : lei(l.netTotal, lang)}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="text-right">
-              {l.discount > 0 && <div className="num text-[11px] text-ink-3 line-through">{lei(l.lineTotal, lang)}</div>}
-              <div className={`num text-[14px] font-semibold ${l.discount > 0 ? "text-accent" : "text-ink"}`}>{l.netTotal === 0 ? (lang === "en" ? "FREE" : "GRATUIT") : lei(l.netTotal, lang)}</div>
-            </div>
-          </motion.li>
-        ))}
+              <AnimatePresence>
+                {isOpen && group && onChoose && <OptionsStrip group={group} lines={allLines} lang={lang} onChoose={onChoose} />}
+              </AnimatePresence>
+            </motion.li>
+          );
+        })}
       </ul>
     </div>
   );

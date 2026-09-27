@@ -171,6 +171,24 @@ export const IconTag = ({ size, ...p }: P) => (
     <circle cx="7.5" cy="7.5" r="1.5" />
   </svg>
 );
+export const IconBag = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8z" />
+    <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+  </svg>
+);
+export const IconTrash = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+  </svg>
+);
+export const IconTruck = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M2 6h11v10H2zM13 10h4l4 3v3h-8z" />
+    <circle cx={6} cy={18} r={1.8} />
+    <circle cx={17} cy={18} r={1.8} />
+  </svg>
+);
 export const IconMic = ({ size, ...p }: P) => (
   <svg {...base(size, p)}>
     <rect x="9" y="3" width="6" height="11" rx="3" />

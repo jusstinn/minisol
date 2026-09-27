@@ -89,6 +89,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     ...offerAmounts,
     ...(lastQuote?.suggestions ?? []).flatMap((s) => [s.total, s.unitPrice]),
     ...(lastQuote?.tiers ?? []).map((t) => t.total),
+    // Option prices and the differences between them ("save 1.870 lei with pine").
+    ...(lastQuote?.choices ?? []).flatMap((g) => g.options.flatMap((o) => [o.total, ...g.options.map((x) => Math.round(Math.abs(o.total - x.total) * 100) / 100)])),
     Math.round(opts.customer.points * LOYALTY.pointValueRon * 100) / 100,
   ];
   const check = verifyReply(turnText, lastQuote?.quote, extra);

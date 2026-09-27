@@ -11,7 +11,8 @@ import type { ChatMessage } from "@/lib/useAgent";
 import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
-import { IconArrowUp, IconCheck, IconClose, IconLayers, Logo } from "../ui/icons";
+import CartDrawer from "../cart/CartDrawer";
+import { IconArrowUp, IconBag, IconCheck, IconClose, Logo } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
 
@@ -34,6 +35,7 @@ export default function Workspace({
   const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline });
   const [highlight, setHighlight] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const started = useRef(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)", true);
 
@@ -66,7 +68,32 @@ export default function Workspace({
           <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
         </button>
         <div className="ml-auto flex items-center gap-2">
-          <div className="hidden w-[250px] sm:block">
+          <AnimatePresence>
+            {quote && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                onClick={() => setCartOpen(true)}
+                className="relative flex items-center gap-2 rounded-full bg-ink py-1.5 pl-2.5 pr-5 text-paper transition hover:bg-accent hover:text-on-accent"
+                aria-label={lang === "en" ? "Open cart" : "Deschide coșul"}
+              >
+                <IconBag size={17} />
+                <span className="hidden font-mono text-[12px] md:inline">
+                  <Counter value={quote.total} lang={lang} /> lei
+                </span>
+                <motion.span
+                  key={quote.lines.length}
+                  initial={{ scale: 1.6 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 font-mono text-[10px] font-bold text-on-accent"
+                >
+                  {quote.lines.length}
+                </motion.span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+          <div className="hidden w-[250px] xl:block">
             <WalletPass member={member} tenant={tenant} lang={lang} compact pointsOverride={member.points} />
           </div>
           <div className="flex items-center rounded-full border border-rule p-0.5 font-mono text-[10.5px]">
@@ -107,6 +134,7 @@ export default function Workspace({
                 onAdd={agent.addItem}
                 onMoveStore={agent.moveStore}
                 onTier={agent.applyTier}
+                onChoose={agent.chooseOption}
                 inline
               />
             )
@@ -124,6 +152,7 @@ export default function Workspace({
             onAdd={agent.addItem}
             onMoveStore={agent.moveStore}
             onTier={agent.applyTier}
+                onChoose={agent.chooseOption}
           />
         </div>
         )}
@@ -136,10 +165,10 @@ export default function Workspace({
             initial={{ y: 80 }}
             animate={{ y: 0 }}
             exit={{ y: 80 }}
-            onClick={() => setSheetOpen(true)}
+            onClick={() => setCartOpen(true)}
             className="fixed inset-x-3 bottom-[86px] z-30 flex items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-paper shadow-2xl lg:hidden"
           >
-            <IconLayers size={18} />
+            <IconBag size={18} />
             <div className="text-left">
               <div className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-paper/60">{tr("total", lang)}</div>
               <div className="display-cond text-[20px] leading-none">
@@ -175,10 +204,30 @@ export default function Workspace({
               onAdd={agent.addItem}
               onMoveStore={agent.moveStore}
               onTier={agent.applyTier}
+                onChoose={agent.chooseOption}
             />
           </motion.div>
         )}
       </AnimatePresence>
+      {quote && (
+        <CartDrawer
+          open={cartOpen}
+          onClose={() => setCartOpen(false)}
+          quote={quote}
+          lang={lang}
+          tenant={tenant}
+          projectTitle={project?.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
+          onQty={agent.changeQty}
+          onShowPlan={
+            isDesktop
+              ? undefined
+              : () => {
+                  setCartOpen(false);
+                  setSheetOpen(true);
+                }
+          }
+        />
+      )}
     </div>
   );
 }

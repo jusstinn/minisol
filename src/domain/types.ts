@@ -248,4 +248,9 @@ export interface Requirement {
   areaToCover?: number;
   /** Preferred product specs, e.g. { heightM: 1.8 } for fence panels. Soft filter. */
   match?: Record<string, string | number | boolean>;
+  /**
+   * Quantity was computed for a reference product size; scale it for others.
+   * e.g. deck boards computed for 145 mm width → 120 mm boards need 145/120 × more.
+   */
+  scaleBySpec?: { key: string; reference: number };
 }

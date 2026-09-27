@@ -1,3 +1,5 @@
+import { artOf } from "./art";
+import type { ArtSpec } from "./art";
 import { distanceKm } from "./geo";
 import { LOYALTY } from "./loyalty";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, Store } from "./types";
@@ -36,6 +38,7 @@ export interface QuoteLine {
   bulky: boolean;
   stock: { available: number; status: StockStatus };
   aisle: number;
+  art: ArtSpec;
 }
 
 export interface AppliedDiscount {
@@ -120,6 +123,15 @@ function offerAppliesToLine(o: Offer, p: Product): boolean {
   return false;
 }
 
+/** Best single percentage discount a product gets from these offers (same rule as quote lines). */
+export function bestPercentOff(p: Product, offers: Offer[]): number {
+  let best = 0;
+  for (const o of offers) {
+    if ((o.kind === "percent_category" || o.kind === "percent_role") && offerAppliesToLine(o, p)) best = Math.max(best, o.percent ?? 0);
+  }
+  return best;
+}
+
 export function buildQuote(
   items: BasketItem[],
   ctx: { customer: Customer; storeId: string; offers: Offer[]; lang?: Lang },
@@ -171,6 +183,7 @@ export function buildQuote(
       bulky: Boolean(p.bulky),
       stock: { available, status: stockStatus(available, it.qty) },
       aisle: deps.aisleOf(p),
+      art: artOf(p),
     };
   });
 

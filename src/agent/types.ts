@@ -1,6 +1,7 @@
 import type { CalculationResult, ProjectType } from "@/domain/calculators";
 import type { BasketItem, Quote } from "@/domain/quote";
-import type { Offer, QualityTier } from "@/domain/types";
+import type { ArtSpec } from "@/domain/art";
+import type { MaterialRole, Offer, QualityTier } from "@/domain/types";
 
 /** Conversation state the client round-trips with every request (server stays stateless). */
 export interface SessionState {
@@ -28,6 +29,35 @@ export interface SuggestionView {
   total: number;
   basis: string;
   isTool: boolean;
+}
+
+/** One product line that can do a shopping-list job, sized for the customer's project. */
+export interface ProductOptionView {
+  key: string;
+  sku: string;
+  name: string;
+  brand: string;
+  quality: QualityTier;
+  rating: number;
+  highlights: string[];
+  /** e.g. "3 × 10 l", "22 × 4 m". */
+  packLabel: string;
+  items: { sku: string; qty: number }[];
+  /** Price for this project with the member's line-level offers (before basket-level offers). */
+  total: number;
+  listTotal: number;
+  percentOff: number;
+  /** Units available at the selected store for every pack of this option. */
+  inStock: boolean;
+  art: ArtSpec;
+}
+
+/** The alternatives for one role in the basket ("Deck boards: 4 options"). */
+export interface ChoiceGroup {
+  role: MaterialRole;
+  label: string;
+  basis: string;
+  options: ProductOptionView[];
 }
 
 export interface QualityOption {
@@ -74,6 +104,7 @@ export interface ProductView {
   rating: number;
   highlights: string[];
   stockAtStore: number;
+  art: ArtSpec;
 }
 
 export interface PlanView {
@@ -95,6 +126,8 @@ export type Card =
       /** Same project priced at every quality tier (from calculate_project). */
       tiers?: QualityOption[];
       quality?: QualityTier;
+      /** Alternatives per basket role — stay valid while the project is the same. */
+      choices?: ChoiceGroup[];
     }
   | { kind: "stock"; id: string; stores: StockStoreView[] }
   | { kind: "offers"; id: string; offers: OfferView[] }

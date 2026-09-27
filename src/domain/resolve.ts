@@ -159,10 +159,57 @@ export function chooseLine(req: Requirement, catalog: Product[], quality: Qualit
   return [];
 }
 
+/** Structural members are bought in one length: mixing 3 m and 4 m deck boards makes no sense on site. */
+const SINGLE_LENGTH: MaterialRole[] = ["deck_board", "deck_joist", "fence_post"];
+
+function packsFor(req: Requirement, needed: number, line: Product[]): { sku: string; qty: number }[] {
+  if (!SINGLE_LENGTH.includes(req.role) || line.length === 1) return optimisePacks(needed, line);
+  const best = line
+    .map((p) => ({ sku: p.sku, qty: Math.max(1, Math.ceil(needed / p.content.amount - 1e-9)), cost: p.price * Math.ceil(needed / p.content.amount - 1e-9) }))
+    .sort((a, b) => a.cost - b.cost)[0];
+  return [{ sku: best.sku, qty: best.qty }];
+}
+
+export interface LineOption {
+  key: string;
+  /** Representative product (largest pack) for name/specs/art. */
+  product: Product;
+  items: { sku: string; qty: number }[];
+  /** Amount of the base unit the packs provide. */
+  provided: number;
+}
+
+/**
+ * Every product line that can do this requirement's job, each with the packs
+ * the customer would need for *their* project (coverage-aware, pack-optimised).
+ * Spec matches (e.g. fence height) are strict here: a 1.2 m panel is not an
+ * alternative to a 1.8 m one.
+ */
+export function lineOptions(req: Requirement, catalog: Product[]): LineOption[] {
+  const all = catalog.filter((p) => p.roles.includes(req.role));
+  const matching = all.filter((p) => matchesSpecs(p, req.match));
+  const pool = req.match && matching.length > 0 ? matching : all;
+  const lines = new Map<string, Product[]>();
+  for (const p of pool) {
+    const k = req.isTool ? p.sku : productLineKey(p);
+    lines.set(k, [...(lines.get(k) ?? []), p]);
+  }
+  return [...lines.entries()].map(([key, line]) => {
+    const product = [...line].sort((a, b) => b.content.amount - a.content.amount)[0];
+    const items = req.isTool ? [{ sku: line[0].sku, qty: req.quantity }] : packsFor(req, neededAmount(req, line), line);
+    const provided = items.reduce((s, it) => s + it.qty * (line.find((p) => p.sku === it.sku)?.content.amount ?? 0), 0);
+    return { key, product, items, provided: Math.round(provided * 100) / 100 };
+  });
+}
+
 export function neededAmount(req: Requirement, line: Product[]): number {
   if (req.areaToCover) {
     const coverage = Math.min(...line.map((p) => coverageOf(p, req.unit) ?? Infinity));
     if (Number.isFinite(coverage)) return Math.round((req.areaToCover / coverage) * 100) / 100;
+  }
+  if (req.scaleBySpec) {
+    const v = line[0].specs[req.scaleBySpec.key];
+    if (typeof v === "number" && v > 0) return Math.round(((req.quantity * req.scaleBySpec.reference) / v) * 100) / 100;
   }
   return req.quantity;
 }
@@ -188,7 +235,7 @@ export function resolveRequirements(reqs: Requirement[], catalog: Product[], opt
       continue;
     }
     const needed = req.isTool ? req.quantity : neededAmount(req, line);
-    const packs = req.isTool ? [{ sku: line[0].sku, qty: req.quantity }] : optimisePacks(needed, line);
+    const packs = req.isTool ? [{ sku: line[0].sku, qty: req.quantity }] : packsFor(req, needed, line);
 
     if (req.optional && !opts.includeOptional) {
       for (const pk of packs) {

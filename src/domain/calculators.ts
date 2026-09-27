@@ -92,7 +92,7 @@ class Builder {
     quantity: number,
     basisRo: string,
     basisEn: string,
-    extra: Partial<Pick<Requirement, "optional" | "areaToCover" | "match">> = {},
+    extra: Partial<Pick<Requirement, "optional" | "areaToCover" | "match" | "scaleBySpec">> = {},
   ) {
     const unit: BaseUnit = MATERIAL_ROLES[role].unit;
     const q = unit === "buc" ? Math.ceil(quantity - 1e-9) : r2(quantity);
@@ -353,7 +353,10 @@ function deck(p: Params, lang: Lang): CalculationResult {
   b.assume("Grinzi la 40 cm interax, suporturi la max. 60 cm.", "Joists at 40 cm centres, supports every 60 cm max.");
   b.assume("10% pierderi la deck, 5% la grinzi.", "10% waste on boards, 5% on joists.");
 
-  b.need("deck_board", rows * L * 1.1, `${rows} rânduri × ${r1(L)} m + 10%`, `${rows} rows × ${r1(L)} m + 10%`);
+  // Rows assume ~145 mm boards; narrower/wider boards scale the length (+5 mm gap either way).
+  b.need("deck_board", rows * L * 1.1, `${rows} rânduri × ${r1(L)} m + 10%`, `${rows} rows × ${r1(L)} m + 10%`, {
+    scaleBySpec: { key: "widthMm", reference: 145 },
+  });
   b.need("deck_joist", joists * W * 1.05, `${joists} grinzi × ${r1(W)} m + 5%`, `${joists} joists × ${r1(W)} m + 5%`);
   b.need("deck_screws", rows * joists * 2 * 1.1, "2 șuruburi la fiecare încrucișare deck–grindă", "2 screws per board–joist crossing");
   b.need("deck_support", joists * supportsPerJoist, `${supportsPerJoist} suporturi pe fiecare grindă`, `${supportsPerJoist} supports per joist`);

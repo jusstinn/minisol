@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
-import type { Card, QualityOption } from "@/agent/types";
+import type { Card, ChoiceGroup, ProductOptionView, QualityOption } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
 import type { BasketItem } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
@@ -26,13 +26,14 @@ interface Props {
   onAdd: (item: BasketItem) => void;
   onMoveStore: (storeId: string) => void;
   onTier?: (o: QualityOption) => void;
+  onChoose?: (g: ChoiceGroup, o: ProductOptionView) => void;
   /** Mobile: render only these cards, inline in the conversation. */
   onlyCards?: Card[];
   inline?: boolean;
 }
 
 export default function Board(props: Props) {
-  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onlyCards, inline } = props;
+  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onChoose, onlyCards, inline } = props;
 
   if (onlyCards) {
     return (
@@ -74,6 +75,8 @@ export default function Board(props: Props) {
             tiers={c.tiers}
             quality={c.quality}
             onTier={onTier}
+            choices={c.choices}
+            onChoose={onChoose}
           />
         );
       case "stock":
@@ -153,7 +156,7 @@ function Flash({ on, v, children }: { on: boolean; v: number; children: React.Re
     }
   }, [on, v]);
   return (
-    <motion.div ref={ref} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} className="relative">
+    <motion.div ref={ref} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} className="relative min-w-0">
       {children}
       {on && (
         <motion.span
