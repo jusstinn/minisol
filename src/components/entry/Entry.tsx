@@ -193,7 +193,9 @@ export default function Entry({
 
           {/* pass stack */}
           <div className="order-first mx-auto w-[min(92%,340px)] lg:absolute lg:-bottom-4 lg:-left-8 lg:order-none lg:mx-0 lg:w-[330px]">
-            <div className="label mb-[104px] pl-1 text-ink-2">{tr("pickPass", lang)} ↓</div>
+            <div className="mb-[104px]">
+              <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">{tr("pickPass", lang)} ↓</span>
+            </div>
             <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
           </div>
         </section>
