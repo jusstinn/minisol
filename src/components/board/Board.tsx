@@ -121,7 +121,10 @@ export default function Board(props: Props) {
           {renderCard(board.products)}
         </Flash>
       )}
-      <div className="pb-6 pt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">{tr("demoNote", lang)}</div>
+      <div className="pb-6 pt-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
+        {tr("demoNote", lang)}
+        {tenant.id !== "demo" && (lang === "en" ? ` · Concept by WalletLoop, not an official ${tenant.name} service` : ` · Concept WalletLoop, nu un serviciu oficial ${tenant.name}`)}
+      </div>
     </div>
   );
 }

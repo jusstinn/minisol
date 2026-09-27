@@ -84,7 +84,8 @@ export default function WeatherPanel({ lat, lng, city, type, lang }: { lat: numb
   const tMin = days ? Math.min(...days.map((d) => d.tMin)) - 2 : 0;
   const tMax = days ? Math.max(...days.map((d) => d.tMax)) + 2 : 30;
   const ty = (t: number) => top + chartH - ((t - tMin) / Math.max(1, tMax - tMin)) * chartH;
-  const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(lang === "en" ? "en-GB" : "ro-RO", { weekday: "short", day: "numeric" });
+  // Parse "YYYY-MM-DD" as a local calendar day (not UTC midnight) so it never shifts by a day.
+  const fmtDay = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(lang === "en" ? "en-GB" : "ro-RO", { weekday: "short", day: "numeric" });
   const path = days?.map((d, i) => `${i === 0 ? "M" : "L"}${padX + colW * i + colW / 2},${ty(d.tMax)}`).join(" ");
   const pathMin = days?.map((d, i) => `${i === 0 ? "M" : "L"}${padX + colW * i + colW / 2},${ty(d.tMin)}`).join(" ");
 

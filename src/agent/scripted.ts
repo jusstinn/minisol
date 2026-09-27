@@ -157,9 +157,15 @@ async function* streamText(text: string): AsyncGenerator<AgentEvent> {
   }
 }
 
+/** "Plot reglabil terasă Kronwald 60–100 mm" → "plot reglabil terasă" (generic words only, brands keep their case). */
+function shortName(name: string): string {
+  const words = name.split(",")[0].split(" ").slice(0, 3);
+  return words.map((w, i) => (i === 0 ? w.charAt(0).toLowerCase() + w.slice(1) : w)).join(" ");
+}
+
 function stockSentence(q: Quote, lang: Lang): string {
   if (q.availability.allInStock) return lang === "en" ? `Everything is in stock at ${q.storeName}.` : `Totul e pe stoc la ${q.storeName}.`;
-  const missing = q.availability.missing.map((m) => m.name.split(",")[0].split(" ").slice(0, 3).join(" ").toLowerCase());
+  const missing = q.availability.missing.map((m) => shortName(m.name));
   const list = missing.slice(0, 3).join(", ");
   const best = q.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
   if (best) {
@@ -191,7 +197,7 @@ function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, title: s
   }
   parts.push(stockSentence(q, lang));
   if (card.suggestions.length) {
-    const s = card.suggestions.slice(0, 2).map((x) => x.name.split(",")[0].split(" ").slice(0, 3).join(" ").toLowerCase());
+    const s = card.suggestions.slice(0, 2).map((x) => shortName(x.name));
     parts.push(en ? `Optional: ${s.join(" and ")} — want me to add them?` : `Opțional: ${s.join(" și ")} — le adaug?`);
   }
   return parts.join(" ");

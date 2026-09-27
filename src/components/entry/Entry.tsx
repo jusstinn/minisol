@@ -159,6 +159,13 @@ export default function Entry({
           </div>
 
           <p className="mt-8 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">{tr("privacy", lang)}</p>
+          {tenant.id !== "demo" && (
+            <p className="mt-2 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">
+              {lang === "en"
+                ? `Concept demo by WalletLoop — not an official ${tenant.name} service. Catalogue, prices and stock are fictional.`
+                : `Demo conceptual WalletLoop — nu este un serviciu oficial ${tenant.name}. Catalogul, prețurile și stocurile sunt fictive.`}
+            </p>
+          )}
         </section>
 
         {/* right: blueprint sheet + wallet passes */}
