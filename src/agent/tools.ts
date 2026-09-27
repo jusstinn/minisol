@@ -273,6 +273,11 @@ function quoteForModel(q: Quote) {
     missingAtStore: q.availability.missing,
     storesWithEverything: q.availability.alternatives.filter((a) => a.allInStock).map((a) => ({ id: a.storeId, name: a.name, km: a.distanceKm })),
     delivery: q.delivery,
+    offerHints: q.hints.map((h) =>
+      h.kind === "threshold_close"
+        ? `Add ${h.amountToGo} RON more to unlock: ${h.title}`
+        : `Bundle unlocked but the free item (${h.role}) is not in the basket: ${h.title}`,
+    ),
   };
 }
 
@@ -364,6 +369,17 @@ const handlers: Record<string, Handler> = {
       includeOptional: args.includeOptional === true,
     });
     const basket: BasketItem[] = resolved.lines.map((l) => ({ sku: l.sku, qty: l.qty, role: l.role, basis: l.basis, isTool: l.isTool }));
+    // If a WalletLoop bundle makes an optional item free, include it — the member would want it.
+    const offers = eligibleOffers(await ctx.sources.loyalty.getOffers(ctx.customer.memberId), ctx.customer, ctx.now);
+    for (const o of offers) {
+      if (o.kind !== "bundle_free_role" || !o.bundle) continue;
+      const units = basket.filter((b) => b.role === o.bundle!.requiresRole).reduce((s, b) => s + b.qty, 0);
+      const idx = resolved.suggestions.findIndex((s) => s.role === o.bundle!.freeRole);
+      if (units >= o.bundle.requiresQty && idx >= 0) {
+        const s = resolved.suggestions.splice(idx, 1)[0];
+        basket.push({ sku: s.sku, qty: s.qty, role: s.role, basis: s.basis, isTool: s.isTool });
+      }
+    }
     const quote = await priceBasket(ctx, basket, store.id);
     const bySku = new Map(catalog.map((p) => [p.sku, p]));
 

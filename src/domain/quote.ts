@@ -79,6 +79,17 @@ export interface Quote {
   };
   categoryBreakdown: { category: CategoryId; amount: number }[];
   delivery: { fee: number; type: "courier" | "truck"; freeFrom: number | null };
+  /** Personal nudges: offers the member is close to unlocking. */
+  hints: QuoteHint[];
+}
+
+export interface QuoteHint {
+  offerId: string;
+  kind: "bundle_missing_free_item" | "threshold_close";
+  title: string;
+  /** For thresholds: RON still needed. For bundles: the role to add. */
+  amountToGo?: number;
+  role?: MaterialRole;
 }
 
 export interface QuoteDeps {
@@ -160,13 +171,18 @@ export function buildQuote(
     discounts.push({ offerId, title: o.title, amount, kind: o.kind });
   }
 
+  const hints: QuoteHint[] = [];
+
   // Bundle: buy N units of role A → one unit of the cheapest role-B line free.
   for (const o of ctx.offers.filter((x) => x.kind === "bundle_free_role" && x.bundle)) {
     const b = o.bundle!;
     const units = lines.filter((l) => l.role === b.requiresRole).reduce((s, l) => s + l.qty, 0);
     if (units < b.requiresQty) continue;
     const freeCandidates = lines.filter((l) => l.role === b.freeRole && l.qty > 0);
-    if (freeCandidates.length === 0) continue;
+    if (freeCandidates.length === 0) {
+      hints.push({ offerId: o.id, kind: "bundle_missing_free_item", title: o.title, role: b.freeRole });
+      continue;
+    }
     const cheapest = freeCandidates.reduce((a, c) => (c.unitPrice < a.unitPrice ? c : a));
     const unitNet = money(cheapest.netTotal / cheapest.qty);
     cheapest.discount = money(cheapest.discount + unitNet);
@@ -181,6 +197,13 @@ export function buildQuote(
     .filter((o) => o.kind === "fixed_threshold" && afterLineDiscounts >= (o.minSpend ?? Infinity))
     .sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))[0];
   if (threshold) discounts.push({ offerId: threshold.id, title: threshold.title, amount: threshold.amount ?? 0, kind: threshold.kind });
+  // Nudge towards a better threshold offer that is within reach (≤ 20% away).
+  for (const o of ctx.offers.filter((x) => x.kind === "fixed_threshold" && (x.amount ?? 0) > (threshold?.amount ?? 0))) {
+    const gap = (o.minSpend ?? 0) - afterLineDiscounts;
+    if (gap > 0 && gap <= (o.minSpend ?? 0) * 0.2) {
+      hints.push({ offerId: o.id, kind: "threshold_close", title: o.title, amountToGo: money(gap) });
+    }
+  }
 
   const discountTotal = money(discounts.reduce((s, d) => s + d.amount, 0));
   const total = money(Math.max(0, subtotal - discountTotal));
@@ -260,5 +283,6 @@ export function buildQuote(
     availability: { allInStock: missing.length === 0, missing, alternatives },
     categoryBreakdown,
     delivery,
+    hints,
   };
 }

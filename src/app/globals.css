@@ -1,26 +1,284 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────
+   Blueprint — design tokens
+   Paper + ink drafting table, blueprint-blue technical surfaces,
+   one retailer accent (set at runtime via --accent).
+   ────────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f2efe8;
+  --paper-2: #e9e5dc;
+  --paper-3: #dfdace;
+  --card: #fbfaf7;
+  --ink: #141311;
+  --ink-2: #45423b;
+  --ink-3: #8a857a;
+  --rule: rgba(20, 19, 17, 0.12);
+  --rule-2: rgba(20, 19, 17, 0.2);
+
+  --bp: #0f2c63;
+  --bp-deep: #0a1f47;
+  --bp-line: rgba(206, 226, 255, 0.85);
+  --bp-grid: rgba(206, 226, 255, 0.09);
+  --bp-grid-strong: rgba(206, 226, 255, 0.18);
+
+  --accent: #ff5b1f;
+  --on-accent: #140b06;
+
+  --ok: #1d9a55;
+  --warn: #e3a300;
+  --bad: #d63a2a;
+  --gold: #c9a24a;
+
+  --radius: 14px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-3: var(--paper-3);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-bp: var(--bp);
+  --color-bp-deep: var(--bp-deep);
+  --color-bp-line: var(--bp-line);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "tnum" 0;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Millimetre drafting paper */
+.paper-grid {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px),
+    linear-gradient(rgba(20, 19, 17, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 19, 17, 0.045) 1px, transparent 1px);
+  background-size:
+    120px 120px,
+    120px 120px,
+    12px 12px,
+    12px 12px;
+  background-position: -1px -1px;
+}
+
+/* Blueprint sheet */
+.bp-sheet {
+  background-color: var(--bp);
+  background-image:
+    radial-gradient(120% 90% at 30% 10%, rgba(80, 140, 255, 0.22), transparent 60%),
+    linear-gradient(var(--bp-grid-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid-strong) 1px, transparent 1px),
+    linear-gradient(var(--bp-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    80px 80px,
+    80px 80px,
+    16px 16px,
+    16px 16px;
+  color: #e8f0ff;
+}
+
+/* Typography helpers */
+.display {
+  font-stretch: 118%;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+}
+.display-cond {
+  font-stretch: 72%;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Hazard stripes for safety callouts */
+.hazard {
+  background: repeating-linear-gradient(-45deg, #141311 0 10px, #f5c400 10px 20px);
+}
+
+/* Perforated coupon edge */
+.perforated {
+  --hole: 7px;
+  mask:
+    radial-gradient(circle at 0 50%, transparent var(--hole), #000 calc(var(--hole) + 0.5px)) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent var(--hole), #000 calc(var(--hole) + 0.5px)) right / 51% 100% no-repeat;
+}
+
+/* Word-by-word reveal for streamed text */
+@keyframes word-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(0.25em);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
   }
 }
+.word-in {
+  display: inline;
+  animation: word-in 520ms var(--ease-out) both;
+}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 700ms var(--ease-out) both;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.draw {
+  stroke-dasharray: var(--len, 400);
+  stroke-dashoffset: var(--len, 400);
+  animation: draw 1.4s var(--ease-out) forwards;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.pulse-ring {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pulse-ring 1.8s var(--ease-out) infinite;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee {
+  animation: marquee 38s linear infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5ch;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes stamp {
+  0% {
+    transform: scale(2.2) rotate(-18deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.94) rotate(-9deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-10deg);
+    opacity: 1;
+  }
+}
+.stamp {
+  animation: stamp 520ms var(--ease-spring) both;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%) 0 0 / 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Scrollbars */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-2) transparent;
+}
+
+/* Inputs */
+textarea:focus,
+input:focus,
+button:focus-visible {
+  outline: none;
+}
+button:focus-visible {
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }

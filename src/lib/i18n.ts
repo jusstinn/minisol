@@ -1,0 +1,98 @@
+import type { Lang } from "@/domain/types";
+
+const STRINGS = {
+  headline: { ro: ["Ce construim", "în weekendul ăsta?"], en: ["What are we", "building this weekend?"] },
+  projects: {
+    ro: ["terasa", "baia", "gardul", "dormitorul", "peretele", "gazonul", "livingul"],
+    en: ["the deck", "the bathroom", "the fence", "the bedroom", "the wall", "the lawn", "the living room"],
+  },
+  subhead: {
+    ro: "Spune-i ce vrei să faci. Primești planul pas cu pas, lista completă de materiale, prețul tău cu oferte personale și unde e totul pe stoc.",
+    en: "Tell it what you want to do. Get a step-by-step plan, the complete materials list, your personal price with offers, and where everything is in stock.",
+  },
+  pickPass: { ro: "Alege un card de fidelitate demo", en: "Pick a demo loyalty card" },
+  fromWallet: { ro: "Deschis din Wallet", en: "Opened from Wallet" },
+  placeholder: { ro: "Descrie proiectul… ex. „vreau o terasă de 4 × 3 m în curte”", en: "Describe your project… e.g. “I want a 4 × 3 m deck in the garden”" },
+  placeholderFollow: { ro: "Întreabă orice, sau cere modificări…", en: "Ask anything, or ask for changes…" },
+  start: { ro: "Începe", en: "Start" },
+  send: { ro: "Trimite", en: "Send" },
+  points: { ro: "puncte", en: "points" },
+  member: { ro: "Membru", en: "Member" },
+  since: { ro: "din", en: "since" },
+  homeStore: { ro: "Magazinul tău", en: "Your store" },
+  boardEmpty: { ro: "Planul tău apare aici", en: "Your plan appears here" },
+  boardEmptySub: {
+    ro: "Pe măsură ce vorbiți, Blueprint desenează proiectul în 3D, calculează materialele și verifică stocul.",
+    en: "As you talk, Blueprint draws your project in 3D, calculates materials and checks stock.",
+  },
+  total: { ro: "Total proiect", en: "Project total" },
+  youSave: { ro: "Economisești", en: "You save" },
+  earn: { ro: "Câștigi", en: "You earn" },
+  shoppingList: { ro: "Lista de cumpărături", en: "Shopping list" },
+  products: { ro: "produse", en: "products" },
+  alreadyOwn: { ro: "Ai deja — nu le mai cumperi", en: "You already own — skipped" },
+  suggestions: { ro: "Poate îți mai trebuie", en: "You might also need" },
+  add: { ro: "Adaugă", en: "Add" },
+  aisle: { ro: "Culoar", en: "Aisle" },
+  inStock: { ro: "Pe stoc", en: "In stock" },
+  low: { ro: "Stoc redus", en: "Low stock" },
+  insufficient: { ro: "Insuficient", en: "Not enough" },
+  out: { ro: "Epuizat", en: "Out of stock" },
+  allInStockAt: { ro: "Totul e pe stoc la", en: "Everything in stock at" },
+  missingAt: { ro: "Lipsesc produse la", en: "Items missing at" },
+  moveTo: { ro: "Mută la", en: "Move to" },
+  byCategory: { ro: "Pe categorii", en: "By category" },
+  redeem: { ro: "Plătește cu puncte", en: "Pay with points" },
+  delivery: { ro: "Livrare", en: "Delivery" },
+  free: { ro: "gratuită", en: "free" },
+  truck: { ro: "camion", en: "truck" },
+  courier: { ro: "curier", en: "courier" },
+  plan: { ro: "Planul de lucru", en: "Work plan" },
+  tips: { ro: "Sfaturi de meșter", en: "Pro tips" },
+  safety: { ro: "Siguranță", en: "Safety" },
+  stock: { ro: "Stoc în magazine", en: "Stock by store" },
+  offers: { ro: "Ofertele tale", en: "Your offers" },
+  applied: { ro: "Aplicat", en: "Applied" },
+  validUntil: { ro: "valabil până la", en: "valid until" },
+  measurements: { ro: "Măsurători", en: "Measurements" },
+  assumptions: { ro: "Presupuneri", en: "Assumptions" },
+  hours: { ro: "ore", en: "hours" },
+  people: { ro: "pers.", en: "people" },
+  difficulty: { ro: "Dificultate", en: "Difficulty" },
+  viewBlueprint: { ro: "Plan", en: "Blueprint" },
+  viewReal: { ro: "Real", en: "Real" },
+  viewExploded: { ro: "Explodat", en: "Exploded" },
+  sendToWallet: { ro: "Trimite lista în Wallet", en: "Send list to Wallet" },
+  reserve: { ro: "Rezervă pentru ridicare", en: "Reserve for pickup" },
+  newProject: { ro: "Proiect nou", en: "New project" },
+  switchMember: { ro: "Schimbă membrul", en: "Switch member" },
+  searchResults: { ro: "Rezultate", en: "Results" },
+  thinking: { ro: "Mă gândesc", en: "Thinking" },
+  error: { ro: "Ceva n-a mers. Încearcă din nou.", en: "Something went wrong. Please try again." },
+  quick: {
+    ro: ["Variantă mai ieftină", "Vreau premium", "Ce oferte am?", "Unde e totul pe stoc?", "Adaugă sugestiile"],
+    en: ["Cheaper option", "Go premium", "What offers do I have?", "Where is everything in stock?", "Add the suggestions"],
+  },
+  privacy: {
+    ro: "Asistentul vede doar nivelul, punctele, magazinul și interesele tale — niciodată numele sau datele de contact.",
+    en: "The assistant only sees your tier, points, store and interests — never your name or contact details.",
+  },
+  noPersonalization: { ro: "Fără personalizare (fără consimțământ)", en: "No personalisation (no consent)" },
+  demoNote: { ro: "Demo · date de catalog și stoc fictive", en: "Demo · fictional catalogue & stock data" },
+} as const;
+
+type Key = keyof typeof STRINGS;
+
+export function tr<K extends Key>(key: K, lang: Lang): (typeof STRINGS)[K]["ro"] {
+  return STRINGS[key][lang] as (typeof STRINGS)[K]["ro"];
+}
+
+export const PROJECT_STARTERS: { id: string; icon: string; ro: string; en: string; promptRo: string; promptEn: string }[] = [
+  { id: "deck", icon: "deck", ro: "Terasă 4 × 3 m", en: "4 × 3 m deck", promptRo: "Vreau să-mi fac o terasă din lemn de 4 x 3 m în curte, pe pământ.", promptEn: "I want to build a 4 x 3 m wooden deck in my garden, on soil." },
+  { id: "paint", icon: "paint", ro: "Vopsesc dormitorul", en: "Paint the bedroom", promptRo: "Vreau să vopsesc dormitorul: 4 x 3,5 m, înălțime 2,6 m, o ușă și o fereastră, inclusiv tavanul.", promptEn: "I want to paint my bedroom: 4 x 3.5 m, 2.6 m high, one door and one window, ceiling included." },
+  { id: "laminate", icon: "laminate", ro: "Parchet în living", en: "Laminate in the living room", promptRo: "Vreau parchet laminat în living, 5 x 4 m, pe șapă de beton.", promptEn: "I want laminate flooring in my living room, 5 x 4 m, on a concrete screed." },
+  { id: "bath", icon: "tiles", ro: "Baie nouă", en: "New bathroom", promptRo: "Refac baia: 2,5 x 2 m, gresie pe jos și faianță pe pereți.", promptEn: "I'm redoing my bathroom: 2.5 x 2 m, floor tiles and wall tiles." },
+  { id: "fence", icon: "fence", ro: "Gard 20 m", en: "20 m fence", promptRo: "Am nevoie de un gard din panouri de 20 m lungime, 1,8 m înălțime.", promptEn: "I need a 20 m long panel fence, 1.8 m high." },
+  { id: "drywall", icon: "drywall", ro: "Perete gips-carton", en: "Drywall partition", promptRo: "Vreau să împart o cameră cu un perete de gips-carton de 3,5 m lungime, 2,6 m înălțime, cu o ușă.", promptEn: "I want to split a room with a 3.5 m long, 2.6 m high drywall partition with one door." },
+  { id: "lawn", icon: "lawn", ro: "Gazon nou", en: "New lawn", promptRo: "Vreau gazon nou pe 80 mp în spatele casei.", promptEn: "I want a new lawn on 80 m² behind the house." },
+];
