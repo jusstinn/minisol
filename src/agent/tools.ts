@@ -10,6 +10,7 @@ import type { BasketItem, Quote } from "@/domain/quote";
 import { resolveRequirements } from "@/domain/resolve";
 import type { CategoryId, Customer, Lang, MaterialRole, Product, QualityTier } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import { dec, int, lei } from "@/lib/format";
 import type { Card, OwnedToolView, SessionState, StockStoreView, SuggestionView } from "./types";
 
 export interface ToolContext {
@@ -245,8 +246,17 @@ async function priceBasket(ctx: ToolContext, items: BasketItem[], storeId: strin
 }
 
 /** What the model needs from a quote — the UI renders the full card. */
-function quoteForModel(q: Quote) {
+function quoteForModel(q: Quote, lang: Lang) {
+  const best = q.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
   return {
+    // Pre-formatted strings: copy these verbatim instead of composing numbers.
+    display: {
+      total: lei(q.total, lang),
+      saved: q.discountTotal > 0 ? lei(q.discountTotal, lang) : null,
+      pointsEarned: int(q.points.earned, lang),
+      payWithPoints: q.points.redeemableValue > 0 ? lei(q.points.redeemableValue, lang) : null,
+      nearestStoreWithEverything: best ? `${best.name} (${dec(best.distanceKm, lang, 1)} km)` : null,
+    },
     store: { id: q.storeId, name: q.storeName },
     lines: q.lines.map((l) => ({
       sku: l.sku,
@@ -419,7 +429,7 @@ const handlers: Record<string, Handler> = {
         storeWarning: store.error,
         project: { title: calc.title, inputsUsed: calc.inputs, measurements: calc.measurements, assumptions: calc.assumptions, estimate: calc.estimate, safetyNotes: calc.safetyNotes },
         quality,
-        quote: quoteForModel(quote),
+        quote: quoteForModel(quote, ctx.lang),
         ownedToolsSkipped: ownedViews.map((o) => `${o.roleLabel} (${o.productName}, bought ${o.date})`),
         optionalSuggestions: suggestions.map((s) => ({ sku: s.sku, name: s.name, qty: s.qty, total: s.total, why: s.basis })),
         unavailableRoles: resolved.skipped.filter((s) => s.reason === "no_product").map((s) => s.role),
@@ -485,7 +495,7 @@ const handlers: Record<string, Handler> = {
     return {
       state,
       cards: [{ kind: "quote", id: cardId("quote"), quote, suggestions: [], owned: [] }],
-      forModel: { changes, errors: errors.length ? errors : undefined, quote: quoteForModel(quote) },
+      forModel: { changes, errors: errors.length ? errors : undefined, quote: quoteForModel(quote, ctx.lang) },
     };
   },
 

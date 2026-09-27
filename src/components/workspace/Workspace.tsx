@@ -222,6 +222,19 @@ function Rail({
             <div key={m.id} className="space-y-3">
               <ConstructionLog message={m} />
               {m.text && <RevealText text={m.text} className="text-[15.5px] leading-[1.6] text-ink-2" />}
+              {m.verified && m.verified.checked > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-ok/30 bg-ok/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ok"
+                  title={lang === "en" ? "Every amount in this answer was checked against the pricing engine" : "Fiecare sumă din răspuns a fost verificată cu motorul de prețuri"}
+                >
+                  <IconCheck size={12} />
+                  {m.verified.replaced
+                    ? lang === "en" ? "Corrected by the pricing engine" : "Corectat de motorul de prețuri"
+                    : lang === "en" ? `${m.verified.checked} amounts verified` : `${m.verified.checked} sume verificate`}
+                </motion.div>
+              )}
               {m.pending && !m.text && m.log.length === 0 && (
                 <div className="flex items-center gap-2 font-mono text-[12px] text-ink-3">
                   <Spinner /> {tr("thinking", lang)}…

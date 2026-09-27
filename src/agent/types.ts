@@ -90,6 +90,10 @@ export type AgentEvent =
   | { type: "mode"; mode: "live" | "scripted"; reason?: string }
   | { type: "status"; tool: string; label: string }
   | { type: "text"; delta: string }
+  /** The guard rejected the model's reply; the client swaps in this text. */
+  | { type: "replace_text"; text: string }
+  /** Result of checking every money amount in the reply against the quote engine. */
+  | { type: "verified"; ok: boolean; checked: number; replaced?: boolean }
   | { type: "card"; card: Card }
   | { type: "state"; state: SessionState }
   | { type: "history"; items: unknown[] }

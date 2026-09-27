@@ -21,6 +21,7 @@ export interface ChatMessage {
   pending?: boolean;
   error?: string;
   ms?: number;
+  verified?: { ok: boolean; checked: number; replaced?: boolean };
 }
 
 type CardOf<K extends Card["kind"]> = Extract<Card, { kind: K }>;
@@ -121,6 +122,12 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 break;
               case "mode":
                 setMode({ mode: ev.mode, reason: ev.reason });
+                break;
+              case "replace_text":
+                patchAssistant(aId, (m) => ({ ...m, text: ev.text }));
+                break;
+              case "verified":
+                patchAssistant(aId, (m) => ({ ...m, verified: { ok: ev.ok, checked: ev.checked, replaced: ev.replaced } }));
                 break;
               case "history":
                 historyRef.current = ev.items;

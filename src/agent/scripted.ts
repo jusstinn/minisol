@@ -9,6 +9,7 @@ import { scriptedPlan } from "./scripted-plans";
 import { TOOL_STATUS, executeTool } from "./tools";
 import type { ToolContext } from "./tools";
 import type { AgentEvent, Card, SessionState } from "./types";
+import { verifyReply } from "./verify";
 
 /**
  * Offline demo agent: no LLM. Parses the request with rules, runs the SAME tools
@@ -178,7 +179,7 @@ function stockSentence(q: Quote, lang: Lang): string {
     : `La ${q.storeName} nu ajunge stocul pentru ${list} — pot găsi alternative pe stoc sau livrare la domiciliu.`;
 }
 
-function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, title: string, lang: Lang): string {
+export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, title: string, lang: Lang): string {
   const en = lang === "en";
   const parts: string[] = [];
   parts.push(
@@ -241,6 +242,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   yield { type: "mode", mode: "scripted", reason: opts.reason };
   const intent = parseIntent(opts.message, state);
   let reply = "";
+  let lastQuote: Quote | undefined;
+  const extraAmounts: number[] = [];
 
   const runTool = async function* (name: string, args: Record<string, unknown>, delay: number) {
     yield status(name);
@@ -250,7 +253,10 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       state = r.state;
       yield { type: "state", state } as AgentEvent;
     }
-    for (const card of r.cards ?? []) yield { type: "card", card } as AgentEvent;
+    for (const card of r.cards ?? []) {
+      if (card.kind === "quote") lastQuote = card.quote;
+      yield { type: "card", card } as AgentEvent;
+    }
     return r;
   };
 
@@ -286,6 +292,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     if (q) {
       const prev = before && before.kind === "quote" ? before.quote.total : undefined;
       const diff = prev !== undefined ? q.quote.total - prev : 0;
+      extraAmounts.push(Math.round(Math.abs(diff) * 100) / 100);
       const label = intent.quality === "budget" ? (lang === "en" ? "The budget version" : "Varianta economică") : lang === "en" ? "The premium version" : "Varianta premium";
       reply =
         lang === "en"
@@ -343,6 +350,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   }
 
   yield* streamText(reply);
+  const check = verifyReply(reply, lastQuote, extraAmounts);
+  if (check.checked > 0) yield { type: "verified", ok: check.ok, checked: check.checked };
   yield { type: "history", items: [...(opts.history ?? []), { role: "user", content: opts.message }, { role: "assistant", content: reply }] };
   yield { type: "done", ms: Date.now() - started };
 }
