@@ -1,6 +1,6 @@
 import { distanceKm } from "./geo";
 import { LOYALTY } from "./loyalty";
-import type { CategoryId, Customer, MaterialRole, Offer, Product, Store } from "./types";
+import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, Store } from "./types";
 
 /**
  * Deterministic pricing: line totals, best offer per line, basket-level offers,
@@ -121,7 +121,7 @@ function offerAppliesToLine(o: Offer, p: Product, role: MaterialRole | undefined
 
 export function buildQuote(
   items: BasketItem[],
-  ctx: { customer: Customer; storeId: string; offers: Offer[] },
+  ctx: { customer: Customer; storeId: string; offers: Offer[]; lang?: Lang },
   deps: QuoteDeps,
 ): Quote {
   const store = deps.stores.find((s) => s.id === ctx.storeId) ?? deps.stores[0];
@@ -134,6 +134,7 @@ export function buildQuote(
     merged.set(it.sku, prev ? { ...prev, qty: prev.qty + Math.round(it.qty) } : { ...it, qty: Math.round(it.qty) });
   }
 
+  const ot = (o: Offer) => (ctx.lang === "en" ? o.titleEn : o.title);
   const percentOffers = ctx.offers.filter((o) => o.kind === "percent_category" || o.kind === "percent_role");
   const lines: QuoteLine[] = [...merged.values()].map((it) => {
     const p = deps.products.get(it.sku)!;
@@ -148,7 +149,7 @@ export function buildQuote(
     const available = deps.stockOf(store.id, p.sku);
     return {
       sku: p.sku,
-      name: p.name,
+      name: ctx.lang === "en" ? p.nameEn : p.name,
       brand: p.brand,
       category: p.category,
       qty: it.qty,
@@ -173,7 +174,7 @@ export function buildQuote(
   for (const l of lines) if (l.offerId) byOffer.set(l.offerId, money((byOffer.get(l.offerId) ?? 0) + l.discount));
   for (const [offerId, amount] of byOffer) {
     const o = ctx.offers.find((x) => x.id === offerId)!;
-    discounts.push({ offerId, title: o.title, amount, kind: o.kind });
+    discounts.push({ offerId, title: ot(o), amount, kind: o.kind });
   }
 
   const hints: QuoteHint[] = [];
@@ -185,14 +186,14 @@ export function buildQuote(
     if (units < b.requiresQty) continue;
     const freeCandidates = lines.filter((l) => l.role === b.freeRole && l.qty > 0);
     if (freeCandidates.length === 0) {
-      hints.push({ offerId: o.id, kind: "bundle_missing_free_item", title: o.title, role: b.freeRole });
+      hints.push({ offerId: o.id, kind: "bundle_missing_free_item", title: ot(o), role: b.freeRole });
       continue;
     }
     const cheapest = freeCandidates.reduce((a, c) => (c.unitPrice < a.unitPrice ? c : a));
     const unitNet = money(cheapest.netTotal / cheapest.qty);
     cheapest.discount = money(cheapest.discount + unitNet);
     cheapest.netTotal = money(cheapest.netTotal - unitNet);
-    discounts.push({ offerId: o.id, title: o.title, amount: unitNet, kind: o.kind });
+    discounts.push({ offerId: o.id, title: ot(o), amount: unitNet, kind: o.kind });
   }
 
   const afterLineDiscounts = money(lines.reduce((s, l) => s + l.netTotal, 0));
@@ -201,12 +202,12 @@ export function buildQuote(
   const threshold = ctx.offers
     .filter((o) => o.kind === "fixed_threshold" && afterLineDiscounts >= (o.minSpend ?? Infinity))
     .sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))[0];
-  if (threshold) discounts.push({ offerId: threshold.id, title: threshold.title, amount: threshold.amount ?? 0, kind: threshold.kind });
+  if (threshold) discounts.push({ offerId: threshold.id, title: ot(threshold), amount: threshold.amount ?? 0, kind: threshold.kind });
   // Nudge towards a better threshold offer that is within reach (≤ 20% away).
   for (const o of ctx.offers.filter((x) => x.kind === "fixed_threshold" && (x.amount ?? 0) > (threshold?.amount ?? 0))) {
     const gap = (o.minSpend ?? 0) - afterLineDiscounts;
     if (gap > 0 && gap <= (o.minSpend ?? 0) * 0.2) {
-      hints.push({ offerId: o.id, kind: "threshold_close", title: o.title, amountToGo: money(gap) });
+      hints.push({ offerId: o.id, kind: "threshold_close", title: ot(o), amountToGo: money(gap) });
     }
   }
 
@@ -225,7 +226,7 @@ export function buildQuote(
     const m = multipliers.find((o) => o.categories?.includes(l.category));
     if (m?.multiplier) {
       pts *= m.multiplier;
-      if (!bonusNotes.includes(m.title)) bonusNotes.push(m.title);
+      if (!bonusNotes.includes(ot(m))) bonusNotes.push(ot(m));
     }
     earned += pts;
   }

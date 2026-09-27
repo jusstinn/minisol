@@ -8,7 +8,7 @@ import type { BasketItem } from "@/domain/quote";
  * directly in the UI (qty steppers, "add suggestion", switch store).
  */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as { memberId?: string; items?: BasketItem[]; storeId?: string; tenant?: string } | null;
+  const body = (await req.json().catch(() => null)) as { memberId?: string; items?: BasketItem[]; storeId?: string; tenant?: string; lang?: "ro" | "en" } | null;
   if (!body?.memberId || !Array.isArray(body.items)) return Response.json({ error: "memberId and items required" }, { status: 400 });
   const tenant = getTenant(body.tenant);
   const sources = getDataSources(tenant.id);
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     .map((i) => ({ sku: i.sku, qty: Math.min(999, Math.round(Number(i.qty))), role: i.role, basis: i.basis, isTool: i.isTool }));
   const storeId = body.storeId ?? customer.homeStoreId;
   const quote = await priceBasket(
-    { sources, customer, state: { basket: items, storeId }, lang: customer.language, now: new Date() },
+    { sources, customer, state: { basket: items, storeId }, lang: body.lang ?? customer.language, now: new Date() },
     items,
     storeId,
   );

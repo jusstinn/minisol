@@ -38,6 +38,7 @@ const QUALITIES: QualityTier[] = ["budget", "standard", "premium"];
 let cardSeq = 0;
 const cardId = (k: string) => `${k}-${Date.now().toString(36)}-${(cardSeq++).toString(36)}`;
 const t = (lang: Lang, ro: string, en: string) => (lang === "en" ? en : ro);
+const pn = (p: Product, lang: Lang) => (lang === "en" ? p.nameEn : p.name);
 const nullable = (schema: Record<string, unknown>) => ({
   ...schema,
   type: [schema.type, "null"],
@@ -233,7 +234,7 @@ async function priceBasket(ctx: ToolContext, items: BasketItem[], storeId: strin
   const stock = await sources.inventory.stock(stores.map((s) => s.id), skus);
   return buildQuote(
     items,
-    { customer, storeId, offers: eligibleOffers(offers, customer, ctx.now) },
+    { customer, storeId, offers: eligibleOffers(offers, customer, ctx.now), lang: ctx.lang },
     {
       products: new Map(products.map((p) => [p.sku, p])),
       stores,
@@ -387,14 +388,14 @@ const handlers: Record<string, Handler> = {
 
     const suggestions: SuggestionView[] = resolved.suggestions.map((s) => {
       const p = bySku.get(s.sku)!;
-      return { sku: s.sku, name: p.name, qty: s.qty, unitPrice: p.price, total: Math.round(p.price * s.qty * 100) / 100, basis: s.basis, isTool: s.isTool };
+      return { sku: s.sku, name: pn(p, ctx.lang), qty: s.qty, unitPrice: p.price, total: Math.round(p.price * s.qty * 100) / 100, basis: s.basis, isTool: s.isTool };
     });
     const ownedProducts = await ctx.sources.catalog.getMany(resolved.skipped.filter((s) => s.ownedSku).map((s) => s.ownedSku!));
     const ownedViews: OwnedToolView[] = resolved.skipped
       .filter((s) => s.reason === "owned")
       .map((s) => ({
         roleLabel: t(ctx.lang, MATERIAL_ROLES[s.role].label, MATERIAL_ROLES[s.role].labelEn),
-        productName: ownedProducts.find((p) => p.sku === s.ownedSku)?.name ?? "",
+        productName: (() => { const op = ownedProducts.find((p) => p.sku === s.ownedSku); return op ? pn(op, ctx.lang) : ""; })(),
         date: s.ownedDate ?? "",
       }));
 
@@ -446,7 +447,7 @@ const handlers: Record<string, Handler> = {
           const n = qty && qty > 0 ? qty : 1;
           if (idx >= 0) basket[idx] = { ...basket[idx], qty: basket[idx].qty + n };
           else basket.push({ sku, qty: n, role: p.roles[0], isTool: p.isTool });
-          changes.push(`+${n} ${p.name}`);
+          changes.push(`+${n} ${pn(p, ctx.lang)}`);
           break;
         }
         case "remove":
@@ -501,7 +502,7 @@ const handlers: Record<string, Handler> = {
     const stock = await ctx.sources.inventory.stock([storeId], products.map((p) => p.sku));
     const views = products.map((p) => ({
       sku: p.sku,
-      name: p.name,
+      name: pn(p, ctx.lang),
       brand: p.brand,
       price: p.price,
       salesUnit: p.salesUnit,
@@ -515,7 +516,7 @@ const handlers: Record<string, Handler> = {
       forModel: {
         results: products.map((p, i) => ({
           sku: p.sku,
-          name: p.name,
+          name: pn(p, ctx.lang),
           price: p.price,
           per: p.salesUnit,
           content: `${p.content.amount} ${p.content.unit}`,
@@ -538,7 +539,7 @@ const handlers: Record<string, Handler> = {
     const selected = ctx.state.storeId ?? ctx.customer.homeStoreId;
     const views: StockStoreView[] = stores
       .map((s) => {
-        const items = products.map((p) => ({ sku: p.sku, name: p.name, needed: needed.get(p.sku) ?? 1, available: stock.get(`${s.id}:${p.sku}`) ?? 0 }));
+        const items = products.map((p) => ({ sku: p.sku, name: pn(p, ctx.lang), needed: needed.get(p.sku) ?? 1, available: stock.get(`${s.id}:${p.sku}`) ?? 0 }));
         return {
           storeId: s.id,
           name: s.name,

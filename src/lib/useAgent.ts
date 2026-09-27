@@ -155,7 +155,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       const res = await fetch("/api/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, items: basket, storeId: sid }),
+        body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, items: basket, storeId: sid, lang: opts.lang }),
       });
       if (!res.ok) return;
       const { quote } = (await res.json()) as { quote: Quote };
@@ -167,7 +167,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       }));
       setPointsDelta(quote.points.earned);
     },
-    [opts.memberId, opts.tenant],
+    [opts.memberId, opts.tenant, opts.lang],
   );
 
   const setQty = useCallback(

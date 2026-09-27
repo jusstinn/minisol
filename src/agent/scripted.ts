@@ -23,7 +23,16 @@ type Intent =
   | { kind: "offers" }
   | { kind: "stock" }
   | { kind: "add_suggestions" }
+  | { kind: "unsafe"; topic: "electrical" | "gas" | "structural" | "roof" | "asbestos" }
   | { kind: "unknown" };
+
+const UNSAFE: [Extract<Intent, { kind: "unsafe" }>["topic"], RegExp][] = [
+  ["electrical", /\b(priz\w*|circuit\w*|tablou electric|siguran\w* automat\w*|cablaj\w*|socket\w*|wiring|rewire|fuse ?box|consumer unit)\b/],
+  ["gas", /\b(gaz|centrala pe gaz|gas|boiler pe gaz|gas boiler)\b/],
+  ["structural", /\b(perete portant|zid portant|daram\w* (un )?perete|load[- ]bearing|structural|knock (down|through) (a )?wall)\b/],
+  ["roof", /\b(acoperis\w*|roof\w*)\b/],
+  ["asbestos", /\b(azbest|asbestos)\b/],
+];
 
 const NUM = String.raw`(\d+(?:[.,]\d+)?)`;
 const num = (s: string) => Number(s.replace(",", "."));
@@ -32,7 +41,7 @@ const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
   ["tiling", /\b(baie|baia|bathroom|gresie|faianta|tile|tiles|tiling|placare)\b/],
   ["fence", /\b(gard|gardul|fence|fencing)\b/],
   ["deck", /\b(terasa|terasă|deck|decking|terrace|patio)\b/],
-  ["laminate_floor", /\b(parchet|laminat|laminate|flooring)\b/],
+  ["laminate_floor", /\b(parchet|laminat|laminate|flooring|floors?|pardosea\w*)\b/],
   ["drywall_partition", /\b(gips|rigips|gipscarton|drywall|plasterboard|partition|despart\w*)\b/],
   ["lawn", /\b(gazon|gazonul|lawn|iarba|grass|turf)\b/],
   ["paint_room", /\b(vops\w*|zugrav\w*|paint\w*|repaint)\b/],
@@ -45,6 +54,8 @@ export function parseIntent(raw: string, state: SessionState): Intent {
     : /\b(premium|durabil\w*|best|cel mai bun|top|calitate)\b/.test(t)
       ? "premium"
       : undefined;
+  const unsafe = UNSAFE.find(([, re]) => re.test(t));
+  if (unsafe) return { kind: "unsafe", topic: unsafe[0] };
   const type = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
 
   if (!type && state.project) {
@@ -306,11 +317,23 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         ? `Added the extras — new total **${lei(q.quote.total, lang)}**, and **${int(q.quote.points.earned, lang)} points** to earn.`
         : `Am adăugat extra-urile — total nou **${lei(q.quote.total, lang)}** și **${int(q.quote.points.earned, lang)} puncte** de câștigat.`
       : "";
+  } else if (intent.kind === "unsafe") {
+    const pro = {
+      electrical: { ro: "un electrician autorizat ANRE", en: "a licensed electrician" },
+      gas: { ro: "un instalator autorizat pentru gaz", en: "a Gas Safe / licensed gas fitter" },
+      structural: { ro: "un inginer structurist", en: "a structural engineer" },
+      roof: { ro: "o echipă de acoperișuri cu echipament de siguranță", en: "a roofing crew with fall protection" },
+      asbestos: { ro: "o firmă autorizată pentru îndepărtarea azbestului", en: "a licensed asbestos removal company" },
+    }[intent.topic];
+    reply =
+      lang === "en"
+        ? `For safety this one needs **${pro.en}** — it's not a DIY job, and ${opts.tenant.name} can recommend an installer. I can still plan everything around it: the finishing materials, tools and a shopping list for the parts you can do yourself.`
+        : `Din motive de siguranță, aici ai nevoie de **${pro.ro}** — nu e o lucrare de făcut singur, iar ${opts.tenant.name} îți poate recomanda un instalator. Pot planifica în schimb tot ce ține de finisaje, sculele și lista pentru partea pe care o faci tu.`;
   } else {
     reply =
       lang === "en"
-        ? "I can plan a **deck, room painting, laminate floor, bathroom tiling, fence, drywall partition or new lawn** — tell me what you'd like to do and the rough dimensions."
-        : "Pot planifica o **terasă, vopsirea unei camere, parchet, placarea băii, un gard, un perete de gips-carton sau gazon nou** — spune-mi ce vrei să faci și dimensiunile aproximative.";
+        ? "I'm your DIY project assistant — I can plan a **deck, room painting, laminate floor, bathroom tiling, fence, drywall partition or new lawn**. Tell me what you'd like to do and the rough dimensions."
+        : "Sunt asistentul tău pentru proiecte DIY — pot planifica o **terasă, vopsirea unei camere, parchet, placarea băii, un gard, un perete de gips-carton sau gazon nou**. Spune-mi ce vrei să faci și dimensiunile aproximative.";
   }
 
   yield* streamText(reply);
