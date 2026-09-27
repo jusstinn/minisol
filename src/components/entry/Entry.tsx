@@ -9,6 +9,7 @@ import type { Lang } from "@/domain/types";
 import { PROJECT_STARTERS, tr } from "@/lib/i18n";
 import { buildScene } from "../blueprint/builders";
 import { IconArrow, Logo, PROJECT_ICONS } from "../ui/icons";
+import { MicButton } from "../ui/MicButton";
 import { Scramble } from "../ui/primitives";
 import type { MemberSummary } from "./WalletPass";
 import { WalletPass } from "./WalletPass";
@@ -124,6 +125,7 @@ export default function Entry({
                 placeholder={tr("placeholder", lang)}
                 className="min-h-[56px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[16px] leading-snug text-ink placeholder:text-ink-3"
               />
+              <MicButton lang={lang} value={prompt} onChange={setPrompt} className="h-12 w-12" />
               <button
                 onClick={() => submit(prompt)}
                 disabled={!prompt.trim() || !member}
@@ -160,8 +162,8 @@ export default function Entry({
         </section>
 
         {/* right: blueprint sheet + wallet passes */}
-        <section className="relative min-h-[520px] lg:min-h-[640px]">
-          <div className="bp-sheet absolute inset-0 overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] lg:left-10">
+        <section className="flex flex-col gap-8 lg:relative lg:block lg:min-h-[640px]">
+          <div className="bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:left-10 lg:h-auto">
             <div className="absolute inset-0">
               <Scene build={heroBuild} mode="blueprint" autoRotate compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
             </div>
@@ -177,7 +179,7 @@ export default function Entry({
           </div>
 
           {/* pass stack */}
-          <div className="absolute -bottom-2 left-0 w-[min(80%,330px)] sm:left-2 lg:-left-8 lg:-bottom-4">
+          <div className="order-first mx-auto w-[min(92%,340px)] lg:absolute lg:-bottom-4 lg:-left-8 lg:order-none lg:mx-0 lg:w-[330px]">
             <div className="label mb-[104px] pl-1 text-ink-2">{tr("pickPass", lang)} ↓</div>
             <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
           </div>

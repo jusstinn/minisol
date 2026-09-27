@@ -1,4 +1,6 @@
 "use client";
+/* three.js objects (camera, refs shared with useFrame) are mutated imperatively every frame by design. */
+/* eslint-disable react-hooks/immutability */
 
 import { ContactShadows, Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";

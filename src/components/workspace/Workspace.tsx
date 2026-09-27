@@ -12,6 +12,7 @@ import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
 import { IconArrowUp, IconCheck, IconClose, IconLayers, Logo } from "../ui/icons";
+import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
 
 export default function Workspace({
@@ -62,7 +63,7 @@ export default function Workspace({
           className="ml-1 flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 transition hover:border-ink"
         >
           <span className={`h-1.5 w-1.5 rounded-full ${offline || agent.mode?.mode === "scripted" ? "bg-accent" : "bg-ok"} ${agent.busy ? "animate-pulse" : ""}`} />
-          {offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}
+          <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
         </button>
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden w-[250px] sm:block">
@@ -75,8 +76,13 @@ export default function Workspace({
               </button>
             ))}
           </div>
-          <button onClick={onExit} className="rounded-full border border-rule px-3 py-1.5 text-[12.5px] font-medium text-ink-2 transition hover:border-ink hover:text-ink">
-            {tr("newProject", lang)}
+          <button
+            onClick={onExit}
+            className="whitespace-nowrap rounded-full border border-rule px-3 py-1.5 text-[12.5px] font-medium text-ink-2 transition hover:border-ink hover:text-ink"
+            aria-label={tr("newProject", lang)}
+          >
+            <span className="sm:hidden">+</span>
+            <span className="hidden sm:inline">{tr("newProject", lang)}</span>
           </button>
         </div>
       </header>
@@ -260,6 +266,7 @@ function Rail({
             placeholder={tr("placeholderFollow", lang)}
             className="max-h-32 min-h-[42px] flex-1 resize-none bg-transparent px-2.5 py-2.5 text-[15px] text-ink placeholder:text-ink-3"
           />
+          <MicButton lang={lang} value={text} onChange={setText} />
           <button
             onClick={() => send(text)}
             disabled={busy || !text.trim()}

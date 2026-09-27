@@ -14,6 +14,7 @@ import PlanPanel from "./PlanPanel";
 import ProductsPanel from "./ProductsPanel";
 import QuotePanel from "./QuotePanel";
 import StockPanel from "./StockPanel";
+import WeatherPanel from "./WeatherPanel";
 
 interface Props {
   board: BoardState;
@@ -105,6 +106,15 @@ export default function Board(props: Props) {
         <Flash on={board.last === "plan"} v={board.version}>
           {renderCard(board.plan)}
         </Flash>
+      )}
+      {board.project && quote && ["deck", "fence", "lawn"].includes(board.project.project.type) && (
+        <WeatherPanel
+          lat={quote.availability.origin.lat}
+          lng={quote.availability.origin.lng}
+          city={quote.availability.origin.city}
+          type={board.project.project.type}
+          lang={lang}
+        />
       )}
       {board.products && (
         <Flash on={board.last === "products"} v={board.version}>

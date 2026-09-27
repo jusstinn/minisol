@@ -69,7 +69,7 @@ export default function BlueprintPanel({
           {project.title}
         </motion.h2>
         <div className={`mt-3 space-y-0.5 font-mono text-[11px] ${dark ? "text-[#dce9ff]" : "text-ink-2"}`}>
-          {project.measurements.slice(0, 4).map((m, i) => (
+          {project.measurements.slice(0, inline ? 2 : 4).map((m, i) => (
             <motion.div
               key={m.label}
               initial={{ opacity: 0, x: -8 }}

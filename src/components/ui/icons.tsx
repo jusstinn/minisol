@@ -171,6 +171,12 @@ export const IconTag = ({ size, ...p }: P) => (
     <circle cx="7.5" cy="7.5" r="1.5" />
   </svg>
 );
+export const IconMic = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+  </svg>
+);
 export const IconClose = ({ size, ...p }: P) => (
   <svg {...base(size, p)}>
     <path d="M6 6l12 12M18 6L6 18" />
