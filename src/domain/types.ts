@@ -87,6 +87,7 @@ export const MATERIAL_ROLES = {
   post_cap: { unit: "buc", label: "Capac stâlp", labelEn: "Post cap" },
   wood_stain: { unit: "l", label: "Lazură lemn", labelEn: "Wood stain" },
   post_hole_digger: { unit: "buc", label: "Burghiu de pământ / sapă", labelEn: "Post-hole digger" },
+  fence_gate: { unit: "buc", label: "Poartă gard", labelEn: "Fence gate" },
 
   // drywall partition
   drywall_board: { unit: "m²", label: "Placă gips-carton", labelEn: "Plasterboard" },
@@ -253,4 +254,6 @@ export interface Requirement {
    * e.g. deck boards computed for 145 mm width → 120 mm boards need 145/120 × more.
    */
   scaleBySpec?: { key: string; reference: number };
+  /** Prefer products whose "min-max" range spec contains this value (e.g. pedestal height). */
+  fitRange?: { key: string; value: number };
 }

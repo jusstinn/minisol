@@ -1,3 +1,4 @@
+import { unionPerimeter, zoneArea } from "./layout";
 import type { BaseUnit, Lang, MaterialRole, Requirement } from "./types";
 import { MATERIAL_ROLES } from "./types";
 
@@ -92,7 +93,7 @@ class Builder {
     quantity: number,
     basisRo: string,
     basisEn: string,
-    extra: Partial<Pick<Requirement, "optional" | "areaToCover" | "match" | "scaleBySpec">> = {},
+    extra: Partial<Pick<Requirement, "optional" | "areaToCover" | "match" | "scaleBySpec" | "fitRange">> = {},
   ) {
     const unit: BaseUnit = MATERIAL_ROLES[role].unit;
     const q = unit === "buc" ? Math.ceil(quantity - 1e-9) : r2(quantity);
@@ -135,7 +136,11 @@ function paintRoom(p: Params, lang: Lang): CalculationResult {
     : "repaint";
 
   const perimeter = 2 * (L + W);
-  const walls = Math.max(0, perimeter * H - doors * 1.89 - windows * 1.8);
+  const openings = Array.isArray(p.openings) ? (p.openings as { kind: string; width: number; height: number }[]) : null;
+  const openingArea = openings
+    ? openings.reduce((s, o) => s + (Number(o.width) || 0.9) * (Number(o.height) || (o.kind === "window" ? 1.5 : 2.1)), 0)
+    : doors * 1.89 + windows * 1.8;
+  const walls = Math.max(0, perimeter * H - openingArea);
   const ceil = ceiling ? L * W : 0;
   const area = walls + ceil;
 
@@ -144,8 +149,8 @@ function paintRoom(p: Params, lang: Lang): CalculationResult {
   b.measure("Total de vopsit", "Total to paint", area, "m²");
   if (p.heightM === undefined) b.assume("Înălțime cameră presupusă 2,6 m.", "Assumed ceiling height of 2.6 m.");
   b.assume(
-    `Scăzute ${doors} uși (0,9×2,1 m) și ${windows} ferestre (1,2×1,5 m).`,
-    `Deducted ${doors} door(s) (0.9×2.1 m) and ${windows} window(s) (1.2×1.5 m).`,
+    openings ? `Scăzute ușile și ferestrele din schiță (${r1(openingArea)} m²).` : `Scăzute ${doors} uși (0,9×2,1 m) și ${windows} ferestre (1,2×1,5 m).`,
+    openings ? `Deducted the doors and windows from the sketch (${r1(openingArea)} m²).` : `Deducted ${doors} door(s) (0.9×2.1 m) and ${windows} window(s) (1.2×1.5 m).`,
   );
   const effCoats = surface === "dark_to_light" ? Math.max(coats, 3) : coats;
   b.assume(
@@ -206,10 +211,13 @@ function laminateFloor(p: Params, lang: Lang): CalculationResult {
     ? (p.subfloor as "concrete" | "wood" | "old_tiles")
     : "concrete";
 
-  const area = L * W;
-  const perimeter = 2 * (L + W);
+  const zones = Array.isArray(p.zones) && p.zones.length ? (p.zones as { id: string; x: number; z: number; w: number; d: number }[]) : null;
+  // An L-shaped room: area is the sum, skirting follows the outline (shared edges don't count).
+  const area = zones ? zoneArea(zones) : L * W;
+  const perimeter = zones ? unionPerimeter(zones) : 2 * (L + W);
   const waste = diagonal ? 0.12 : 0.07;
   b.measure("Suprafață pardoseală", "Floor area", area, "m²");
+  if (zones && zones.length > 1) b.measure("Zone", "Areas", zones.length, "buc");
   b.measure("Perimetru", "Perimeter", perimeter, "m");
   b.assume(
     `Pierderi la tăiere ${Math.round(waste * 100)}% (montaj ${diagonal ? "diagonal" : "drept"}).`,
@@ -239,7 +247,7 @@ function laminateFloor(p: Params, lang: Lang): CalculationResult {
   const hours = area / 4 + 2;
   return {
     projectType: "laminate_floor",
-    title: b.t("Montaj parchet laminat", "Laminate flooring"),
+    title: b.t(zones && zones.length > 1 ? "Parchet laminat în L" : "Montaj parchet laminat", zones && zones.length > 1 ? "L-shaped laminate floor" : "Laminate flooring"),
     inputs: { lengthM: L, widthM: W, pattern: diagonal ? "diagonal" : "straight", doorways, subfloor },
     measurements: b.measurements,
     requirements: b.requirements,
@@ -267,7 +275,19 @@ function tiling(p: Params, lang: Lang): CalculationResult {
 
   const floor = tileFloor ? L * W : 0;
   const perimeter = 2 * (L + W);
-  const wall = wallHeight > 0 ? Math.max(0, perimeter * wallHeight - doors * 0.9 * Math.min(wallHeight, 2.05)) : 0;
+  // Per-wall tile heights from an edited sketch; otherwise one height all round.
+  const perWall = p.wallHeights && typeof p.wallHeights === "object" ? (p.wallHeights as Record<string, number>) : null;
+  const openings = Array.isArray(p.openings) ? (p.openings as { wall: string; width: number }[]) : null;
+  const wall = perWall
+    ? (["n", "e", "s", "w"] as const).reduce((sum, side) => {
+        const h = Math.max(0, Number(perWall[side]) || 0);
+        const len = side === "n" || side === "s" ? L : W;
+        const cut = (openings ?? []).filter((o) => o.wall === side).reduce((s, o) => s + (Number(o.width) || 0.8) * Math.min(h, 2.05), 0);
+        return sum + Math.max(0, len * h - cut);
+      }, 0)
+    : wallHeight > 0
+      ? Math.max(0, perimeter * wallHeight - doors * 0.9 * Math.min(wallHeight, 2.05))
+      : 0;
   if (floor === 0 && wall === 0) throw new CalculatorInputError("Nothing to tile: enable tileFloor or set wallTileHeightM");
 
   if (floor) b.measure("Gresie (pardoseală)", "Floor tiling", floor, "m²");
@@ -332,39 +352,91 @@ function tiling(p: Params, lang: Lang): CalculationResult {
 }
 
 // ───────────────────────────── deck ──────────────────────────────
+interface ZoneIn {
+  id: string;
+  w: number;
+  d: number;
+}
+interface StepsIn {
+  zone: string;
+  side: string;
+  width: number;
+  count: number;
+}
+
 function deck(p: Params, lang: Lang): CalculationResult {
   const b = new Builder(lang);
-  const L = positive("lengthM", p.lengthM, { max: 30 });
-  const W = positive("widthM", p.widthM, { max: 30 });
+  // Zones come from an edited sketch; a plain request is one rectangle.
+  const zones: ZoneIn[] = Array.isArray(p.zones) && p.zones.length
+    ? (p.zones as ZoneIn[]).map((z) => ({ id: z.id, w: positive("zone.w", z.w, { max: 30 }), d: positive("zone.d", z.d, { max: 30 }) }))
+    : [{ id: "A", w: positive("lengthM", p.lengthM, { max: 30 }), d: positive("widthM", p.widthM, { max: 30 }) }];
+  const steps: StepsIn[] = Array.isArray(p.steps) ? (p.steps as StepsIn[]) : [];
+  const heightM = p.heightM === undefined ? 0.18 : Math.min(1.2, Math.max(0.1, Number(p.heightM) || 0.18));
+  const direction = p.direction === "z" ? "z" : "x";
   const base = (["concrete_slab", "soil", "gravel"] as const).includes(p.base as never)
     ? (p.base as "concrete_slab" | "soil" | "gravel")
     : "soil";
-  const area = L * W;
   const boardPitch = 0.15; // 145 mm board + 5 mm gap
   const joistSpacing = 0.4;
-  const rows = Math.ceil(W / boardPitch);
-  const joists = Math.ceil(L / joistSpacing) + 1;
-  const supportsPerJoist = Math.ceil(W / 0.6) + 1;
+
+  let area = 0;
+  let rows = 0;
+  let boardM = 0;
+  let joists = 0;
+  let joistM = 0;
+  let screws = 0;
+  let supports = 0;
+  for (const z of zones) {
+    const run = direction === "x" ? z.w : z.d; // boards run along this
+    const across = direction === "x" ? z.d : z.w;
+    const r = Math.ceil(across / boardPitch);
+    const j = Math.ceil(run / joistSpacing) + 1;
+    area += z.w * z.d;
+    rows += r;
+    boardM += r * run;
+    joists += j;
+    joistM += j * across;
+    screws += r * j * 2;
+    supports += j * (Math.ceil(across / 0.6) + 1);
+  }
+  // Steps: 2 boards per tread, stringers every 60 cm (from joist timber), ~30 cm going per step.
+  let treads = 0;
+  for (const st of steps) {
+    const width = Number(st.width) || 1;
+    const count = Math.max(1, Math.round(Number(st.count) || 1));
+    const stringers = 2 + Math.floor(width / 0.6);
+    treads += count;
+    boardM += count * 2 * width;
+    joistM += stringers * count * 0.3 * 1.25;
+    screws += count * 2 * stringers * 2;
+  }
 
   b.measure("Suprafață terasă", "Deck area", area, "m²");
+  if (zones.length > 1) b.measure("Zone", "Sections", zones.length, "buc");
   b.measure("Rânduri de deck", "Board rows", rows, "rânduri");
   b.measure("Grinzi suport", "Joists", joists, "buc");
-  b.assume("Deck de ~145 mm lățime cu rost de 5 mm, montat pe lungime.", "~145 mm boards with 5 mm gaps, running lengthwise.");
+  if (treads) b.measure("Trepte", "Steps", treads, "buc");
+  b.assume("Deck de ~145 mm lățime cu rost de 5 mm.", "~145 mm boards with 5 mm gaps.");
   b.assume("Grinzi la 40 cm interax, suporturi la max. 60 cm.", "Joists at 40 cm centres, supports every 60 cm max.");
   b.assume("10% pierderi la deck, 5% la grinzi.", "10% waste on boards, 5% on joists.");
+  if (zones.length > 1) b.assume("Fiecare zonă are structura ei de grinzi.", "Each section gets its own joist frame.");
+  if (treads) b.assume("Treaptă: ~17 cm înălțime, ~30 cm adâncime, 2 deck-uri pe treaptă.", "Steps: ~17 cm rise, ~30 cm going, 2 boards per tread.");
 
-  // Rows assume ~145 mm boards; narrower/wider boards scale the length (+5 mm gap either way).
-  b.need("deck_board", rows * L * 1.1, `${rows} rânduri × ${r1(L)} m + 10%`, `${rows} rows × ${r1(L)} m + 10%`, {
+  // Pedestal height = deck height − joist − board.
+  const pedestalMm = Math.round(heightM * 1000 - 98);
+  b.need("deck_board", boardM * 1.1, `${rows} rânduri${treads ? ` + ${treads} trepte` : ""} + 10%`, `${rows} rows${treads ? ` + ${treads} steps` : ""} + 10%`, {
     scaleBySpec: { key: "widthMm", reference: 145 },
   });
-  b.need("deck_joist", joists * W * 1.05, `${joists} grinzi × ${r1(W)} m + 5%`, `${joists} joists × ${r1(W)} m + 5%`);
-  b.need("deck_screws", rows * joists * 2 * 1.1, "2 șuruburi la fiecare încrucișare deck–grindă", "2 screws per board–joist crossing");
-  b.need("deck_support", joists * supportsPerJoist, `${supportsPerJoist} suporturi pe fiecare grindă`, `${supportsPerJoist} supports per joist`);
+  b.need("deck_joist", joistM * 1.05, `${joists} grinzi${treads ? " + vanguri trepte" : ""} + 5%`, `${joists} joists${treads ? " + step stringers" : ""} + 5%`);
+  b.need("deck_screws", screws * 1.1, "2 șuruburi la fiecare încrucișare deck–grindă", "2 screws per board–joist crossing");
+  b.need("deck_support", supports, `suporturi reglate la ~${pedestalMm} mm`, `supports set to ~${pedestalMm} mm`, {
+    fitRange: { key: "heightRangeMm", value: Math.max(40, pedestalMm) },
+  });
   if (base !== "concrete_slab") {
     b.need("weed_membrane", area * 1.15, "sub toată terasa, cu suprapuneri", "under the whole deck, with overlaps");
   }
-  b.need("deck_oil", (area * 2) / 15, "2 straturi (nu e necesar la WPC)", "2 coats (not needed for WPC)", {
-    areaToCover: r2(area * 2),
+  b.need("deck_oil", ((area + treads * 0.3 * 1.2) * 2) / 15, "2 straturi (nu e necesar la WPC)", "2 coats (not needed for WPC)", {
+    areaToCover: r2((area + treads * 0.36) * 2),
     optional: true,
   });
   b.tool("cordless_drill");
@@ -378,39 +450,90 @@ function deck(p: Params, lang: Lang): CalculationResult {
   if (base === "soil") {
     b.assume("Pe pământ: nivelează și compactează, apoi pune dale/plăci sub suporturi.", "On soil: level and compact, then put paving slabs under the supports.");
   }
-  b.safety("Terasele înalte de peste 60 cm necesită balustradă și, uneori, autorizație.", "Decks higher than 60 cm need a railing and may need a permit.");
+  if (pedestalMm > 190) {
+    b.assume(
+      "Peste ~30 cm înălțime structura are nevoie de stâlpi și fundații — nu sunt incluse în calcul.",
+      "Above ~30 cm the frame needs posts and footings — not included in this calculation.",
+    );
+  }
+  b.safety(
+    heightM > 0.6 ? "Terasa depășește 60 cm: balustrada e obligatorie și poate fi necesară autorizație." : "Terasele înalte de peste 60 cm necesită balustradă și, uneori, autorizație.",
+    heightM > 0.6 ? "This deck is over 60 cm high: a railing is required and a permit may be needed." : "Decks higher than 60 cm need a railing and may need a permit.",
+  );
 
-  const hours = area * 1.5 + 4;
+  const hours = area * 1.5 + treads * 1.5 + 4;
   return {
     projectType: "deck",
-    title: b.t("Terasă din deck", "Garden deck"),
-    inputs: { lengthM: L, widthM: W, base },
+    title: b.t(zones.length > 1 ? "Terasă din deck în L" : "Terasă din deck", zones.length > 1 ? "L-shaped garden deck" : "Garden deck"),
+    inputs: { lengthM: p.lengthM ?? zones[0].w, widthM: p.widthM ?? zones[0].d, base, heightM, direction },
     measurements: b.measurements,
     requirements: b.requirements,
     assumptions: b.assumptions,
-    estimate: { hoursMin: Math.round(hours), hoursMax: Math.round(hours * 1.5), difficulty: 3, people: 2 },
+    estimate: { hoursMin: Math.round(hours), hoursMax: Math.round(hours * 1.5), difficulty: treads || heightM > 0.3 ? 4 : 3, people: 2 },
     safetyNotes: b.safetyNotes,
   };
 }
 
 // ───────────────────────────── fence ─────────────────────────────
+interface GateIn {
+  wall: string;
+  width: number;
+  pos?: number;
+}
+
 function fence(p: Params, lang: Lang): CalculationResult {
   const b = new Builder(lang);
-  const len = positive("lengthM", p.lengthM, { max: 500 });
+  const segments: number[] = Array.isArray(p.segments) && p.segments.length
+    ? (p.segments as number[]).map((x) => positive("segment", x, { max: 300 }))
+    : [positive("lengthM", p.lengthM, { max: 500 })];
+  const gates: GateIn[] = Array.isArray(p.gates) ? (p.gates as GateIn[]) : [];
   const allowedHeights = [0.9, 1.2, 1.8];
   const hIn = p.heightM === undefined ? 1.8 : Number(p.heightM);
   const H = allowedHeights.reduce((a, c) => (Math.abs(c - hIn) < Math.abs(a - hIn) ? c : a), 1.8);
   const section = 1.8 + 0.09;
-  const panels = Math.ceil(len / section - 1e-9);
-  const posts = panels + 1;
+  const len = segments.reduce((s, x) => s + x, 0);
+
+  // Gates split a segment into runs; every run is panelled separately (a cut panel
+  // can't be continued past a gate). Mirrors how the 3D sketch lays them out.
+  let panels = 0;
+  segments.forEach((segLen, i) => {
+    const onSeg = gates
+      .filter((g) => Number(g.wall) === i)
+      .map((g) => ({ c: Math.min(1, Math.max(0, Number(g.pos ?? 0.5))) * segLen, w: Number(g.width) >= 2 ? 3 : 1 }))
+      .sort((a, c) => a.c - c.c);
+    let cursor = 0;
+    const runs: number[] = [];
+    for (const g of onSeg) {
+      runs.push(Math.max(cursor, g.c - g.w / 2 - 0.045) - cursor);
+      cursor = g.c + g.w / 2 + 0.045;
+    }
+    runs.push(segLen - cursor);
+    for (const r of runs) if (r >= 0.05) panels += Math.ceil(r / section - 1e-9);
+  });
+  // Continuous run: panels + 1 posts (corners are shared); each gate splits a run → one extra post.
+  const posts = panels + 1 + gates.length;
+
   b.measure("Lungime gard", "Fence length", len, "m");
+  if (segments.length > 1) b.measure("Segmente / colțuri", "Segments / corners", segments.length, "buc");
   b.measure("Panouri", "Panels", panels, "buc");
   b.measure("Stâlpi", "Posts", posts, "buc");
+  if (gates.length) b.measure("Porți", "Gates", gates.length, "buc");
   b.assume(`Panouri de 1,8 m lățime, înălțime ${H} m; stâlp de 9 cm între panouri.`, `1.8 m wide panels, ${H} m high; 9 cm post between panels.`);
+  if (segments.length > 1) b.assume("Stâlpii de colț sunt comuni celor două segmente.", "Corner posts are shared by both segments.");
   if (hIn !== H) b.assume(`Înălțimea a fost rotunjită la standardul de ${H} m.`, `Height rounded to the standard ${H} m.`);
 
-  b.need("fence_panel", panels, `${r1(len)} m ÷ 1,89 m`, `${r1(len)} m ÷ 1.89 m`, { match: { heightM: H } });
-  b.need("fence_post", posts, "panouri + 1", "panels + 1", { match: { heightM: H >= 1.8 ? 2.4 : H >= 1.2 ? 1.8 : 1.5 } });
+  b.need("fence_panel", panels, `${r1(len)} m ÷ 1,89 m${gates.length ? " (fără porți)" : ""}`, `${r1(len)} m ÷ 1.89 m${gates.length ? " (excl. gates)" : ""}`, { match: { heightM: H } });
+  b.need("fence_post", posts, gates.length ? "panouri + 1 + câte unul la fiecare poartă" : "panouri + 1", gates.length ? "panels + 1 + one per gate" : "panels + 1", {
+    match: { heightM: H >= 1.8 ? 2.4 : H >= 1.2 ? 1.8 : 1.5 },
+  });
+  for (const wdt of [1, 3]) {
+    const n = gates.filter((g) => (Number(g.width) >= 2 ? 3 : 1) === wdt).length;
+    if (n) {
+      b.need("fence_gate", n, wdt === 3 ? "poartă dublă auto 3 m" : "poartă pietonală 1 m", wdt === 3 ? "3 m double driveway gate" : "1 m pedestrian gate", {
+        match: { widthM: wdt, heightM: H >= 1.8 ? 1.8 : 1.2 },
+      });
+    }
+  }
   b.need("post_concrete", posts * (H >= 1.8 ? 30 : 20), `${H >= 1.8 ? 30 : 20} kg beton pe stâlp`, `${H >= 1.8 ? 30 : 20} kg concrete per post`);
   b.need("fence_fixings", panels * 4, "4 cleme pe panou", "4 clips per panel");
   b.need("post_cap", posts, "un capac pe stâlp", "one cap per post", { optional: true });
@@ -429,11 +552,11 @@ function fence(p: Params, lang: Lang): CalculationResult {
     "Înainte să sapi, verifică traseul cablurilor și conductelor subterane; respectă limita de proprietate.",
     "Before digging, check for underground cables and pipes; respect the property line.",
   );
-  const hours = posts * 0.8 + panels * 0.4 + 2;
+  const hours = posts * 0.8 + panels * 0.4 + gates.length * 1.5 + 2;
   return {
     projectType: "fence",
-    title: b.t("Gard din panouri", "Panel fence"),
-    inputs: { lengthM: len, heightM: H },
+    title: b.t(segments.length > 1 ? "Gard din panouri cu colț" : "Gard din panouri", segments.length > 1 ? "Panel fence with corners" : "Panel fence"),
+    inputs: { lengthM: r2(len), heightM: H },
     measurements: b.measurements,
     requirements: b.requirements,
     assumptions: b.assumptions,

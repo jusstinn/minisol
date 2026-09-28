@@ -7007,5 +7007,117 @@
     "descriptionEn": "Pointed shovel with a fibreglass D-handle for digging and loading soil and gravel.",
     "rating": 4.7,
     "isTool": true
+  },
+  {
+    "sku": "13640218",
+    "name": "Poartă gard pietonală Kronwald pin tratat 100 × 180 cm, cu balamale și zăvor",
+    "nameEn": "Kronwald treated pine pedestrian gate 100 × 180 cm, with hinges and latch",
+    "brand": "Kronwald",
+    "category": "fencing",
+    "price": 459.9,
+    "salesUnit": "buc",
+    "roles": [
+      "fence_gate"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "widthM": 1.0,
+      "heightM": 1.8,
+      "material": "pin tratat",
+      "hardware": "balamale + zăvor incluse"
+    },
+    "description": "Poartă pietonală asortată panourilor de gard din pin, feronerie inclusă.",
+    "descriptionEn": "Pedestrian gate matching the pine fence panels, hardware included.",
+    "rating": 4.2,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "12977463",
+    "name": "Poartă gard pietonală Kronwald WPC antracit 100 × 180 cm",
+    "nameEn": "Kronwald anthracite WPC pedestrian gate 100 × 180 cm",
+    "brand": "Kronwald",
+    "category": "fencing",
+    "price": 1299.9,
+    "salesUnit": "buc",
+    "roles": [
+      "fence_gate"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "widthM": 1.0,
+      "heightM": 1.8,
+      "material": "WPC compozit",
+      "hardware": "balamale inox + încuietoare"
+    },
+    "description": "Poartă din compozit fără întreținere, cu încuietoare și balamale inox.",
+    "descriptionEn": "Maintenance-free composite gate with lock and stainless hinges.",
+    "rating": 4.6,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "11208845",
+    "name": "Poartă gard dublă auto Kronwald pin tratat 300 × 180 cm",
+    "nameEn": "Kronwald treated pine double driveway gate 300 × 180 cm",
+    "brand": "Kronwald",
+    "category": "fencing",
+    "price": 1899.9,
+    "salesUnit": "set",
+    "roles": [
+      "fence_gate"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "widthM": 3.0,
+      "heightM": 1.8,
+      "material": "pin tratat",
+      "hardware": "balamale + opritor + zăvor"
+    },
+    "description": "Poartă dublă pentru acces auto, două canaturi de 150 cm cu opritor la sol.",
+    "descriptionEn": "Double driveway gate, two 150 cm leaves with ground stop.",
+    "rating": 4.3,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "14102376",
+    "name": "Poartă gard pietonală Kronwald pin tratat 100 × 120 cm",
+    "nameEn": "Kronwald treated pine pedestrian gate 100 × 120 cm",
+    "brand": "Kronwald",
+    "category": "fencing",
+    "price": 349.9,
+    "salesUnit": "buc",
+    "roles": [
+      "fence_gate"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "widthM": 1.0,
+      "heightM": 1.2,
+      "material": "pin tratat",
+      "hardware": "balamale + zăvor incluse"
+    },
+    "description": "Poartă joasă pentru garduri de 1,2 m, feronerie inclusă.",
+    "descriptionEn": "Low gate for 1.2 m fences, hardware included.",
+    "rating": 4.1,
+    "isTool": false,
+    "bulky": true
   }
 ]

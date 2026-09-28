@@ -84,6 +84,27 @@ function matchesSpecs(p: Product, match: Requirement["match"]): boolean {
   });
 }
 
+/** Does a "min-max" range spec (e.g. heightRangeMm "60-100") contain the value? */
+function fitsRange(p: Product, fit: Requirement["fitRange"]): boolean {
+  if (!fit) return true;
+  const m = String(p.specs[fit.key] ?? "").match(/(\d+(?:[.,]\d+)?)\s*[-–]\s*(\d+(?:[.,]\d+)?)/);
+  if (!m) return false;
+  const lo = Number(m[1].replace(",", "."));
+  const hi = Number(m[2].replace(",", "."));
+  return fit.value >= lo && fit.value <= hi;
+}
+
+/** Narrow a candidate pool by spec match and range fit, falling back when nothing fits. */
+function narrow(pool: Product[], req: Requirement, strictMatch: boolean): Product[] {
+  const matching = pool.filter((p) => matchesSpecs(p, req.match));
+  let out = req.match && (strictMatch || matching.length > 0) ? (matching.length ? matching : pool) : pool;
+  if (req.fitRange) {
+    const fitting = out.filter((p) => fitsRange(p, req.fitRange));
+    if (fitting.length) out = fitting;
+  }
+  return out;
+}
+
 /**
  * Cheapest combination of pack sizes whose total content ≥ needed.
  * Small bounded search — lines have at most a handful of sizes.
@@ -134,8 +155,7 @@ export function chooseLine(req: Requirement, catalog: Product[], quality: Qualit
       return all.filter((p) => productLineKey(p) === key);
     }
   }
-  const matching = all.filter((p) => matchesSpecs(p, req.match));
-  const pool = matching.length > 0 ? matching : all;
+  const pool = narrow(all, req, false);
   const tierOrder = req.isTool ? TIER_FALLBACK.standard : (TIER_FALLBACK[quality] ?? TIER_FALLBACK.standard);
   for (const tier of tierOrder) {
     const inTier = pool.filter((p) => p.quality === tier);
@@ -187,8 +207,7 @@ export interface LineOption {
  */
 export function lineOptions(req: Requirement, catalog: Product[]): LineOption[] {
   const all = catalog.filter((p) => p.roles.includes(req.role));
-  const matching = all.filter((p) => matchesSpecs(p, req.match));
-  const pool = req.match && matching.length > 0 ? matching : all;
+  const pool = narrow(all, req, true);
   const lines = new Map<string, Product[]>();
   for (const p of pool) {
     const k = req.isTool ? p.sku : productLineKey(p);

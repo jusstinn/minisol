@@ -1,0 +1,188 @@
+import { describe, expect, it } from "vitest";
+import { buildLayout } from "../../components/blueprint/builders";
+import { calculateProject } from "../calculators";
+import { applyOps, defaultLayout, exposedEdges, fenceSegments, layoutParams, SketchEditError, unionPerimeter } from "../layout";
+import type { Layout, Zone } from "../layout";
+
+const req = (r: ReturnType<typeof calculateProject>, role: string) => r.requirements.find((x) => x.role === role);
+const calc = (l: Layout) => calculateProject(l.type, layoutParams(l));
+const zonesOf = (l: Layout) => ("zones" in l ? l.zones : []);
+
+describe("plan geometry", () => {
+  const A: Zone = { id: "A", x: 0, z: 0, w: 4, d: 3 };
+  const B: Zone = { id: "B", x: 4, z: 0, w: 2, d: 2 };
+
+  it("measures the outline of an L, not two boxes", () => {
+    expect(unionPerimeter([A])).toBeCloseTo(14, 1);
+    expect(unionPerimeter([A, B])).toBeCloseTo(18, 1); // 2 × (6 + 3)
+  });
+
+  it("drops the shared edge between zones", () => {
+    const edges = exposedEdges([A, B]);
+    const total = edges.reduce((s, e) => s + Math.abs(e.x2 - e.x1) + Math.abs(e.z2 - e.z1), 0);
+    expect(total).toBeCloseTo(18, 1);
+    // nothing is left on x = 4 between z = 0 and z = 2 (the seam)
+    expect(edges.some((e) => e.x1 === 4 && e.x2 === 4 && Math.min(e.z1, e.z2) < 2 - 1e-6)).toBe(false);
+  });
+
+  it("measures fence runs", () => {
+    const segs = fenceSegments([{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 4 }]);
+    expect(segs.map((s) => s.length)).toEqual([10, 4]);
+  });
+});
+
+describe("applyOps", () => {
+  const deck = defaultLayout("deck", { lengthM: 4, widthM: 3 });
+
+  it("attaches a wing to a side and reports it", () => {
+    const { layout, changes } = applyOps(deck, [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 2, align: "start" }], "en");
+    const [a, b] = zonesOf(layout);
+    expect(b.id).toBe("B");
+    expect(b.x).toBeCloseTo(a.x + a.w);
+    expect(b.z).toBeCloseTo(a.z);
+    expect(changes[0]).toMatch(/east side of zone A/);
+  });
+
+  it("keeps coordinates stable so untouched parts don't move", () => {
+    const { layout } = applyOps(deck, [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 2 }]);
+    expect(zonesOf(layout)[0]).toEqual(zonesOf(deck)[0]);
+  });
+
+  it("does not mutate the input layout", () => {
+    const before = JSON.stringify(deck);
+    applyOps(deck, [{ op: "resize", zone: "A", w: 6 }]);
+    expect(JSON.stringify(deck)).toBe(before);
+  });
+
+  it("rejects overlapping zones and impossible sizes", () => {
+    const withB = applyOps(deck, [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 2 }]).layout;
+    expect(() => applyOps(withB, [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 2 }])).toThrow(SketchEditError);
+    expect(() => applyOps(deck, [{ op: "resize", zone: "A", w: 90 }])).toThrow(SketchEditError);
+    expect(() => applyOps(deck, [{ op: "add_opening", kind: "gate" }])).toThrow(SketchEditError);
+  });
+
+  it("reuses the first free zone letter after a removal", () => {
+    let l = applyOps(deck, [
+      { op: "add_zone", zone: "A", side: "e", w: 2, d: 2 },
+      { op: "add_zone", zone: "A", side: "s", w: 2, d: 1 },
+    ]).layout;
+    l = applyOps(l, [{ op: "remove_zone", zone: "B" }]).layout;
+    l = applyOps(l, [{ op: "add_zone", zone: "A", side: "w", w: 1, d: 1 }]).layout;
+    const ids = zonesOf(l).map((z) => z.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain("B");
+  });
+
+  it("snaps fence heights to real panel sizes", () => {
+    const fence = defaultLayout("fence", { lengthM: 20 });
+    const { layout } = applyOps(fence, [{ op: "set_height", value: 1.5 }]);
+    expect(layout.type === "fence" && layout.heightM).toBe(1.8);
+  });
+
+  it("turns a fence corner at 90°", () => {
+    const fence = defaultLayout("fence", { lengthM: 10 });
+    const { layout } = applyOps(fence, [{ op: "add_fence_segment", length: 5, turn: "right" }]);
+    if (layout.type !== "fence") throw new Error();
+    const segs = fenceSegments(layout.points);
+    expect(segs.map((s) => s.length)).toEqual([10, 5]);
+    expect(layout.points[2].x).toBeCloseTo(layout.points[1].x);
+  });
+});
+
+describe("calculators follow the sketch", () => {
+  it("an L-shaped deck costs more than its main rectangle, and steps add treads", () => {
+    const base = defaultLayout("deck", { lengthM: 4, widthM: 3 });
+    const l = applyOps(base, [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 2 }]).layout;
+    const r0 = calc(base);
+    const r1 = calc(l);
+    expect(r1.measurements.find((m) => m.unit === "m²")!.value).toBeCloseTo(16);
+    expect(req(r1, "deck_board")!.quantity).toBeGreaterThan(req(r0, "deck_board")!.quantity);
+    expect(r1.title).toMatch(/în L/);
+
+    const withSteps = applyOps(l, [{ op: "set_height", value: 0.5 }, { op: "add_steps", zone: "A", side: "s", width: 1.2 }]).layout;
+    const r2 = calc(withSteps);
+    expect(r2.measurements.find((m) => m.label.includes("Trepte"))!.value).toBe(3); // 0.5 m ÷ 17 cm
+    expect(req(r2, "deck_board")!.quantity).toBeGreaterThan(req(r1, "deck_board")!.quantity);
+    // taller deck → pedestals must reach ~400 mm
+    expect(req(r2, "deck_support")!.fitRange?.value).toBe(402);
+  });
+
+  it("a fence corner shares its post; gates replace panels and add a latch post", () => {
+    const fence = defaultLayout("fence", { lengthM: 18.9, heightM: 1.8 });
+    const straight = calc(fence);
+    expect(req(straight, "fence_panel")!.quantity).toBe(10);
+    expect(req(straight, "fence_post")!.quantity).toBe(11);
+
+    const corner = applyOps(fence, [{ op: "add_fence_segment", length: 3.78, turn: "right" }]).layout;
+    const rc = calc(corner);
+    expect(req(rc, "fence_panel")!.quantity).toBe(12);
+    expect(req(rc, "fence_post")!.quantity).toBe(13);
+
+    // A gate splits its run in two: each side is panelled on its own, plus one latch post.
+    const gated = applyOps(corner, [{ op: "add_opening", kind: "gate", segment: 0, width: 3, pos: 0.1 }]).layout;
+    const rg = calc(gated);
+    expect(req(rg, "fence_gate")!.quantity).toBe(1);
+    expect(req(rg, "fence_gate")!.match).toMatchObject({ widthM: 3, heightM: 1.8 });
+    const panels = req(rg, "fence_panel")!.quantity;
+    expect(panels).toBe(12); // 0.35 m + 15.47 m runs → 1 + 9 panels (cut panels can't cross the gate)
+    expect(req(rg, "fence_post")!.quantity).toBe(panels + 1 + 1);
+    // and the 3D sketch shows exactly what is bought
+    expect(buildLayout(gated, "ro").parts.filter((p) => p.layer === "fence_panel")).toHaveLength(panels);
+  });
+
+  it("per-wall tile heights change the tile area", () => {
+    const t = defaultLayout("tiling", { lengthM: 2.5, widthM: 2, roomType: "bathroom" });
+    const full = calc(t);
+    const half = calc(applyOps(t, [{ op: "set_wall_tiles", wall: "n", value: 1.2 }]).layout);
+    expect(req(half, "wall_tiles")!.quantity).toBeLessThan(req(full, "wall_tiles")!.quantity);
+  });
+
+  it("adding a window reduces the painted area", () => {
+    const p = defaultLayout("paint_room", { lengthM: 4, widthM: 3.5 });
+    const more = applyOps(p, [{ op: "add_opening", kind: "window", wall: "e", width: 1.2 }]).layout;
+    expect(req(calc(more), "interior_paint")!.areaToCover!).toBeLessThan(req(calc(p), "interior_paint")!.areaToCover!);
+  });
+});
+
+describe("3D sketch follows the layout", () => {
+  it("draws every zone and keeps part ids stable across an edit", () => {
+    const base = defaultLayout("deck", { lengthM: 4, widthM: 3 });
+    const edited = applyOps(base, [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 2 }]).layout;
+    const b0 = buildLayout(base, "ro");
+    const b1 = buildLayout(edited, "ro");
+    const ids0 = new Map(b0.parts.map((p) => [p.id, JSON.stringify([p.pos, p.size])]));
+    const unchanged = b1.parts.filter((p) => ids0.get(p.id) === JSON.stringify([p.pos, p.size]));
+    // zone A is untouched → all of its parts are identical; zone B is new
+    expect(unchanged.length).toBe(b0.parts.length);
+    expect(b1.parts.some((p) => p.id.startsWith("B-board"))).toBe(true);
+    expect(new Set(b1.parts.map((p) => p.id)).size).toBe(b1.parts.length);
+  });
+
+  it("has unique part ids for every project type", () => {
+    const layouts: Layout[] = [
+      applyOps(defaultLayout("fence", { lengthM: 20 }), [
+        { op: "add_fence_segment", length: 6, turn: "left" },
+        { op: "add_opening", kind: "gate", segment: 0, width: 3 },
+      ]).layout,
+      defaultLayout("laminate_floor", { lengthM: 5, widthM: 4, doorways: 2 }),
+      defaultLayout("paint_room", { lengthM: 4, widthM: 3.5 }),
+      defaultLayout("tiling", { lengthM: 2.5, widthM: 2 }),
+      defaultLayout("drywall_partition", { lengthM: 3.5, doors: 1 }),
+      defaultLayout("lawn", { areaM2: 80 }),
+    ];
+    for (const l of layouts) {
+      const b = buildLayout(l, "en");
+      expect(new Set(b.parts.map((p) => p.id)).size, l.type).toBe(b.parts.length);
+    }
+  });
+
+  it("draws a gate and no doubled posts on a gated fence", () => {
+    const l = applyOps(defaultLayout("fence", { lengthM: 18.9 }), [{ op: "add_opening", kind: "gate", segment: 0, width: 1 }]).layout;
+    const b = buildLayout(l, "ro");
+    expect(b.parts.filter((p) => p.layer === "fence_gate")).toHaveLength(1);
+    const posts = b.parts.filter((p) => p.layer === "fence_post").map((p) => `${p.pos[0].toFixed(2)},${p.pos[2].toFixed(2)}`);
+    expect(new Set(posts).size).toBe(posts.length);
+    const r = calc(l);
+    expect(posts.length).toBe(req(r, "fence_post")!.quantity);
+  });
+});
