@@ -13,6 +13,7 @@ const OPS = new Set<EditOp["op"]>([
   "undo",
   "resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening",
   "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option",
+  "add_item", "move_item", "rotate_item", "remove_item",
 ]);
 
 /**

@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
+import { ITEMS, itemRect, paletteFor } from "@/domain/items";
+import type { Item } from "@/domain/items";
 import { applyOps, bbox, exposedEdges, fenceSegments, SIDES } from "@/domain/layout";
 import type { Layout, Opening, Side, SketchOp, Zone } from "@/domain/layout";
 import type { Lang } from "@/domain/types";
@@ -50,6 +52,13 @@ function extentOf(l: Layout) {
 
 function frameOf(l: Layout): Frame {
   const e = extentOf(l);
+  for (const it of l.items ?? []) {
+    const r = itemRect(it);
+    e.minX = Math.min(e.minX, r.minX);
+    e.maxX = Math.max(e.maxX, r.maxX);
+    e.minZ = Math.min(e.minZ, r.minZ);
+    e.maxZ = Math.max(e.maxZ, r.maxZ);
+  }
   const w = Math.max(e.maxX - e.minX, 1);
   const d = Math.max(e.maxZ - e.minZ, 1);
   // Leave ~25% room so a drag can grow the shape without it leaving the frame.
@@ -62,7 +71,8 @@ type Drag =
   | { kind: "room-w" | "room-d"; orig: number; start: number }
   | { kind: "wall-len"; orig: number; start: number }
   | { kind: "segment"; segment: number; orig: number; start: { x: number; z: number }; dir: { x: number; z: number } }
-  | { kind: "opening"; id: string };
+  | { kind: "opening"; id: string }
+  | { kind: "item"; id: string; dx: number; dz: number };
 
 interface MenuItem {
   label: string;
@@ -94,6 +104,7 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
   const [frozen, setFrozen] = useState<Frame | null>(null);
   /** Op the current drag would commit (state, so the live label can render it). */
   const [dragOp, setDragOp] = useState<SketchOp | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   const shown = local ?? layout;
   const f = frozen ?? frameOf(layout);
@@ -145,6 +156,8 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
         const pos = openingPos(shown, d.id, p);
         return pos === null ? null : { op: "move_opening", id: d.id, pos: clamp(snap(pos, 0.01), 0.1, 0.9) };
       }
+      case "item":
+        return { op: "move_item", id: d.id, x: snap(p.x - d.dx, 0.05), z: snap(p.z - d.dz, 0.05) };
     }
   };
 
@@ -436,6 +449,62 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
     if (!drag) els.push(plus(X(0), Z(0) + 24, [{ label: en ? "Door" : "Ușă", ops: [{ op: "add_opening", kind: "door", wall: "s" }] }], "p-door"));
   }
 
+  // ─────────── placed items (fixtures, lights, furniture) ───────────
+  for (const it of shown.items ?? []) els.push(itemMark(it));
+
+  function itemMark(it: Item) {
+    const r = itemRect(it);
+    const spec = ITEMS[it.kind];
+    const sel = selected === it.id;
+    const ceiling = spec.mount === "ceiling";
+    const w = (r.maxX - r.minX) * f.sc;
+    const h = (r.maxZ - r.minZ) * f.sc;
+    const cx = X(it.x);
+    const cz = Z(it.z);
+    return (
+      <g
+        key={`item-${it.id}`}
+        className="cursor-grab active:cursor-grabbing"
+        onPointerDown={(e) => {
+          const p = toPlan(e);
+          setSelected(it.id);
+          begin(e, { kind: "item", id: it.id, dx: p.x - it.x, dz: p.z - it.z });
+        }}
+      >
+        <title>{en ? spec.labelEn : spec.label}</title>
+        {ceiling ? (
+          <circle cx={cx} cy={cz} r={Math.max(6, w / 2)} fill="none" stroke={ink} strokeDasharray="2 2" strokeWidth={sel ? 1.6 : 1} />
+        ) : (
+          <rect x={X(r.minX)} y={Z(r.minZ)} width={Math.max(3, w)} height={Math.max(3, h)} rx={2} fill={sel ? "var(--accent)" : spec.color} fillOpacity={sel ? 0.5 : 0.75} stroke={sel ? "var(--accent)" : ink} strokeWidth={sel ? 1.6 : 0.8} />
+        )}
+        {Math.min(w, h) > 14 || ceiling ? (
+          <text x={cx} y={cz} textAnchor="middle" dominantBaseline="middle" fontSize={8} className="pointer-events-none select-none font-mono" fill={ceiling ? ink : "#141311"}>
+            {ITEM_ABBR[it.kind]}
+          </text>
+        ) : null}
+        {sel && !drag && (
+          <>
+            {cross(X(r.maxX) + 7, Z(r.minZ) - 7, [{ op: "remove_item", id: it.id }], `x-it-${it.id}`)}
+            <g
+              role="button"
+              className="cursor-pointer"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                void run([{ op: "rotate_item", id: it.id }]);
+              }}
+            >
+              <circle cx={X(r.minX) - 7} cy={Z(r.minZ) - 7} r={7} fill={dark ? "#0a1f47" : "#fff"} stroke={soft} />
+              <text x={X(r.minX) - 7} y={Z(r.minZ) - 6.5} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill={ink} className="select-none">
+                ↻
+              </text>
+            </g>
+          </>
+        )}
+      </g>
+    );
+  }
+
   function openingMark(o: Opening, wall: { x1: number; z1: number; x2: number; z2: number }, key: string) {
     const len = Math.hypot(wall.x2 - wall.x1, wall.z2 - wall.z1);
     const ux = (wall.x2 - wall.x1) / len;
@@ -468,11 +537,18 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
     if (op.op === "resize") return op.w != null ? `↔ ${m(op.w)}` : op.d != null ? `↕ ${m(op.d)}` : null;
     if (op.op === "set_segment_length" && op.length != null) return `${m(op.length)}`;
     if (op.op === "move_opening" && op.pos != null) return `${Math.round(op.pos * 100)}%`;
+    if (op.op === "move_item" && op.x != null && op.z != null) return `${dec(op.x, lang, 2)} · ${dec(op.z, lang, 2)} m`;
     return null;
   })();
 
   return (
-    <div className="relative select-none" onPointerDown={() => setMenu(null)}>
+    <div
+      className="relative select-none"
+      onPointerDown={() => {
+        setMenu(null);
+        setSelected(null);
+      }}
+    >
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VW} ${VH}`}
@@ -501,6 +577,21 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
           </text>
         </g>
       </svg>
+
+      {/* item palette: tap to add, then drag it where you want it */}
+      <div className="flex flex-wrap items-center gap-1 px-1 pt-1.5">
+        <span className={`mr-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>{en ? "Add" : "Adaugă"}</span>
+        {paletteFor(layout.type).map((k) => (
+          <button
+            key={k}
+            disabled={busy}
+            onClick={() => void run([{ op: "add_item", item: k }])}
+            className={`rounded-full px-2 py-0.5 text-[11px] transition disabled:opacity-40 ${dark ? "bg-[#dce9ff]/10 hover:bg-[#dce9ff]/20" : "bg-ink/5 hover:bg-ink/10"}`}
+          >
+            + {en ? ITEMS[k].labelEn : ITEMS[k].label}
+          </button>
+        ))}
+      </div>
 
       <AnimatePresence>
         {dragLabel && (
@@ -616,3 +707,29 @@ function openingPos(l: Layout, id: string, p: { x: number; z: number }): number 
       return null;
   }
 }
+
+const ITEM_ABBR: Record<Item["kind"], string> = {
+  toilet: "WC",
+  sink: "LAV",
+  shower: "DUȘ",
+  bathtub: "CADĂ",
+  mirror: "OGL",
+  towel_radiator: "CAL",
+  washing_machine: "MS",
+  ceiling_lamp: "✦",
+  wall_lamp: "✧",
+  floor_lamp: "◉",
+  garden_light: "•",
+  table: "MASĂ",
+  chair: "SC",
+  sofa: "CANAP",
+  bed: "PAT",
+  wardrobe: "DULAP",
+  tv: "TV",
+  radiator: "CAL",
+  plant: "✿",
+  planter: "JARD",
+  bbq: "BBQ",
+  lounger: "ȘEZL",
+  parasol: "☂",
+};

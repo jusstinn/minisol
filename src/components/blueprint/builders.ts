@@ -1,9 +1,12 @@
 import type { ProjectType } from "@/domain/calculators";
-import { defaultLayout, exposedEdges, fenceSegments, SIDES } from "@/domain/layout";
+import { ITEMS, itemRole, rotXZ } from "@/domain/items";
+import type { ItemKind } from "@/domain/items";
+import { defaultLayout, exposedEdges, fenceSegments, itemContainer, SIDES } from "@/domain/layout";
 import type { Layout, Opening, Side, Zone } from "@/domain/layout";
 import { shades } from "@/domain/look";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
+import { MATERIAL_ROLES } from "@/domain/types";
 
 /**
  * Procedural 3D "assemblies" drawn from the project layout — the same layout the
@@ -647,6 +650,11 @@ function lawn(l: Extract<Layout, { type: "lawn" }>, lang: Lang): Build {
 
 /** Draw a layout, with the look of the products in the basket when known. */
 export function buildLayout(l: Layout, lang: Lang, look: Look = {}): Build {
+  const b = buildShape(l, lang, look);
+  return l.items?.length ? withItems(b, l, lang, look) : b;
+}
+
+function buildShape(l: Layout, lang: Lang, look: Look): Build {
   switch (l.type) {
     case "deck":
       return deck(l, lang, look);
@@ -663,6 +671,193 @@ export function buildLayout(l: Layout, lang: Lang, look: Look = {}): Build {
     case "lawn":
       return lawn(l, lang);
   }
+}
+
+// ─────────────────────────── placed items ────────────────────────────
+type Box = [x: number, y: number, z: number, w: number, h: number, d: number, color?: string, opacity?: number];
+
+/**
+ * Each item kind as a few boxes in local coordinates: x across, y up from its base,
+ * z from back (−d/2, against the wall) to front (+d/2).
+ */
+function itemBoxes(kind: ItemKind, color: string, outdoorSet: boolean): Box[] {
+  const s = ITEMS[kind];
+  const { w, d, h } = s;
+  const white = "#f4f4f2";
+  const metal = "#9aa1a8";
+  const dark = "#2b2d30";
+  switch (kind) {
+    case "toilet":
+      return [
+        [0, 0.18, 0.05, w * 0.55, 0.36, d * 0.5, white],
+        [0, 0.33, 0.08, w, 0.12, d * 0.7, white],
+        [0, 0.41, 0.08, w * 0.95, 0.03, d * 0.66, "#e6e6e2"],
+        [0, 0.6, -d / 2 + 0.1, w, 0.4, 0.2, white],
+      ];
+    case "sink":
+      return [
+        [0, 0.36, -0.05, 0.18, 0.72, 0.18, white],
+        [0, 0.78, 0, w, 0.14, d, white],
+        [0, 0.86, -d / 2 + 0.06, 0.05, 0.12, 0.05, metal],
+      ];
+    case "shower":
+      return [
+        [0, 0.03, 0, w, 0.06, d, white],
+        [0, h / 2, d / 2 - 0.01, w, h - 0.06, 0.012, "#bfe0f5", 0.35],
+        [w / 2 - 0.01, h / 2, 0, 0.012, h - 0.06, d, "#bfe0f5", 0.35],
+        [0, h - 0.15, -d / 2 + 0.08, 0.18, 0.02, 0.18, metal],
+      ];
+    case "bathtub":
+      return [
+        [0, h / 2, 0, w, h, d, white],
+        [0, h - 0.005, 0, w - 0.12, 0.012, d - 0.12, "#cfe4f2"],
+      ];
+    case "mirror":
+      return [[0, h / 2, -d / 2 + 0.01, w, h, 0.02, "#c9dbe6"]];
+    case "towel_radiator": {
+      const rails: Box[] = [];
+      for (let i = 0; i < 6; i++) rails.push([0, 0.08 + (i * (h - 0.16)) / 5, -d / 2 + 0.04, w, 0.025, 0.025, "#e9e9e6"]);
+      return [[-w / 2 + 0.02, h / 2, -d / 2 + 0.04, 0.03, h, 0.03, "#e9e9e6"], [w / 2 - 0.02, h / 2, -d / 2 + 0.04, 0.03, h, 0.03, "#e9e9e6"], ...rails];
+    }
+    case "washing_machine":
+      return [
+        [0, h / 2, 0, w, h, d, "#f1f1ee"],
+        [0, h * 0.55, d / 2 + 0.005, 0.34, 0.34, 0.01, "#b8c6d1"],
+      ];
+    case "ceiling_lamp":
+      return [[0, h / 2, 0, w, h, d, color]];
+    case "wall_lamp":
+      return [
+        [0, h / 2, -d / 2 + 0.01, 0.08, h * 0.8, 0.02, dark],
+        [0, h / 2, 0.01, w, h, d * 0.7, color],
+      ];
+    case "floor_lamp":
+      return [
+        [0, 0.015, 0, 0.3, 0.03, 0.3, dark],
+        [0, 0.72, 0, 0.03, 1.4, 0.03, dark],
+        [0, 1.43, 0, w, 0.32, d, "#efe6d2"],
+      ];
+    case "garden_light":
+      return [
+        [0, 0.2, 0, 0.07, 0.4, 0.07, dark],
+        [0, 0.44, 0, w, 0.1, d, "#fff1c2"],
+      ];
+    case "table": {
+      const legs: Box[] = [
+        [-w / 2 + 0.06, 0.36, -d / 2 + 0.06, 0.06, 0.72, 0.06],
+        [w / 2 - 0.06, 0.36, -d / 2 + 0.06, 0.06, 0.72, 0.06],
+        [-w / 2 + 0.06, 0.36, d / 2 - 0.06, 0.06, 0.72, 0.06],
+        [w / 2 - 0.06, 0.36, d / 2 - 0.06, 0.06, 0.72, 0.06],
+      ];
+      const top: Box = [0, 0.74, 0, w, 0.04, d];
+      if (!outdoorSet) return [top, ...legs];
+      // The retailer's set comes with four chairs: two on each long side.
+      const chairs: Box[] = [];
+      for (const cx of [-w / 4, w / 4])
+        for (const side of [-1, 1]) {
+          const cz = side * (d / 2 + 0.3);
+          chairs.push([cx, 0.45, cz, 0.44, 0.05, 0.42], [cx, 0.7, cz + side * 0.2, 0.44, 0.45, 0.04], [cx, 0.22, cz, 0.36, 0.44, 0.04]);
+        }
+      return [top, ...legs, ...chairs];
+    }
+    case "chair":
+      return [
+        [0, 0.45, 0.02, w, 0.05, d - 0.04],
+        [0, 0.7, -d / 2 + 0.03, w, 0.45, 0.04],
+        [-w / 2 + 0.04, 0.22, d / 2 - 0.06, 0.04, 0.44, 0.04],
+        [w / 2 - 0.04, 0.22, d / 2 - 0.06, 0.04, 0.44, 0.04],
+        [-w / 2 + 0.04, 0.22, -d / 2 + 0.06, 0.04, 0.44, 0.04],
+        [w / 2 - 0.04, 0.22, -d / 2 + 0.06, 0.04, 0.44, 0.04],
+      ];
+    case "sofa":
+      return [
+        [0, 0.22, 0.05, w - 0.3, 0.44, d - 0.1],
+        [0, 0.6, -d / 2 + 0.12, w, 0.5, 0.24],
+        [-w / 2 + 0.1, 0.32, 0, 0.2, 0.64, d],
+        [w / 2 - 0.1, 0.32, 0, 0.2, 0.64, d],
+      ];
+    case "bed":
+      return [
+        [0, 0.15, 0, w, 0.3, d],
+        [0, 0.38, 0.03, w - 0.06, 0.18, d - 0.12, "#f3efe6"],
+        [0, 0.55, -d / 2 + 0.03, w, 0.9, 0.06],
+        [-w / 4, 0.5, -d / 2 + 0.25, w / 2 - 0.1, 0.1, 0.3, "#ffffff"],
+        [w / 4, 0.5, -d / 2 + 0.25, w / 2 - 0.1, 0.1, 0.3, "#ffffff"],
+      ];
+    case "wardrobe":
+      return [
+        [-w / 4, h / 2, 0, w / 2 - 0.005, h, d],
+        [w / 4, h / 2, 0, w / 2 - 0.005, h, d, "#c2ad8f"],
+      ];
+    case "tv":
+      return [[0, h / 2, -d / 2 + 0.03, w, h, 0.05, dark]];
+    case "radiator":
+      return [[0, h / 2, -d / 2 + 0.05, w, h, 0.08, "#ededea"]];
+    case "plant":
+      return [
+        [0, 0.15, 0, 0.3, 0.3, 0.3, "#b86b45"],
+        [0, 0.62, 0, w, 0.64, d, "#5d8f4e"],
+      ];
+    case "planter":
+      return [
+        [0, h / 2, 0, w, h, d],
+        [0, h + 0.12, 0, w - 0.1, 0.24, d - 0.08, "#5d8f4e"],
+      ];
+    case "bbq":
+      return [
+        [-0.18, 0.3, 0.1, 0.03, 0.6, 0.03, dark],
+        [0.18, 0.3, 0.1, 0.03, 0.6, 0.03, dark],
+        [0, 0.3, -0.18, 0.03, 0.6, 0.03, dark],
+        [0, 0.75, 0, 0.56, 0.3, 0.56],
+        [0, 0.98, 0, 0.5, 0.16, 0.5],
+        [w / 2 - 0.12, 0.62, 0, 0.22, 0.03, 0.4, metal],
+      ];
+    case "lounger":
+      return [
+        [0, 0.18, 0.2, w, 0.1, d - 0.6],
+        [0, 0.38, -d / 2 + 0.3, w, 0.5, 0.12],
+        [-w / 2 + 0.04, 0.1, 0, 0.04, 0.2, d - 0.1, "#8a6a4a"],
+        [w / 2 - 0.04, 0.1, 0, 0.04, 0.2, d - 0.1, "#8a6a4a"],
+      ];
+    case "parasol":
+      return [
+        [0, 0.04, 0, 0.4, 0.08, 0.4, dark],
+        [0, h / 2, 0, 0.04, h, 0.04, "#8a8f94"],
+        [0, h - 0.02, 0, 2.4, 0.06, 2.4, color, 0.92],
+      ];
+  }
+}
+
+function withItems(b: Build, l: Layout, lang: Lang, look: Look): Build {
+  const parts = [...b.parts];
+  const outdoor = l.type === "deck" || l.type === "lawn" || l.type === "fence";
+  const layers = new Map<string, { label: string; color: string }>();
+  (l.items ?? []).forEach((it, i) => {
+    const spec = ITEMS[it.kind];
+    const role = itemRole(it.kind, l.type);
+    const layer = role ?? "items";
+    const color = (role && look[role]?.color) || spec.color;
+    if (!layers.has(layer)) {
+      layers.set(layer, role ? { label: lang === "en" ? MATERIAL_ROLES[role].labelEn : MATERIAL_ROLES[role].label, color } : { label: lang === "en" ? "Other items" : "Alte obiecte", color: "#9aa3ad" });
+    }
+    const c = itemContainer(l, it.zone, { x: it.x, z: it.z });
+    const base = spec.mount === "ceiling" ? (c.ceilingY ?? 2.6) - spec.h : spec.mount === "wall" ? c.floorY + (spec.elevation ?? 1) : c.floorY;
+    itemBoxes(it.kind, color, outdoor && it.kind === "table").forEach(([x, y, z, w, h, d, col, op], k) => {
+      const [rx, rz] = rotXZ(x, z, it.rot);
+      const sideways = it.rot % 180 !== 0;
+      parts.push({
+        id: `item-${it.id}-${k}`,
+        layer,
+        pos: [it.x + rx, base + y, it.z + rz],
+        size: sideways ? [d, h, w] : [w, h, d],
+        color: col ?? color,
+        opacity: op,
+        delay: b.duration * 0.85 + i * 0.15 + k * 0.04,
+        grow: "pop",
+      });
+    });
+  });
+  return { ...b, parts, layers: [...b.layers, ...[...layers].map(([id, v]) => ({ id, ...v }))], duration: b.duration + 0.6 };
 }
 
 /** Draw a project from plain calculator inputs (landing hero, projects without a stored layout). */

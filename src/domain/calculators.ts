@@ -1,3 +1,5 @@
+import { ITEM_KINDS, itemRole } from "./items";
+import type { ItemKind } from "./items";
 import { unionPerimeter, zoneArea } from "./layout";
 import type { BaseUnit, Lang, MaterialRole, Requirement } from "./types";
 import { MATERIAL_ROLES } from "./types";
@@ -681,7 +683,28 @@ const CALCULATORS: Record<ProjectType, (p: Params, lang: Lang) => CalculationRes
 export function calculateProject(type: ProjectType, params: Params, lang: Lang = "ro"): CalculationResult {
   const fn = CALCULATORS[type];
   if (!fn) throw new CalculatorInputError(`Unknown project type "${type}"`);
-  return fn(params ?? {}, lang);
+  const result = fn(params ?? {}, lang);
+  return withPlacedItems(result, type, params?.items, lang);
+}
+
+/** Items placed in the sketch that the retailer sells become shopping-list lines (one per item). */
+function withPlacedItems(r: CalculationResult, type: ProjectType, raw: unknown, lang: Lang): CalculationResult {
+  if (!Array.isArray(raw) || !raw.length) return r;
+  const counts = new Map<MaterialRole, number>();
+  for (const it of raw as { kind?: string }[]) {
+    if (!it || !ITEM_KINDS.includes(it.kind as ItemKind)) continue;
+    const role = itemRole(it.kind as ItemKind, type);
+    if (role) counts.set(role, (counts.get(role) ?? 0) + 1);
+  }
+  if (!counts.size) return r;
+  const en = lang === "en";
+  const extra: Requirement[] = [...counts].map(([role, n]) => ({
+    role,
+    quantity: n,
+    unit: MATERIAL_ROLES[role].unit,
+    basis: en ? `${n} placed in your sketch` : `${n} ${n === 1 ? "pus" : "puse"} în schiță`,
+  }));
+  return { ...r, requirements: [...r.requirements, ...extra] };
 }
 
 /** Parameter documentation used in the tool schema description. */

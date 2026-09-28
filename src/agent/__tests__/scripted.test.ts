@@ -222,3 +222,44 @@ describe("two requests in one message", () => {
     expect(events.find((e) => e.type === "ui")).toMatchObject({ command: { view: "real" } });
   }, 20000);
 });
+
+describe("placing things by talking", () => {
+  const project = (type: "tiling" | "deck" | "paint_room") => ({
+    basket: [],
+    project: { type, title: "", inputs: {}, measurements: [], assumptions: [], estimate: { hoursMin: 1, hoursMax: 2, difficulty: 1 as const, people: 1 as const }, safetyNotes: [] },
+  });
+  it.each([
+    ["Pune o toaletă lângă ușă", "tiling", [{ op: "add_item", item: "toilet", near: "door" }]],
+    ["Vreau o toaletă lângă ușă și un lavoar pe peretele din stânga", "tiling", [{ op: "add_item", item: "toilet", near: "door" }, { op: "add_item", item: "sink", wall: "w" }]],
+    ["Pune o oglindă deasupra lavoarului", "tiling", [{ op: "add_item", item: "mirror", near: "sink" }]],
+    ["Mută lavoarul sub fereastră", "tiling", [{ op: "move_item", item: "sink", near: "window" }]],
+    ["Scoate cada", "tiling", [{ op: "remove_item", item: "bathtub" }]],
+    ["Pune o lampă pe peretele din stânga", "paint_room", [{ op: "add_item", item: "wall_lamp", wall: "w" }]],
+    ["Vreau o masă și un grătar pe terasă", "deck", [{ op: "add_item", item: "table" }, { op: "add_item", item: "bbq" }]],
+    ["Add a parasol in the back right corner", "deck", [{ op: "add_item", item: "parasol", corner: "ne" }]],
+  ] as const)("%s", (msg, type, edits) => {
+    expect(parseIntent(msg, project(type))).toMatchObject({ kind: "sketch", edits });
+  });
+
+  it("builds a bathroom by chat and puts the fixtures on the list", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    let state: Parameters<typeof runScriptedAgent>[0]["state"] = { basket: [] };
+    const say = async (message: string) => {
+      const events: AgentEvent[] = [];
+      for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state, lang: "ro" })) {
+        events.push(ev);
+        if (ev.type === "state") state = ev.state;
+      }
+      return events;
+    };
+    await say("Baie 2,5 × 2 m");
+    const ev = await say("Pune o toaletă lângă ușă și un lavoar pe peretele din stânga");
+    const change = ev.find((e) => e.type === "card" && e.card.kind === "change") as Extract<AgentEvent, { type: "card" }> | undefined;
+    expect(change?.card.kind === "change" && change.card.change.lines.map((l) => l.role)).toEqual(expect.arrayContaining(["toilet", "washbasin"]));
+    expect(state.basket.some((b) => b.role === "toilet")).toBe(true);
+    expect(state.project?.layout?.items).toHaveLength(2);
+    expect(ev.find((e) => e.type === "verified")).toMatchObject({ ok: true });
+  }, 20000);
+});

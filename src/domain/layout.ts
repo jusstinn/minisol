@@ -1,4 +1,6 @@
 import type { ProjectType } from "./calculators";
+import { ITEMS, ITEM_KINDS, ROT_FOR_WALL, footprint, itemRect, overlaps as rectsOverlap, verticalRange } from "./items";
+import type { Item, ItemKind, Rect } from "./items";
 import type { Lang } from "./types";
 
 /**
@@ -48,7 +50,10 @@ export interface Point {
   z: number;
 }
 
-export type Layout =
+/** Every layout can hold placed items (fixtures, lights, furniture). */
+export type Layout = LayoutShape & { items?: Item[] };
+
+type LayoutShape =
   | { type: "deck"; zones: Zone[]; heightM: number; steps: Steps[]; direction: "x" | "z"; base: "soil" | "gravel" | "concrete_slab" }
   | { type: "laminate_floor"; zones: Zone[]; openings: Opening[]; pattern: "straight" | "diagonal"; subfloor: "concrete" | "wood" | "old_tiles" }
   | { type: "lawn"; zones: Zone[]; mode: "new" | "overseed" }
@@ -262,8 +267,13 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
   }
 }
 
-/** Calculator params for a layout (the calculators understand zones, openings, gates, steps). */
+/** Calculator params for a layout (the calculators understand zones, openings, gates, steps, items). */
 export function layoutParams(l: Layout): Record<string, unknown> {
+  const p = shapeParams(l);
+  return l.items?.length ? { ...p, items: l.items } : p;
+}
+
+function shapeParams(l: Layout): Record<string, unknown> {
   switch (l.type) {
     case "deck": {
       const b = bbox(l.zones);
@@ -329,7 +339,11 @@ export interface SketchOp {
     | "add_fence_segment"
     | "set_segment_length"
     | "remove_fence_segment"
-    | "set_option";
+    | "set_option"
+    | "add_item"
+    | "move_item"
+    | "rotate_item"
+    | "remove_item";
   zone?: string | null;
   w?: number | null;
   d?: number | null;
@@ -347,6 +361,15 @@ export interface SketchOp {
   length?: number | null;
   turn?: "left" | "right" | "straight" | null;
   key?: string | null;
+  /** add_item / move_item / rotate_item / remove_item: what to place (kind). */
+  item?: ItemKind | string | null;
+  /** Place next to: "door", "window", "gate", "steps" or another item kind. */
+  near?: string | null;
+  /** Place in a corner: ne / nw / se / sw (n = back, e = right as seen in the sketch). */
+  corner?: "ne" | "nw" | "se" | "sw" | null;
+  /** Exact plan position (plan editor drag). */
+  x?: number | null;
+  z?: number | null;
 }
 
 export class SketchEditError extends Error {}
@@ -618,6 +641,41 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         say(`Setare actualizată: ${key}`, `Updated setting: ${key}`);
         break;
       }
+      case "add_item": {
+        const kind = asKind(need(o.item, "item"));
+        const items = (l.items ??= []);
+        if (items.length >= 24) throw new SketchEditError("Maximum 24 items in one sketch");
+        const placed = placeItem(l, kind, o, items);
+        const it: Item = { id: nid("it"), kind, ...placed };
+        items.push(it);
+        say(`Adăugat: ${ITEMS[kind].label.toLowerCase()} ${placed.where.ro}`, `Added: ${ITEMS[kind].labelEn.toLowerCase()} ${placed.where.en}`);
+        delete (it as Partial<Item & { where: unknown }>).where;
+        break;
+      }
+      case "move_item":
+      case "rotate_item":
+      case "remove_item": {
+        const items = l.items ?? [];
+        const target = o.id ? items.find((x) => x.id === o.id) : [...items].reverse().find((x) => !o.item || x.kind === asKind(o.item));
+        if (!target) throw new SketchEditError(o.item ? `There is no ${String(o.item)} in the sketch` : "No such item");
+        const name = { ro: ITEMS[target.kind].label.toLowerCase(), en: ITEMS[target.kind].labelEn.toLowerCase() };
+        if (o.op === "remove_item") {
+          l.items = items.filter((x) => x !== target);
+          say(`Eliminat: ${name.ro}`, `Removed: ${name.en}`);
+        } else if (o.op === "rotate_item") {
+          const others = items.filter((x) => x !== target);
+          const rot = (((target.rot + 90) % 360) as Item["rot"]);
+          const placed = placeItem(l, target.kind, { x: target.x, z: target.z, zone: target.zone, rot }, others);
+          Object.assign(target, { x: placed.x, z: placed.z, rot: placed.rot, zone: placed.zone });
+          say(`Rotit: ${name.ro}`, `Rotated: ${name.en}`);
+        } else {
+          const others = items.filter((x) => x !== target);
+          const placed = placeItem(l, target.kind, { ...o, rot: o.x != null ? target.rot : undefined }, others);
+          Object.assign(target, { x: placed.x, z: placed.z, rot: placed.rot, zone: placed.zone });
+          say(`Mutat: ${name.ro} ${placed.where.ro}`, `Moved: ${name.en} ${placed.where.en}`);
+        }
+        break;
+      }
       default:
         throw new SketchEditError(`Unknown edit "${(o as SketchOp).op}"`);
     }
@@ -628,18 +686,302 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
   return { layout: l, changes };
 }
 
+const describeItems = (l: Layout) => (l.items?.length ? { items: l.items.map((i) => ({ id: i.id, item: i.kind, x: i.x, z: i.z, rot: i.rot })) } : {});
+
 /** Compact description of the layout for the model (ids it can reference in edits). */
 export function describeLayout(l: Layout): unknown {
   switch (l.type) {
     case "deck":
     case "laminate_floor":
     case "lawn":
-      return { type: l.type, zones: l.zones.map((z) => ({ id: z.id, w: z.w, d: z.d, x: z.x, z: z.z })), ...("steps" in l ? { steps: l.steps, heightM: l.heightM } : {}), ...("openings" in l ? { openings: l.openings } : {}) };
+      return {
+        type: l.type,
+        zones: l.zones.map((z) => ({ id: z.id, w: z.w, d: z.d, x: z.x, z: z.z })),
+        ...("steps" in l ? { steps: l.steps, heightM: l.heightM } : {}),
+        ...("openings" in l ? { openings: l.openings } : {}),
+        ...describeItems(l),
+      };
     case "fence":
-      return { type: l.type, segments: fenceSegments(l.points).map((s, i) => ({ segment: i, length: s.length })), heightM: l.heightM, gates: l.gates };
+      return { type: l.type, segments: fenceSegments(l.points).map((s, i) => ({ segment: i, length: s.length })), heightM: l.heightM, gates: l.gates, ...describeItems(l) };
     default:
       return l;
   }
+}
+
+// ───────────────────────────── placed items ─────────────────────────────
+
+const ITEM_WORDS: [ItemKind, RegExp][] = [
+  ["toilet", /toilet|wc|vas/],
+  ["sink", /sink|washbasin|lavoar|chiuvet/],
+  ["shower", /shower|dus/],
+  ["bathtub", /bath|cada/],
+  ["towel_radiator", /towel/],
+  ["mirror", /mirror|oglind/],
+  ["washing_machine", /washing|masina de spalat/],
+  ["ceiling_lamp", /ceiling|plafon|lustr/],
+  ["wall_lamp", /wall.?(lamp|light)|aplic/],
+  ["floor_lamp", /floor.?lamp|lampadar/],
+  ["garden_light", /garden.?light|solar|felinar/],
+  ["lounger", /lounger|sezlong/],
+  ["parasol", /parasol|umbrel/],
+  ["bbq", /bbq|grill|gratar/],
+  ["planter", /planter|jardinier/],
+  ["plant", /plant/],
+];
+
+/** Accept exact kinds and forgiving names ("wc", "lamp", "BBQ"). */
+function asKind(v: unknown): ItemKind {
+  const k = String(v ?? "").toLowerCase().trim().replace(/\s+/g, "_") as ItemKind;
+  if (ITEM_KINDS.includes(k)) return k;
+  const hit = ITEM_WORDS.find(([, re]) => re.test(String(v).toLowerCase()))?.[0];
+  if (hit) return hit;
+  throw new SketchEditError(`Unknown item "${String(v)}". Items: ${ITEM_KINDS.join(", ")}`);
+}
+
+interface Container {
+  rect: Rect;
+  floorY: number;
+  ceilingY: number | null;
+  walls: boolean;
+  zone?: string;
+}
+
+/** Where items can stand for this project (room, deck zone, the yard in front of a fence…). */
+export function itemContainer(l: Layout, zoneId?: string | null, at?: { x: number; z: number }): Container {
+  switch (l.type) {
+    case "paint_room":
+      return { rect: { minX: -l.w / 2, maxX: l.w / 2, minZ: -l.d / 2, maxZ: l.d / 2 }, floorY: 0, ceilingY: l.h, walls: true };
+    case "tiling":
+      return { rect: { minX: -l.w / 2, maxX: l.w / 2, minZ: -l.d / 2, maxZ: l.d / 2 }, floorY: 0.012, ceilingY: 2.6, walls: true };
+    case "drywall_partition":
+      return { rect: { minX: -l.length / 2, maxX: l.length / 2, minZ: -1.6, maxZ: 1.6 }, floorY: 0, ceilingY: l.heightM, walls: true };
+    case "fence": {
+      const xs = l.points.map((p) => p.x);
+      const zs = l.points.map((p) => p.z);
+      return { rect: { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs) + 0.1, maxZ: Math.max(...zs) + 4 }, floorY: 0, ceilingY: null, walls: false };
+    }
+    case "deck":
+    case "laminate_floor":
+    case "lawn": {
+      const byPoint = at && l.zones.find((z) => at.x >= z.x - 0.01 && at.x <= z.x + z.w + 0.01 && at.z >= z.z - 0.01 && at.z <= z.z + z.d + 0.01);
+      const z = byPoint ?? l.zones.find((x) => x.id === zoneId) ?? l.zones[0];
+      const floorY = l.type === "deck" ? l.heightM : l.type === "laminate_floor" ? 0.022 : 0.02;
+      return { rect: { minX: z.x, maxX: z.x + z.w, minZ: z.z, maxZ: z.z + z.d }, floorY, ceilingY: l.type === "laminate_floor" ? 2.6 : null, walls: l.type === "laminate_floor", zone: z.id };
+    }
+  }
+}
+
+type Where = { ro: string; en: string };
+const SIDE_WHERE: Record<Side, Where> = {
+  n: { ro: "pe peretele din spate", en: "on the back wall" },
+  s: { ro: "pe peretele din față", en: "on the front wall" },
+  w: { ro: "pe peretele din stânga", en: "on the left wall" },
+  e: { ro: "pe peretele din dreapta", en: "on the right wall" },
+};
+
+/**
+ * Resolve where an item goes from how the customer said it: against a wall (at a
+ * position along it), in a corner, next to a door / window / gate / the steps /
+ * another item, at an exact point (plan editor drag) or in the middle — then slide
+ * it until it doesn't overlap anything. Throws SketchEditError when it can't fit.
+ */
+export function placeItem(
+  l: Layout,
+  kind: ItemKind,
+  o: Pick<SketchOp, "wall" | "side" | "pos" | "near" | "corner" | "x" | "z" | "zone"> & { rot?: Item["rot"] },
+  others: Item[],
+): { x: number; z: number; rot: Item["rot"]; zone?: string; where: Where } {
+  const spec = ITEMS[kind];
+  const outdoorProject = l.type === "deck" || l.type === "lawn" || l.type === "fence";
+  if (spec.indoor && outdoorProject) throw new SketchEditError(`${spec.labelEn} is for indoors — this is an outdoor project`);
+  if (spec.outdoor && !outdoorProject) throw new SketchEditError(`${spec.labelEn} is for outdoors — this is an indoor project`);
+  const c = itemContainer(l, o.zone, o.x != null && o.z != null ? { x: o.x, z: o.z } : undefined);
+  if (spec.mount === "ceiling" && c.ceilingY == null) throw new SketchEditError(`${spec.labelEn} needs a ceiling — try a garden light`);
+  if (spec.mount === "wall" && !c.walls) throw new SketchEditError(`${spec.labelEn} mounts on a wall — this project has none`);
+
+  const r = c.rect;
+  let rot: Item["rot"] = o.rot ?? 0;
+  let x = (r.minX + r.maxX) / 2;
+  let z = (r.minZ + r.maxZ) / 2;
+  let where: Where = { ro: "în mijloc", en: "in the middle" };
+  let slide: "x" | "z" | "both" = "both";
+
+  const againstWall = (side: Side, pos: number) => {
+    rot = ROT_FOR_WALL[side];
+    const f = footprint(kind, rot);
+    const along = (lo: number, hi: number, len: number) => clamp(lo + pos * (hi - lo), lo + len / 2, hi - len / 2);
+    // Drywall: the partition runs along z = 0; items stand against its faces.
+    const face = l.type === "drywall_partition" && (side === "n" || side === "s");
+    if (side === "n" || side === "s") {
+      x = along(r.minX, r.maxX, f.w);
+      z = face ? (side === "s" ? 0.05 + f.d / 2 : -0.05 - f.d / 2) : side === "n" ? r.minZ + f.d / 2 : r.maxZ - f.d / 2;
+      if (face) rot = side === "s" ? 0 : 180;
+      slide = "x";
+    } else {
+      z = along(r.minZ, r.maxZ, f.d);
+      x = side === "w" ? r.minX + f.w / 2 : r.maxX - f.w / 2;
+      slide = "z";
+    }
+  };
+
+  const near = o.near ? String(o.near).toLowerCase() : "";
+  if (o.x != null && o.z != null) {
+    x = Number(o.x);
+    z = Number(o.z);
+    where = { ro: "unde ai ales", en: "where you put it" };
+    if (spec.mount === "wall") {
+      // Snap to the nearest wall.
+      const d = { n: Math.abs(z - r.minZ), s: Math.abs(r.maxZ - z), w: Math.abs(x - r.minX), e: Math.abs(r.maxX - x) };
+      const side = (Object.entries(d).sort((a, b) => a[1] - b[1])[0][0]) as Side;
+      const len = side === "n" || side === "s" ? r.maxX - r.minX : r.maxZ - r.minZ;
+      againstWall(side, len > 0 ? (side === "n" || side === "s" ? (x - r.minX) / len : (z - r.minZ) / len) : 0.5);
+    }
+  } else if (near) {
+    const anchor = findAnchor(l, near, others, c);
+    if (!anchor) throw new SketchEditError(`There is no ${near} to place it next to`);
+    where = anchor.where;
+    const f0 = footprint(kind, anchor.side ? ROT_FOR_WALL[anchor.side] : 0);
+    if (anchor.side && spec.mount !== "ceiling") {
+      // Along the same wall, beside the anchor (whichever side has room) — or right above it
+      // when a wall item goes by a floor item (mirror above the washbasin, TV above the sofa).
+      againstWall(anchor.side, 0.5);
+      const alongX = anchor.side === "n" || anchor.side === "s";
+      const above = spec.mount === "wall" && anchor.item != null && ITEMS[anchor.item].mount === "floor";
+      if (above) where = { ro: `deasupra: ${ITEMS[anchor.item!].label.toLowerCase()}`, en: `above the ${ITEMS[anchor.item!].labelEn.toLowerCase()}` };
+      const off = above ? 0 : anchor.half + (alongX ? f0.w : f0.d) / 2 + 0.1;
+      const lo = alongX ? r.minX + f0.w / 2 : r.minZ + f0.d / 2;
+      const hi = alongX ? r.maxX - f0.w / 2 : r.maxZ - f0.d / 2;
+      const a = anchor.along + off <= hi ? anchor.along + off : anchor.along - off;
+      if (alongX) x = clamp(a, lo, hi);
+      else z = clamp(a, lo, hi);
+    } else {
+      // Free-standing next to it (inside the container), or a ceiling light above the spot.
+      x = clamp(anchor.x, r.minX + f0.w / 2, r.maxX - f0.w / 2);
+      z = clamp(anchor.z, r.minZ + f0.d / 2, r.maxZ - f0.d / 2);
+    }
+  } else if (o.corner) {
+    const cn = String(o.corner) as "ne" | "nw" | "se" | "sw";
+    rot = cn[0] === "n" ? 0 : 180;
+    const f = footprint(kind, rot);
+    x = cn[1] === "e" ? r.maxX - f.w / 2 : r.minX + f.w / 2;
+    z = cn[0] === "n" ? r.minZ + f.d / 2 : r.maxZ - f.d / 2;
+    where = {
+      ro: `în colțul din ${cn[0] === "n" ? "spate" : "față"}-${cn[1] === "e" ? "dreapta" : "stânga"}`,
+      en: `in the ${cn[0] === "n" ? "back" : "front"}-${cn[1] === "e" ? "right" : "left"} corner`,
+    };
+    slide = cn[0] === "n" || cn[0] === "s" ? "x" : "z";
+  } else if (o.wall || o.side) {
+    const side = String(o.wall ?? o.side) as Side;
+    if (!SIDES.includes(side)) throw new SketchEditError(`Unknown wall "${String(o.wall ?? o.side)}" — use n, e, s or w`);
+    if (!c.walls && spec.mount !== "floor") throw new SketchEditError(`${spec.labelEn} can't go on an edge without a wall`);
+    againstWall(side, clamp(Number(o.pos ?? 0.5), 0, 1));
+    where = c.walls ? SIDE_WHERE[side] : { ro: `pe latura de ${{ n: "spate", s: "față", w: "stânga", e: "dreapta" }[side]}`, en: `along the ${{ n: "back", s: "front", w: "left", e: "right" }[side]} edge` };
+  } else if (spec.mount === "wall") {
+    againstWall("n", 0.5);
+    where = SIDE_WHERE.n;
+  }
+
+  // Keep inside, then slide until it doesn't overlap another item (or the partition).
+  const f = footprint(kind, rot);
+  const inside = (px: number, pz: number) => ({ x: clamp(px, r.minX + f.w / 2, r.maxX - f.w / 2), z: clamp(pz, r.minZ + f.d / 2, r.maxZ - f.d / 2) });
+  const blocked = (px: number, pz: number) => {
+    const me = itemRect({ kind, x: px, z: pz, rot });
+    if (l.type === "drywall_partition" && rectsOverlap(me, { minX: -l.length / 2, maxX: l.length / 2, minZ: -0.06, maxZ: 0.06 })) return true;
+    // Only things at the same height collide (a mirror above a washbasin is fine).
+    const [lo, hi] = verticalRange(kind, c.ceilingY);
+    return others.some((it) => {
+      const [a, b] = verticalRange(it.kind, c.ceilingY);
+      return a < hi - 0.01 && lo < b - 0.01 && rectsOverlap(me, itemRect(it));
+    });
+  };
+  let p = inside(x, z);
+  if (blocked(p.x, p.z)) {
+    // Slide 10 cm at a time, alternating sides, along the wall (or in any direction when free-standing).
+    const tries: [number, number][] = [];
+    for (let k = 1; k <= 60; k++) {
+      const step = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.1;
+      if (slide !== "z") tries.push([p.x + step, p.z]);
+      if (slide !== "x") tries.push([p.x, p.z + step]);
+    }
+    if (slide === "both") for (let k = 1; k <= 20; k++) for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) tries.push([p.x + dx * k * 0.1, p.z + dz * k * 0.1]);
+    const free = tries.map(([a, b]) => inside(a, b)).find((q) => !blocked(q.x, q.z));
+    if (!free) throw new SketchEditError(`There's no free space for the ${spec.labelEn.toLowerCase()} there — move or remove something first`);
+    p = free;
+  }
+  return { x: r2(p.x), z: r2(p.z), rot, zone: c.zone, where };
+}
+
+/** What "next to the door / window / gate / steps / sink" refers to. */
+function findAnchor(
+  l: Layout,
+  near: string,
+  items: Item[],
+  c: Container,
+): { x: number; z: number; along: number; half: number; side?: Side; item?: ItemKind; where: Where } | null {
+  const r = c.rect;
+  const onWall = (side: Side, pos: number, width: number, where: Where) => {
+    const alongX = side === "n" || side === "s";
+    const along = alongX ? r.minX + pos * (r.maxX - r.minX) : r.minZ + pos * (r.maxZ - r.minZ);
+    const x = alongX ? along : side === "w" ? r.minX + 0.6 : r.maxX - 0.6;
+    const z = alongX ? (side === "n" ? r.minZ + 0.6 : r.maxZ - 0.6) : along;
+    return { x, z, along, half: width / 2, side: c.walls ? side : undefined, where };
+  };
+  if (/door|usa|usi/.test(near) || /window|fereastr|geam/.test(near)) {
+    const kind = /window|fereastr|geam/.test(near) ? "window" : "door";
+    const where: Where = kind === "door" ? { ro: "lângă ușă", en: "next to the door" } : { ro: "lângă fereastră", en: "by the window" };
+    if (l.type === "paint_room" || l.type === "tiling" || l.type === "laminate_floor") {
+      const o = [...l.openings].reverse().find((x) => x.kind === kind && (l.type !== "laminate_floor" || !c.zone || x.zone === c.zone));
+      return o ? onWall(o.wall as Side, o.pos, o.width, where) : null;
+    }
+    if (l.type === "drywall_partition" && kind === "door") {
+      const o = l.openings.at(-1);
+      return o ? { x: -l.length / 2 + o.pos * l.length, z: 0.6, along: -l.length / 2 + o.pos * l.length, half: o.width / 2, side: "s", where } : null;
+    }
+    return null;
+  }
+  if (/gate|poart/.test(near) && l.type === "fence") {
+    const g = l.gates.at(-1);
+    const seg = g && fenceSegments(l.points)[Number(g.wall)];
+    if (!g || !seg) return null;
+    const t = g.pos;
+    const gx = seg.a.x + (seg.b.x - seg.a.x) * t;
+    const gz = seg.a.z + (seg.b.z - seg.a.z) * t;
+    const alongX = Math.abs(seg.b.x - seg.a.x) >= Math.abs(seg.b.z - seg.a.z);
+    const off = g.width / 2 + 0.6;
+    return { x: alongX ? gx + off : gx + 0.6, z: alongX ? gz + 0.6 : gz + off, along: alongX ? gx : gz, half: g.width / 2, where: { ro: "lângă poartă", en: "by the gate" } };
+  }
+  if (/steps|trept|scar/.test(near) && l.type === "deck") {
+    const st = l.steps.at(-1);
+    const z = st && l.zones.find((q) => q.id === st.zone);
+    if (!st || !z) return null;
+    const alongX = st.side === "n" || st.side === "s";
+    const along = alongX ? z.x + z.w / 2 : z.z + z.d / 2;
+    const off = st.width / 2 + 0.5;
+    const x = alongX ? along + off : st.side === "w" ? z.x + 0.5 : z.x + z.w - 0.5;
+    const zz = alongX ? (st.side === "n" ? z.z + 0.5 : z.z + z.d - 0.5) : along + off;
+    return { x, z: zz, along, half: st.width / 2, where: { ro: "lângă trepte", en: "by the steps" } };
+  }
+  let kind: ItemKind | undefined;
+  try {
+    kind = asKind(near);
+  } catch {
+    return null;
+  }
+  const it = [...items].reverse().find((x) => x.kind === kind);
+  if (!it) return null;
+  const f = footprint(it.kind, it.rot);
+  // The wall the anchor stands against, from its rotation (its back faces that wall).
+  const side = c.walls ? (({ 0: "n", 90: "w", 180: "s", 270: "e" }) as const)[it.rot] : undefined;
+  const alongX = !side || side === "n" || side === "s";
+  return {
+    x: it.x + f.w / 2 + 0.5,
+    z: it.z,
+    along: alongX ? it.x : it.z,
+    half: (alongX ? f.w : f.d) / 2,
+    side,
+    item: it.kind,
+    where: { ro: `lângă ${ITEMS[it.kind].label.toLowerCase()}`, en: `next to the ${ITEMS[it.kind].labelEn.toLowerCase()}` },
+  };
 }
 
 // ───────────────────────────── validation ─────────────────────────────
@@ -741,5 +1083,23 @@ export function checkLayout(raw: unknown, type: ProjectType): Layout | null {
         );
     }
   })();
-  return ok ? (structuredClone(l) as unknown as Layout) : null;
+  return ok && okItems(l.items) ? (structuredClone(l) as unknown as Layout) : null;
+}
+
+function okItems(v: unknown): boolean {
+  if (v === undefined) return true;
+  return (
+    Array.isArray(v) &&
+    v.length <= 24 &&
+    v.every(
+      (it) =>
+        it &&
+        str(it.id) &&
+        ITEM_KINDS.includes(it.kind) &&
+        fin(it.x, -200, 200) &&
+        fin(it.z, -200, 200) &&
+        [0, 90, 180, 270].includes(it.rot) &&
+        (it.zone === undefined || str(it.zone, 4)),
+    )
+  );
 }

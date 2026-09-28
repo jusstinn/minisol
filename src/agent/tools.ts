@@ -4,6 +4,7 @@ import { scriptedPlan } from "./scripted-plans";
 import { AISLES } from "@/data/stores";
 import { CalculatorInputError, PROJECT_PARAM_DOCS, PROJECT_TYPES, calculateProject } from "@/domain/calculators";
 import type { CalculationResult, ProjectType } from "@/domain/calculators";
+import { ITEM_KINDS } from "@/domain/items";
 import { SIDES, SketchEditError, applyOps, defaultLayout, describeLayout, layoutParams } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
 import { distanceKm } from "@/domain/geo";
@@ -138,6 +139,7 @@ export const TOOL_DEFINITIONS = [
       "Use for: resizing (resize), L/U shapes (add_zone attaches a rectangle to a side of an existing zone; remove_zone), deck height (set_height, metres) and steps (add_steps / remove_steps; count defaults to height ÷ 17 cm), " +
       "doors/windows/gates (add_opening / move_opening / remove_opening; fence gates: width 1 = pedestrian, 3 = driveway, on a segment index), fence corners (add_fence_segment with turn left/right/straight; set_segment_length; remove_fence_segment), " +
       "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (set_option key/value: base, direction, pattern, subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode). " +
+      "Place fixtures, lights and furniture where the customer says with add_item (item + one of: wall n/e/s/w with pos 0..1, near door/window/gate/steps/<item>, corner, or nothing = middle); move_item, rotate_item, remove_item by id or item kind. Items the store sells (WC, washbasin, shower, bathtub, mirror, towel radiator, lights, garden set, BBQ, planter, lounger, parasol) are added to the list automatically; sofas, beds etc. are drawn for context only. " +
       "undo reverts the last sketch change (alone, nothing else in the same call). Sides/walls: n = back, s = front, e = right, w = left as seen in the sketch. Zone ids and segment indexes are in the state section of your instructions. Set unused fields to null. Several edits can be sent at once.",
     strict: true,
     parameters: {
@@ -150,7 +152,11 @@ export const TOOL_DEFINITIONS = [
             properties: {
               op: {
                 type: "string",
-                enum: ["resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening", "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option", "undo"],
+                enum: [
+                  "resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening", "move_opening",
+                  "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option",
+                  "add_item", "move_item", "rotate_item", "remove_item", "undo",
+                ],
               },
               zone: { type: ["string", "null"], description: "Zone id (A, B…). resize/add_zone/add_steps/remove_zone; null = first zone" },
               w: { type: ["number", "null"], description: "Width in m (east–west). resize, add_zone; for walls/fences: total length" },
@@ -170,8 +176,13 @@ export const TOOL_DEFINITIONS = [
               length: { type: ["number", "null"], description: "Fence segment length in m" },
               turn: { type: ["string", "null"], enum: ["left", "right", "straight", null] },
               key: { type: ["string", "null"], description: "set_option key" },
+              item: { type: ["string", "null"], enum: [...ITEM_KINDS, null], description: "add_item/move_item/rotate_item/remove_item: what (for move/rotate/remove: id or kind)" },
+              near: { type: ["string", "null"], description: "Place next to: door, window, gate, steps, or an item kind (e.g. sink)" },
+              corner: { type: ["string", "null"], enum: ["ne", "nw", "se", "sw", null], description: "Place in a corner (n = back, s = front, e = right, w = left)" },
+              x: { type: ["number", "null"], description: "Exact plan x in m (rarely needed)" },
+              z: { type: ["number", "null"], description: "Exact plan z in m (rarely needed)" },
             },
-            required: ["op", "zone", "w", "d", "h", "side", "align", "width", "count", "value", "option", "kind", "wall", "pos", "id", "segment", "length", "turn", "key"],
+            required: ["op", "zone", "w", "d", "h", "side", "align", "width", "count", "value", "option", "kind", "wall", "pos", "id", "segment", "length", "turn", "key", "item", "near", "corner", "x", "z"],
             additionalProperties: false,
           },
         },

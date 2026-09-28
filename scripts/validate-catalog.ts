@@ -20,7 +20,7 @@ const TIERS: QualityTier[] = ["budget", "standard", "premium"];
 const SALES_UNITS = ["găleată", "bidon", "pachet", "cutie", "sac", "rolă", "buc", "set", "tub"];
 const BRANDS = [
   "Pigmenta", "Nuanța", "Artizan", "Floorline", "Casaro", "Fixplus", "Kronwald", "Lignara", "Gipsa", "Termika",
-  "Ancora", "Verdea", "Toolcraft", "Voltmaster", "Protekt", "Betonix",
+  "Ancora", "Verdea", "Toolcraft", "Voltmaster", "Protekt", "Betonix", "Aquanova", "Lumina",
 ];
 /** Real manufacturers that must never appear (prices are invented). */
 const REAL_BRANDS = [
@@ -72,6 +72,10 @@ const ROLE_CATEGORIES: Partial<Record<MaterialRole, CategoryId[]>> = {
   spirit_level: ["tools", "power_tools"], pencil: ["tools"], caulking_gun: ["tools"], work_gloves: ["safety"],
   safety_glasses: ["safety"], dust_mask: ["safety"], knee_pads: ["safety"], ladder: ["tools"],
   wheelbarrow: ["garden", "tools"], spade: ["garden", "tools"],
+  toilet: ["bathroom"], washbasin: ["bathroom"], shower_enclosure: ["bathroom"], bathtub: ["bathroom"],
+  bathroom_mirror: ["bathroom"], towel_radiator: ["bathroom", "plumbing"], ceiling_light: ["electrical"],
+  wall_light: ["electrical"], floor_lamp: ["electrical"], garden_light: ["garden", "electrical"],
+  garden_furniture: ["garden"], planter: ["garden"], bbq: ["garden"], sun_lounger: ["garden"], parasol: ["garden"],
 };
 
 type SpecType = "number" | "string" | "boolean";

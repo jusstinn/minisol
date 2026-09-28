@@ -109,6 +109,23 @@ export const MATERIAL_ROLES = {
   garden_hose: { unit: "buc", label: "Furtun grădină", labelEn: "Garden hose" },
   sprinkler: { unit: "buc", label: "Aspersor", labelEn: "Sprinkler" },
 
+  // fixtures, lights and garden furniture placed in the sketch
+  toilet: { unit: "buc", label: "Vas WC", labelEn: "Toilet" },
+  washbasin: { unit: "buc", label: "Lavoar", labelEn: "Washbasin" },
+  shower_enclosure: { unit: "buc", label: "Cabină de duș", labelEn: "Shower enclosure" },
+  bathtub: { unit: "buc", label: "Cadă", labelEn: "Bathtub" },
+  bathroom_mirror: { unit: "buc", label: "Oglindă baie", labelEn: "Bathroom mirror" },
+  towel_radiator: { unit: "buc", label: "Calorifer port-prosop", labelEn: "Towel radiator" },
+  ceiling_light: { unit: "buc", label: "Plafonieră", labelEn: "Ceiling light" },
+  wall_light: { unit: "buc", label: "Aplică", labelEn: "Wall light" },
+  floor_lamp: { unit: "buc", label: "Lampadar", labelEn: "Floor lamp" },
+  garden_light: { unit: "buc", label: "Lampă de grădină", labelEn: "Garden light" },
+  garden_furniture: { unit: "buc", label: "Set mobilier grădină", labelEn: "Garden furniture set" },
+  planter: { unit: "buc", label: "Jardinieră", labelEn: "Planter" },
+  bbq: { unit: "buc", label: "Grătar", labelEn: "BBQ grill" },
+  sun_lounger: { unit: "buc", label: "Șezlong", labelEn: "Sun lounger" },
+  parasol: { unit: "buc", label: "Umbrelă de soare", labelEn: "Parasol" },
+
   // general tools / power tools / safety
   cordless_drill: { unit: "buc", label: "Mașină de găurit / înșurubat", labelEn: "Cordless drill" },
   jigsaw: { unit: "buc", label: "Fierăstrău pendular", labelEn: "Jigsaw" },

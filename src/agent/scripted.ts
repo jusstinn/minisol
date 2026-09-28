@@ -5,6 +5,7 @@ import type { Quote } from "@/domain/quote";
 import { fold } from "@/domain/search";
 import type { Customer, Lang, MaterialRole, QualityTier } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import type { ItemKind } from "@/domain/items";
 import type { SketchOp, Side } from "@/domain/layout";
 import { lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
@@ -74,7 +75,96 @@ const WORD_NUM: Record<string, number> = { o: 1, un: 1, una: 1, one: 1, a: 1, do
  * Sketch edits in plain words ("add 2 steps at the front", "fă-o în L cu 2×2 m în dreapta",
  * "o poartă de mașină", "faianță doar până la 1,2 m"). Returns null if it isn't an edit.
  */
+/** Things that can be placed in the sketch, as customers say them (folded text). Order matters: specific first. */
+const ITEM_PHRASES: [ItemKind, RegExp][] = [
+  ["towel_radiator", /\b(port-?prosop|towel radiator)\b/],
+  ["washing_machine", /\b(masina de spalat|washing machine)\b/],
+  ["garden_light", /\b(lamp\w* de gradina|lumin\w* de gradina|garden lights?|felinar\w*|stalpisor\w*)\b/],
+  ["ceiling_lamp", /\b(plafonier\w*|lustr\w*|ceiling lights?|lamp\w* (pe|din) tavan)\b/],
+  ["wall_lamp", /\b(aplic\w*|wall lights?|lamp\w* pe perete)\b/],
+  ["floor_lamp", /\b(lampadar\w*|floor lamps?)\b/],
+  ["toilet", /\b(toalet\w*|vas(ul)? wc|wc|closet\w*|toilets?)\b/],
+  ["sink", /\b(lavoar\w*|chiuvet\w*|sinks?|washbasins?)\b/],
+  ["shower", /\b(dus(ul)?|cabin\w* de dus|showers?)\b/],
+  ["bathtub", /\b(cada|cad[ae]|cadita|bathtubs?|tub)\b/],
+  ["mirror", /\b(oglind\w*|mirrors?)\b/],
+  ["planter", /\b(jardinier\w*|planters?)\b/],
+  ["bbq", /\b(gratar\w*|bbq|barbecue|grill)\b/],
+  ["lounger", /\b(sezlong\w*|loungers?)\b/],
+  ["parasol", /\b(umbrel\w*|parasols?)\b/],
+  ["table", /\b(mas[ae]|masuta|tables?)\b/],
+  ["chair", /\b(scaun\w*|chairs?)\b/],
+  ["sofa", /\b(canapea|canapeaua|sofa|couch)\b/],
+  ["bed", /\b(pat(ul)?|beds?)\b/],
+  ["wardrobe", /\b(dulap\w*|wardrobes?)\b/],
+  ["tv", /\b(televizor\w*|tv)\b/],
+  ["radiator", /\b(calorifer\w*|radiators?)\b/],
+  ["plant", /\b(plant[ae]|plante|ghiveci|plants?)\b/],
+];
+const GENERIC_LAMP = /\b(lamp[ai]|lampa|lampi|becuri|bec|corp de iluminat|lumin[ai]|lights?|lamps?)\b/;
+
+/** Where, in one clause: next to something, a corner, a wall/side (or nothing = the middle). */
+function placementIn(t: string, self?: ItemKind): Pick<SketchOp, "near" | "corner" | "wall"> {
+  const nearM = t.match(/\b(langa|linga|sub|deasupra|next to|by|near|beside|under|above|la)\s+(usa|usii|intrare|fereastra|ferestrei|geam|poarta|portii|trepte|treptele|scari|door|window|gate|steps|entrance)\b/);
+  let near: string | null = nearM ? (/usa|usii|intrare|door|entrance/.test(nearM[2]) ? "door" : /fereastr|geam|window/.test(nearM[2]) ? "window" : /poart|gate/.test(nearM[2]) ? "gate" : "steps") : null;
+  if (!near) {
+    const nextTo = t.match(/\b(langa|linga|deasupra|next to|beside|above)\s+(\w+)/);
+    const anchor = nextTo && ITEM_PHRASES.find(([, re]) => re.test(nextTo[2]))?.[0];
+    if (anchor && anchor !== self) near = anchor;
+  }
+  const side = sideIn(t);
+  const corner = /\b(colt\w*|corner)\b/.test(t) ? (((/\b(fata|front)\b/.test(t) ? "s" : "n") + (/\b(stanga|left)\b/.test(t) ? "w" : "e")) as "ne" | "nw" | "se" | "sw") : null;
+  return { near, corner, wall: !near && !corner && side ? side : null };
+}
+
+function kindsIn(t: string): ItemKind[] {
+  const kinds: ItemKind[] = [];
+  let rest = t;
+  for (const [kind, re] of ITEM_PHRASES) {
+    const m = rest.match(re);
+    if (m) {
+      kinds.push(kind);
+      rest = rest.replace(m[0], " ");
+    }
+  }
+  return kinds;
+}
+
+/** "Pune o toaletă lângă ușă și un lavoar pe peretele din stânga", "mută lavoarul sub fereastră", "scoate cada". */
+function parseItems(t: string, type: ProjectType): Partial<SketchOp>[] | null {
+  const outdoor = type === "deck" || type === "lawn" || type === "fence";
+  const remove = /\b(scoate\w*|elimina\w*|sterge\w*|remove|delete|fara|nu mai vreau)\b/.test(t);
+  const rotate = /\b(roteste|intoarce|rotate|turn)\b/.test(t);
+  const move = /\b(muta\w*|mut|move)\b/.test(t);
+  const add = /\b(pune|puneti|adauga\w*|vreau|monteaza|instaleaza|as vrea|put|add|place|install|want|i'?d like)\b/.test(t);
+  if (!remove && !rotate && !move && !add) return null;
+  // Each clause ("… și …", "…, …") carries its own placement.
+  const clauses = t.split(/\s*(?:,|;|\bsi\b|\band\b|\bplus\b)\s*/).filter(Boolean);
+  const placed: { kind: ItemKind; where: Pick<SketchOp, "near" | "corner" | "wall"> }[] = [];
+  for (const c of clauses) {
+    // The thing after "lângă / deasupra / sub" is where it goes, not something to add.
+    let kinds = kindsIn(c.replace(/\b(langa|linga|deasupra|sub|next to|beside|above|under|near|by)\s+\S+/g, " "));
+    if (!kinds.length && GENERIC_LAMP.test(c)) kinds = [outdoor ? "garden_light" : /\b(perete\w*|wall)\b/.test(c) ? "wall_lamp" : "ceiling_lamp"];
+    const where = placementIn(c, kinds[0]);
+    if (!kinds.length) {
+      // "… și pe peretele din stânga" — a placement for the item before it.
+      const last = placed.at(-1);
+      if (last && !last.where.near && !last.where.corner && !last.where.wall) last.where = where;
+      continue;
+    }
+    kinds.forEach((k, i) => placed.push({ kind: k, where: i === 0 ? where : { near: null, corner: null, wall: null } }));
+  }
+  if (!placed.length) return null;
+  if (remove) return placed.map((p) => ({ op: "remove_item", item: p.kind }));
+  if (rotate) return placed.map((p) => ({ op: "rotate_item", item: p.kind }));
+  if (move) return [{ op: "move_item", item: placed[0].kind, ...placed[0].where }];
+  return placed.map((p) => ({ op: "add_item", item: p.kind, ...p.where }));
+}
+
 export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>[] | null {
+  // Placed items first, so "lângă ușă" doesn't read as "add a door".
+  const items = parseItems(t, type);
+  if (items) return items;
   const dims = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters)?\\s*(?:x|×|\\*|pe|by)\\s*${NUM}`));
   const side = sideIn(t);
   const removing = /\b(fara|scoate\w*|elimina\w*|sterge\w*|remove|delete|without|no more)\b/.test(t);

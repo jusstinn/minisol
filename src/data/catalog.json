@@ -7171,5 +7171,793 @@
     "descriptionEn": "Extra-tall adjustable pedestal with two extension rings for raised decks; stable base only (concrete/paving).",
     "rating": 4.3,
     "isTool": false
+  },
+  {
+    "sku": "15101012",
+    "name": "Vas WC compact Aquanova Basic, evacuare orizontală, cu rezervor și capac",
+    "nameEn": "Aquanova Basic close-coupled toilet, horizontal outlet, with cistern and seat",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 449.9,
+    "salesUnit": "buc",
+    "roles": [
+      "toilet"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "mounting": "pe pardoseală",
+      "flushL": "3/6 l",
+      "outlet": "orizontal",
+      "widthMm": 360,
+      "depthMm": 650
+    },
+    "description": "Set complet vas + rezervor + capac, dublă acționare 3/6 l.",
+    "descriptionEn": "Complete set: pan, cistern and seat, 3/6 l dual flush.",
+    "rating": 4.2,
+    "isTool": false
+  },
+  {
+    "sku": "15101025",
+    "name": "Vas WC suspendat Aquanova Rimless cu capac soft-close",
+    "nameEn": "Aquanova Rimless wall-hung toilet with soft-close seat",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 899.9,
+    "salesUnit": "buc",
+    "roles": [
+      "toilet"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "mounting": "suspendat",
+      "flushL": "3/6 l",
+      "rimless": true,
+      "widthMm": 360,
+      "depthMm": 530
+    },
+    "description": "Vas fără ramă, ușor de curățat; necesită rezervor încastrat.",
+    "descriptionEn": "Rimless pan, easy to clean; needs a concealed cistern frame.",
+    "rating": 4.6,
+    "isTool": false
+  },
+  {
+    "sku": "15101038",
+    "name": "Lavoar ceramic Aquanova 55 cm cu piedestal",
+    "nameEn": "Aquanova 55 cm ceramic washbasin with pedestal",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 289.9,
+    "salesUnit": "buc",
+    "roles": [
+      "washbasin"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "widthMm": 550,
+      "depthMm": 450,
+      "tapHoles": 1
+    },
+    "description": "Lavoar clasic pe piedestal, orificiu pentru baterie.",
+    "descriptionEn": "Classic pedestal basin with one tap hole.",
+    "rating": 4.3,
+    "isTool": false
+  },
+  {
+    "sku": "15101041",
+    "name": "Mobilier baie Aquanova Linea 60 cm cu lavoar, alb lucios",
+    "nameEn": "Aquanova Linea 60 cm vanity unit with basin, gloss white",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 899.9,
+    "salesUnit": "buc",
+    "roles": [
+      "washbasin"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "widthMm": 600,
+      "depthMm": 460,
+      "drawers": 2,
+      "color": "alb"
+    },
+    "description": "Corp cu două sertare soft-close și lavoar ceramic.",
+    "descriptionEn": "Two soft-close drawers and a ceramic basin.",
+    "rating": 4.5,
+    "isTool": false
+  },
+  {
+    "sku": "15101054",
+    "name": "Cabină de duș Aquanova 90 × 90 cm, uși culisante, cu cădiță",
+    "nameEn": "Aquanova 90 × 90 cm shower enclosure, sliding doors, with tray",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 1199.9,
+    "salesUnit": "buc",
+    "roles": [
+      "shower_enclosure"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "sizeCm": "90x90",
+      "glassMm": 5,
+      "doors": "culisante"
+    },
+    "description": "Sticlă securizată 5 mm, profile cromate, cădiță acrilică inclusă.",
+    "descriptionEn": "5 mm safety glass, chrome profiles, acrylic tray included.",
+    "rating": 4.3,
+    "isTool": false
+  },
+  {
+    "sku": "15101067",
+    "name": "Cabină de duș walk-in Aquanova 90 cm, sticlă 8 mm",
+    "nameEn": "Aquanova 90 cm walk-in shower screen, 8 mm glass",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 1899.9,
+    "salesUnit": "buc",
+    "roles": [
+      "shower_enclosure"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "sizeCm": "90x200",
+      "glassMm": 8,
+      "doors": "walk-in"
+    },
+    "description": "Perete fix walk-in cu tratament anti-calcar.",
+    "descriptionEn": "Fixed walk-in screen with anti-limescale coating.",
+    "rating": 4.6,
+    "isTool": false
+  },
+  {
+    "sku": "15101070",
+    "name": "Cadă acrilică Aquanova 170 × 70 cm cu picioare",
+    "nameEn": "Aquanova 170 × 70 cm acrylic bathtub with legs",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 899.9,
+    "salesUnit": "buc",
+    "roles": [
+      "bathtub"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "sizeCm": "170x70",
+      "capacityL": 190
+    },
+    "description": "Cadă dreptunghiulară, acril ranforsat, picioare reglabile.",
+    "descriptionEn": "Rectangular reinforced acrylic tub, adjustable legs.",
+    "rating": 4.4,
+    "isTool": false
+  },
+  {
+    "sku": "15101083",
+    "name": "Oglindă baie Aquanova 60 × 80 cm cu LED și anti-aburire",
+    "nameEn": "Aquanova 60 × 80 cm LED bathroom mirror with demister",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 349.9,
+    "salesUnit": "buc",
+    "roles": [
+      "bathroom_mirror"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "sizeCm": "60x80",
+      "led": true,
+      "ip": "IP44"
+    },
+    "description": "Iluminare LED 4000 K, încălzire anti-aburire.",
+    "descriptionEn": "4000 K LED lighting, demister pad.",
+    "rating": 4.5,
+    "isTool": false
+  },
+  {
+    "sku": "15101096",
+    "name": "Calorifer port-prosop Aquanova 50 × 120 cm, alb",
+    "nameEn": "Aquanova 50 × 120 cm towel radiator, white",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 399.9,
+    "salesUnit": "buc",
+    "roles": [
+      "towel_radiator"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "widthMm": 500,
+      "heightMm": 1200,
+      "powerW": 540,
+      "color": "alb"
+    },
+    "description": "Racord la instalația de încălzire, 540 W la ΔT50.",
+    "descriptionEn": "Connects to the heating system, 540 W at ΔT50.",
+    "rating": 4.4,
+    "isTool": false
+  },
+  {
+    "sku": "15201011",
+    "name": "Plafonieră LED Lumina 24 W, 30 cm, lumină neutră",
+    "nameEn": "Lumina 24 W LED ceiling light, 30 cm, neutral white",
+    "brand": "Lumina",
+    "category": "electrical",
+    "price": 129.9,
+    "salesUnit": "buc",
+    "roles": [
+      "ceiling_light"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "powerW": 24,
+      "lumens": 2200,
+      "kelvin": 4000,
+      "ip": "IP20"
+    },
+    "description": "Montaj rapid, driver integrat.",
+    "descriptionEn": "Quick fit, integrated driver.",
+    "rating": 4.3,
+    "isTool": false
+  },
+  {
+    "sku": "15201024",
+    "name": "Plafonieră LED Lumina 36 W, 40 cm, IP44 (baie)",
+    "nameEn": "Lumina 36 W LED ceiling light, 40 cm, IP44 (bathroom)",
+    "brand": "Lumina",
+    "category": "electrical",
+    "price": 219.9,
+    "salesUnit": "buc",
+    "roles": [
+      "ceiling_light"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "powerW": 36,
+      "lumens": 3400,
+      "kelvin": 4000,
+      "ip": "IP44"
+    },
+    "description": "Protejată la umezeală — potrivită pentru baie.",
+    "descriptionEn": "Moisture-protected — suitable for bathrooms.",
+    "rating": 4.6,
+    "isTool": false
+  },
+  {
+    "sku": "15201037",
+    "name": "Aplică perete Lumina Duo, negru mat, 2 × GU10",
+    "nameEn": "Lumina Duo wall light, matt black, 2 × GU10",
+    "brand": "Lumina",
+    "category": "electrical",
+    "price": 89.9,
+    "salesUnit": "buc",
+    "roles": [
+      "wall_light"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "sockets": "2 × GU10",
+      "color": "negru",
+      "ip": "IP20"
+    },
+    "description": "Lumină sus-jos, becurile se cumpără separat.",
+    "descriptionEn": "Up-down light, bulbs sold separately.",
+    "rating": 4.4,
+    "isTool": false
+  },
+  {
+    "sku": "15201040",
+    "name": "Lampadar Lumina Arc 160 cm, negru",
+    "nameEn": "Lumina Arc 160 cm floor lamp, black",
+    "brand": "Lumina",
+    "category": "electrical",
+    "price": 249.9,
+    "salesUnit": "buc",
+    "roles": [
+      "floor_lamp"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "heightMm": 1600,
+      "socket": "E27",
+      "color": "negru"
+    },
+    "description": "Abajur textil, întrerupător cu picior.",
+    "descriptionEn": "Fabric shade, foot switch.",
+    "rating": 4.2,
+    "isTool": false
+  },
+  {
+    "sku": "15201053",
+    "name": "Set 4 lămpi solare de grădină Lumina, 50 cm",
+    "nameEn": "Lumina set of 4 solar garden lights, 50 cm",
+    "brand": "Lumina",
+    "category": "garden",
+    "price": 179.9,
+    "salesUnit": "set",
+    "roles": [
+      "garden_light"
+    ],
+    "content": {
+      "amount": 4,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "heightMm": 500,
+      "solar": true,
+      "ip": "IP65"
+    },
+    "description": "Se aprind automat seara, fără cabluri.",
+    "descriptionEn": "Switch on automatically at dusk, no wiring.",
+    "rating": 4.1,
+    "isTool": false
+  },
+  {
+    "sku": "15301019",
+    "name": "Set mobilier grădină Verdea: masă 160 cm + 4 scaune, acacia",
+    "nameEn": "Verdea garden set: 160 cm table + 4 chairs, acacia",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 1299.9,
+    "salesUnit": "buc",
+    "roles": [
+      "garden_furniture"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "tableCm": "160x90",
+      "seats": 4,
+      "material": "acacia"
+    },
+    "description": "Lemn de acacia uleiat, scaune pliabile.",
+    "descriptionEn": "Oiled acacia, folding chairs.",
+    "rating": 4.4,
+    "isTool": false
+  },
+  {
+    "sku": "15301022",
+    "name": "Set mobilier grădină Verdea Basic: masă + 4 scaune, metal",
+    "nameEn": "Verdea Basic garden set: table + 4 chairs, metal",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 699.9,
+    "salesUnit": "buc",
+    "roles": [
+      "garden_furniture"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "tableCm": "140x80",
+      "seats": 4,
+      "material": "metal"
+    },
+    "description": "Metal vopsit în câmp electrostatic, gri antracit.",
+    "descriptionEn": "Powder-coated steel, anthracite.",
+    "rating": 4,
+    "isTool": false
+  },
+  {
+    "sku": "15301035",
+    "name": "Jardinieră Verdea din lemn 80 × 35 cm",
+    "nameEn": "Verdea wooden planter 80 × 35 cm",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 129.9,
+    "salesUnit": "buc",
+    "roles": [
+      "planter"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "sizeCm": "80x35",
+      "heightMm": 400,
+      "material": "pin tratat"
+    },
+    "description": "Pin tratat, folie interioară inclusă.",
+    "descriptionEn": "Treated pine, inner liner included.",
+    "rating": 4.3,
+    "isTool": false
+  },
+  {
+    "sku": "15301048",
+    "name": "Grătar cu cărbuni Verdea 57 cm, cu capac și roți",
+    "nameEn": "Verdea 57 cm charcoal kettle BBQ with lid and wheels",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 499.9,
+    "salesUnit": "buc",
+    "roles": [
+      "bbq"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "grillCm": 57,
+      "fuel": "cărbune"
+    },
+    "description": "Termometru în capac, colector de cenușă.",
+    "descriptionEn": "Lid thermometer, ash catcher.",
+    "rating": 4.5,
+    "isTool": false
+  },
+  {
+    "sku": "15301051",
+    "name": "Șezlong Verdea din lemn de acacia, reglabil",
+    "nameEn": "Verdea adjustable acacia sun lounger",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 349.9,
+    "salesUnit": "buc",
+    "roles": [
+      "sun_lounger"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "lengthMm": 1900,
+      "material": "acacia",
+      "positions": 4
+    },
+    "description": "Spătar reglabil în 4 poziții, roți.",
+    "descriptionEn": "4-position backrest, wheels.",
+    "rating": 4.3,
+    "isTool": false
+  },
+  {
+    "sku": "15301064",
+    "name": "Umbrelă de soare Verdea 3 m, bej, cu manivelă",
+    "nameEn": "Verdea 3 m parasol, beige, with crank",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 299.9,
+    "salesUnit": "buc",
+    "roles": [
+      "parasol"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "color": "bej",
+      "upf": 50,
+      "canopyM": 3
+    },
+    "description": "Pânză UPF 50+, se înclină; suportul se cumpără separat.",
+    "descriptionEn": "UPF 50+ canopy, tilting; base sold separately.",
+    "rating": 4.2,
+    "isTool": false
+  },
+  {
+    "sku": "15301077",
+    "name": "Jardinieră Verdea înaltă din WPC 100 × 40 cm, antracit",
+    "nameEn": "Verdea tall WPC planter 100 × 40 cm, anthracite",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 329.9,
+    "salesUnit": "buc",
+    "roles": [
+      "planter"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "sizeCm": "100x40",
+      "heightMm": 600,
+      "material": "WPC compozit",
+      "color": "antracit"
+    },
+    "description": "Nu putrezește, fără întreținere.",
+    "descriptionEn": "Rot-proof, maintenance-free.",
+    "rating": 4.5,
+    "isTool": false
+  },
+  {
+    "sku": "15301080",
+    "name": "Grătar pe gaz Verdea cu 3 arzătoare și capac",
+    "nameEn": "Verdea 3-burner gas BBQ with lid",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 1499.9,
+    "salesUnit": "buc",
+    "roles": [
+      "bbq"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "burners": 3,
+      "fuel": "gaz",
+      "powerKw": 9
+    },
+    "description": "Aprindere piezo, arzător lateral, termometru.",
+    "descriptionEn": "Piezo ignition, side burner, thermometer.",
+    "rating": 4.6,
+    "isTool": false
+  },
+  {
+    "sku": "15301093",
+    "name": "Șezlong Verdea Basic pliabil, textilenă gri",
+    "nameEn": "Verdea Basic folding sun lounger, grey textilene",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 179.9,
+    "salesUnit": "buc",
+    "roles": [
+      "sun_lounger"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "lengthMm": 1880,
+      "material": "aluminiu + textilenă",
+      "positions": 5,
+      "color": "gri"
+    },
+    "description": "Ușor, pliabil, rezistent la apă.",
+    "descriptionEn": "Light, folding, water-resistant.",
+    "rating": 4,
+    "isTool": false
+  },
+  {
+    "sku": "15301106",
+    "name": "Umbrelă de soare Verdea 2 m, gri, cu ax",
+    "nameEn": "Verdea 2 m parasol, grey, tilt",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 119.9,
+    "salesUnit": "buc",
+    "roles": [
+      "parasol"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "color": "gri",
+      "upf": 30,
+      "canopyM": 2
+    },
+    "description": "Pentru balcon sau masa mică.",
+    "descriptionEn": "For a balcony or a small table.",
+    "rating": 3.9,
+    "isTool": false
+  },
+  {
+    "sku": "15101109",
+    "name": "Cadă de colț Aquanova 150 × 150 cm, acril",
+    "nameEn": "Aquanova 150 × 150 cm corner bathtub, acrylic",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 1599.9,
+    "salesUnit": "buc",
+    "roles": [
+      "bathtub"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "sizeCm": "150x150",
+      "capacityL": 260
+    },
+    "description": "Cadă de colț spațioasă, acril ranforsat.",
+    "descriptionEn": "Roomy corner tub, reinforced acrylic.",
+    "rating": 4.4,
+    "isTool": false
+  },
+  {
+    "sku": "15101112",
+    "name": "Oglindă baie Aquanova 50 × 70 cm, fără ramă",
+    "nameEn": "Aquanova 50 × 70 cm frameless bathroom mirror",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 99.9,
+    "salesUnit": "buc",
+    "roles": [
+      "bathroom_mirror"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "sizeCm": "50x70",
+      "led": false
+    },
+    "description": "Margini șlefuite, prindere inclusă.",
+    "descriptionEn": "Polished edges, fixings included.",
+    "rating": 4.2,
+    "isTool": false
+  },
+  {
+    "sku": "15101125",
+    "name": "Calorifer port-prosop electric Aquanova 45 × 80 cm",
+    "nameEn": "Aquanova 45 × 80 cm electric towel radiator",
+    "brand": "Aquanova",
+    "category": "bathroom",
+    "price": 499.9,
+    "salesUnit": "buc",
+    "roles": [
+      "towel_radiator"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "widthMm": 450,
+      "heightMm": 800,
+      "powerW": 300,
+      "electric": true
+    },
+    "description": "Funcționează independent de încălzire, termostat.",
+    "descriptionEn": "Works independently of the heating, thermostat.",
+    "rating": 4.3,
+    "isTool": false
+  },
+  {
+    "sku": "15201066",
+    "name": "Aplică perete Lumina Basic, albă, E27",
+    "nameEn": "Lumina Basic wall light, white, E27",
+    "brand": "Lumina",
+    "category": "electrical",
+    "price": 49.9,
+    "salesUnit": "buc",
+    "roles": [
+      "wall_light"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "socket": "E27",
+      "color": "alb",
+      "ip": "IP20"
+    },
+    "description": "Formă simplă, montaj rapid.",
+    "descriptionEn": "Simple shape, quick fit.",
+    "rating": 4,
+    "isTool": false
+  },
+  {
+    "sku": "15201079",
+    "name": "Lampadar Lumina Basic 150 cm, alb",
+    "nameEn": "Lumina Basic 150 cm floor lamp, white",
+    "brand": "Lumina",
+    "category": "electrical",
+    "price": 119.9,
+    "salesUnit": "buc",
+    "roles": [
+      "floor_lamp"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "heightMm": 1500,
+      "socket": "E27",
+      "color": "alb"
+    },
+    "description": "Abajur din hârtie, întrerupător pe cablu.",
+    "descriptionEn": "Paper shade, cable switch.",
+    "rating": 3.9,
+    "isTool": false
+  },
+  {
+    "sku": "15201082",
+    "name": "Stâlpișor de grădină Lumina 60 cm, 230 V, antracit",
+    "nameEn": "Lumina 60 cm garden bollard light, 230 V, anthracite",
+    "brand": "Lumina",
+    "category": "garden",
+    "price": 139.9,
+    "salesUnit": "buc",
+    "roles": [
+      "garden_light"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "heightMm": 600,
+      "solar": false,
+      "ip": "IP54",
+      "color": "antracit"
+    },
+    "description": "Aluminiu, necesită alimentare îngropată.",
+    "descriptionEn": "Aluminium, needs a buried supply cable.",
+    "rating": 4.4,
+    "isTool": false
   }
 ]
