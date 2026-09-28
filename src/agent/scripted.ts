@@ -619,6 +619,15 @@ const EDIT_EXAMPLES: Record<ProjectType, [string, string]> = {
   lawn: ["„fă-o 10 × 8 m”, „adaugă o zonă de 3 × 3 m în spate”", "“make it 10 × 8 m”, “add another area of 3 × 3 m at the back”"],
 };
 
+/** The language to answer in: the message's own language when it's clear, else the session's. */
+export function replyLang(message: string, fallback: Lang): Lang {
+  return /\b(the|want|need|build|building|my|how|what|would|like|please|i'm|i am|with|and|to|for|is)\b/i.test(message)
+    ? "en"
+    : /[ăâîșțş]|\b(vreau|și|sau|pentru|cum|unde|îmi|imi|doresc|trebuie)\b/i.test(message)
+      ? "ro"
+      : fallback;
+}
+
 export interface ScriptedOptions {
   sources: DataSources;
   tenant: Tenant;
@@ -633,11 +642,7 @@ export interface ScriptedOptions {
 
 export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<AgentEvent> {
   const started = Date.now();
-  const lang: Lang = /\b(the|want|need|build|building|my|how|what|would|like|please|i'm|i am|with|and|to|for|is)\b/i.test(opts.message)
-    ? "en"
-    : /[ăâîșțş]|\b(vreau|și|sau|pentru|cum|unde|îmi|imi|doresc|trebuie)\b/i.test(opts.message)
-      ? "ro"
-      : opts.lang;
+  const lang = replyLang(opts.message, opts.lang);
   let state: SessionState = { ...opts.state, basket: opts.state.basket ?? [] };
   const ctx = (): ToolContext => ({ sources: opts.sources, customer: opts.customer, state, lang, now: new Date(), tenant: opts.tenant });
   const status = (tool: string): AgentEvent => ({ type: "status", tool, label: TOOL_STATUS[tool]?.[lang] ?? tool });
@@ -669,11 +674,14 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     const words = contentWords(text);
     if (!words.length || !state.suggestions?.length) return [];
     const products = new Map((await opts.sources.catalog.getMany(state.suggestions.map((sg) => sg.sku))).map((p) => [p.sku, p]));
-    return state.suggestions.filter((sg) => {
+    const scored = state.suggestions.map((sg) => {
       const p = products.get(sg.sku);
       const hay = fold(`${p?.name ?? ""} ${p?.nameEn ?? ""} ${MATERIAL_ROLES[sg.role]?.label ?? ""} ${MATERIAL_ROLES[sg.role]?.labelEn ?? ""}`);
-      return words.some((w) => hay.includes(w));
+      // Words matched, then the words as a phrase: "the mitre saw" is the saw, not the "mitre box with saw".
+      return { sg, n: words.filter((w) => hay.includes(w)).length * 2 + (hay.includes(words.join(" ")) ? 1 : 0) };
     });
+    const top = Math.max(0, ...scored.map((x) => x.n));
+    return top > 0 ? scored.filter((x) => x.n === top).map((x) => x.sg) : [];
   };
 
   if (intent.kind === "project" && !intent.missing) {
@@ -900,16 +908,22 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         ? "I didn't find that among this project's materials — you can change products from the options on each line of the list."
         : "Nu am găsit asta printre materialele proiectului — poți schimba produsele din opțiunile de pe fiecare linie a listei.";
   } else if (intent.kind === "add_suggestions" && state.project && state.suggestions?.length) {
-    const chosen = intent.text ? await namedSuggestions(intent.text) : state.suggestions;
-    const added = chosen.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
+    const all = state.suggestions;
+    const picked = intent.text ? await namedSuggestions(intent.text) : all;
+    const added = picked.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
     const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
     const r = yield* runTool("modify_basket", { operations: added, storeId: null }, 500);
     const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
     if (q) {
       const diff = Math.round((q.quote.total - before.total) * 100) / 100;
       extraAmounts.push(Math.abs(diff));
-      reply =
-        lang === "en"
+      // Named just one of several: say which.
+      const one = picked.length === 1 && all.length > 1 ? q.quote.lines.find((l) => l.sku === picked[0].sku)?.name : undefined;
+      reply = one
+        ? lang === "en"
+          ? `Added ${one} (+${lei(diff, lang)}) — new total **${lei(q.quote.total, lang)}**, and **${int(q.quote.points.earned, lang)} points** to earn.`
+          : `Am adăugat ${one} (+${lei(diff, lang)}) — total nou **${lei(q.quote.total, lang)}** și **${int(q.quote.points.earned, lang)} puncte** de câștigat.`
+        : lang === "en"
           ? `Added the extras (+${lei(diff, lang)}) — new total **${lei(q.quote.total, lang)}**, and **${int(q.quote.points.earned, lang)} points** to earn.`
           : `Am adăugat extra-urile (+${lei(diff, lang)}) — total nou **${lei(q.quote.total, lang)}** și **${int(q.quote.points.earned, lang)} puncte** de câștigat.`;
     }

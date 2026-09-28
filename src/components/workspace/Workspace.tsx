@@ -20,6 +20,8 @@ import { IconArrowUp, IconBag, IconCheck, Logo } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
 import CardChips from "./CardChips";
+import { NextStepChips, useNextSteps } from "./NextStepChips";
+import type { NextStep } from "@/lib/nextSteps";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
 import type { PanelTarget } from "./MobileTabs";
 import { UploadsProvider } from "../blueprint/uploads/UploadsContext";
@@ -63,6 +65,7 @@ export default function Workspace({
 
   const quote = agent.board.quote?.quote;
   const project = agent.board.project?.project;
+  const chips = useNextSteps(agent.board, agent.messages, lang, tenant);
 
   /** The assistant asked to show a panel: scroll to it on desktop, open its tab on phones. */
   const showPanel = (target: PanelTarget | null, c: UiCommand) => {
@@ -172,7 +175,7 @@ export default function Workspace({
           messages={agent.messages}
           busy={agent.busy}
           onSend={agent.send}
-          hasQuote={Boolean(quote)}
+          chips={chips}
           hidden={!isDesktop && tabs.tab !== "chat"}
           onTyping={onTyping}
           renderInlineBoard={(m) =>
@@ -249,7 +252,7 @@ function Rail({
   messages,
   busy,
   onSend,
-  hasQuote,
+  chips,
   renderInlineBoard,
   hidden = false,
   onTyping,
@@ -258,7 +261,8 @@ function Rail({
   messages: ChatMessage[];
   busy: boolean;
   onSend: (t: string) => void;
-  hasQuote: boolean;
+  /** Context-aware next steps (src/lib/nextSteps.ts). */
+  chips: NextStep[];
   renderInlineBoard: (m: ChatMessage) => React.ReactNode;
   /** Phones: another tab is open (the conversation stays mounted, with its draft). */
   hidden?: boolean;
@@ -337,19 +341,7 @@ function Rail({
       </div>
 
       <div className="border-t border-rule bg-paper px-3 pb-3 pt-2.5 sm:px-5 lg:pb-[max(12px,env(safe-area-inset-bottom))]">
-        {hasQuote && !busy && last?.role === "assistant" && (
-          <div className="thin-scroll -mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">
-            {tr("quick", lang).map((q) => (
-              <button
-                key={q}
-                onClick={() => send(q)}
-                className="shrink-0 rounded-full border border-ink/15 bg-card px-3 py-1.5 text-[12.5px] text-ink-2 transition hover:border-ink hover:text-ink"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
+        {chips.length > 0 && !busy && last?.role === "assistant" && <NextStepChips chips={chips} lang={lang} onSend={send} />}
         <div className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink/40">
           <textarea
             rows={1}
