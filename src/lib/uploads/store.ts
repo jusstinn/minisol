@@ -14,6 +14,7 @@ import type { LoadedModel } from "./loadModel";
 import { aiJpeg, preparePlan } from "./loadPlan";
 import { defaultPlacement, sanitizePlacement } from "./units";
 import type { ModelPlacement } from "./units";
+import { track } from "../track";
 
 /**
  * The customer's own model and plan for the current project: loaded, placed, calibrated
@@ -210,6 +211,7 @@ export class UploadsStore {
       const placement = defaultPlacement(modelSize(parsed.value), ctx.center);
       const entry: ModelEntry = { name: file.name, format, bytes: file.size, model: parsed.value, placement };
       this.set({ busy: null, model: entry, added: { slot: "model", seq: ++this.seq }, ui: { ...this.state.ui, open: "model", aligning: false } });
+      track("upload_added", { kind: "model" });
       this.note(onDevice(file.name));
       if (parsed.value.triangles > HEAVY_TRIANGLES) {
         this.note({ ro: "Model mare — pe telefon poate merge mai greu.", en: "Large model — it may be slow on phones." });
@@ -230,6 +232,7 @@ export class UploadsStore {
     const { blob, img, source } = prepared.value;
     const entry: PlanEntry = { name: file.name, source, blob, url: URL.createObjectURL(blob), img, cal: defaultCalibration(img, ctx.center, ctx.extent) };
     this.set({ busy: null, plan: entry, added: { slot: "plan", seq: ++this.seq }, ui: { calibrating: true, aligning: false, open: "plan" } });
+    track("upload_added", { kind: "plan" });
     this.note(onDevice(file.name));
     const saved = this.scope && this.project ? await idbPut({ [uploadKey(this.scope, "plan", "blob")]: blob, [uploadKey(this.scope, "plan", "meta")]: this.planMeta(entry) }) : false;
     if (!saved) this.note(notSaved);

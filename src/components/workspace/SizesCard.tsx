@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import type { Card } from "@/agent/types";
 import { estimateMessage, PACE_M } from "@/domain/sizes";
+import { track } from "@/lib/track";
 import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
 import { IconMinus, IconPlus, IconRuler } from "../ui/icons";
@@ -43,7 +44,10 @@ export default function SizesCard({ card, lang, onSend, disabled }: { card: Extr
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 * i }}
             disabled={disabled}
-            onClick={() => onSend(p.message)}
+            onClick={() => {
+              track("sizes_used", { how: "preset" });
+              onSend(p.message);
+            }}
             className="group rounded-xl border border-rule bg-paper px-3 py-2.5 text-left transition hover:border-ink disabled:opacity-50"
           >
             <div className="text-[14px] font-semibold leading-tight text-ink">{p.label}</div>
@@ -63,7 +67,10 @@ export default function SizesCard({ card, lang, onSend, disabled }: { card: Extr
             <span className="font-mono text-[13px] font-semibold tabular-nums text-ink">{result}</span>
             <button
               disabled={disabled}
-              onClick={() => onSend(estimateMessage(card.projectType, lang, la, help.estimator === "length" ? undefined : lb))}
+              onClick={() => {
+                track("sizes_used", { how: "estimate" });
+                onSend(estimateMessage(card.projectType, lang, la, help.estimator === "length" ? undefined : lb));
+              }}
               className="rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-on-accent transition hover:brightness-105 disabled:opacity-50"
             >
               {en ? "Use this" : "Folosește"}

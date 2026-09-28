@@ -7,6 +7,10 @@ import type { Look } from "@/domain/look";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { readSaved, writeSaved } from "./savedSession";
+import { track } from "./track";
+
+/** Where a message or change came from, for the anonymous usage events (src/lib/usage.ts). */
+export type Via = "chat" | "starter" | "sizes" | "upload" | "share" | "editor" | "chip" | "list";
 
 export interface LogEntry {
   tool: string;
@@ -105,9 +109,12 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, via: Via = "chat") => {
       const message = text.trim();
       if (!message || busy) return;
+      // Usage events: how this answer was made, and what it changed (no text is recorded).
+      const t0 = performance.now();
+      const turn = { mode: undefined as string | undefined, tools: new Set<string>(), cards: [] as Card[], error: false };
       setBusy(true);
       busyRef.current = true;
       // Undo covers hand edits since the last message; the conversation owns anything older.
@@ -159,12 +166,14 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 patchAssistant(aId, (m) => ({ ...m, text: m.text + ev.delta, log: m.log.map((l) => ({ ...l, done: true })) }));
                 break;
               case "status":
+                turn.tools.add(ev.tool);
                 patchAssistant(aId, (m) => ({
                   ...m,
                   log: [...m.log.map((l) => ({ ...l, done: true })), { tool: ev.tool, label: ev.label, at: Date.now(), done: false }],
                 }));
                 break;
               case "card":
+                turn.cards.push(ev.card);
                 putCard(ev.card);
                 patchAssistant(aId, (m) => ({ ...m, cards: [...m.cards, ev.card] }));
                 break;
@@ -175,6 +184,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 repriceSeq.current++;
                 break;
               case "mode":
+                turn.mode = ev.mode;
                 setMode({ mode: ev.mode, reason: ev.reason });
                 break;
               case "ui":
@@ -190,6 +200,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 historyRef.current = ev.items;
                 break;
               case "error":
+                turn.error = true;
                 patchAssistant(aId, (m) => ({ ...m, error: ev.message }));
                 break;
               case "done":
@@ -200,9 +211,11 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
         }
       } catch (e) {
         if ((e as Error).name !== "AbortError") {
+          turn.error = true;
           patchAssistant(aId, (m) => ({ ...m, error: (e as Error).message }));
         }
       } finally {
+        trackTurn(turn, via, Math.round(performance.now() - t0));
         patchAssistant(aId, (m) => ({ ...m, pending: false, log: m.log.map((l) => ({ ...l, done: true })) }));
         setBusy(false);
         busyRef.current = false;
@@ -266,6 +279,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     (sku: string, delta: number) => {
       const current = pendingRef.current ?? stateRef.current.basket;
       const basket = current.map((b) => (b.sku === sku ? { ...b, qty: b.qty + delta } : b)).filter((b) => b.qty > 0);
+      if (!busyRef.current) track("basket_changed", { via: "list", op: basket.length < current.length ? "remove" : "set_qty" });
       return reprice(basket);
     },
     [reprice],
@@ -274,6 +288,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   const addItem = useCallback(
     (item: BasketItem) => {
       if (busyRef.current) return;
+      track("basket_changed", { via: "list", op: "add" });
       setBoard((b) => (b.quote ? { ...b, quote: { ...b.quote, suggestions: b.quote.suggestions.filter((s) => s.sku !== item.sku) } } : b));
       stateRef.current = { ...stateRef.current, suggestions: (stateRef.current.suggestions ?? []).filter((s) => s.sku !== item.sku) };
       return reprice([...(pendingRef.current ?? stateRef.current.basket), item]);
@@ -282,7 +297,13 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   );
 
   // Prices don't depend on the store, so the tier comparison stays valid.
-  const moveStore = useCallback((storeId: string) => reprice(pendingRef.current ?? stateRef.current.basket, { storeId, keepTiers: true }), [reprice]);
+  const moveStore = useCallback(
+    (storeId: string) => {
+      if (!busyRef.current) track("basket_changed", { via: "list", op: "move_store" });
+      return reprice(pendingRef.current ?? stateRef.current.basket, { storeId, keepTiers: true });
+    },
+    [reprice],
+  );
 
   /** Swap the product(s) doing one job for another option (already sized for the project). */
   const chooseOption = useCallback(
@@ -292,6 +313,8 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       const at = Math.max(0, current.findIndex((b) => b.role === group.role));
       const others = current.filter((b) => b.role !== group.role);
       const chosen = option.items.map((it) => ({ sku: it.sku, qty: it.qty, role: group.role, basis: group.basis }));
+      if (busyRef.current) return;
+      track("basket_changed", { via: "list", op: "choose" });
       stateRef.current = { ...stateRef.current, suggestions: (stateRef.current.suggestions ?? []).filter((s) => s.role !== group.role) };
       return reprice([...others.slice(0, at), ...chosen, ...others.slice(at)]);
     },
@@ -300,7 +323,10 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
 
   /** Switch the whole basket to another quality tier (already priced by calculate_project). */
   const applyTier = useCallback(
-    (option: QualityOption) => reprice(option.basket, { keepTiers: true, quality: option.quality }),
+    (option: QualityOption) => {
+      if (!busyRef.current) track("basket_changed", { via: "list", op: "quality" });
+      return reprice(option.basket, { keepTiers: true, quality: option.quality });
+    },
     [reprice],
   );
 
@@ -335,6 +361,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
         }
         undoRef.current = [...undoRef.current.slice(-19), before];
         setUndoDepth(undoRef.current.length);
+        track("sketch_edited", { type: data.state.project?.type ?? "", via: "editor", ops: edits.map((e) => e.op) });
         stateRef.current = data.state;
         pendingRef.current = null;
         repriceSeq.current++;
@@ -399,6 +426,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
         pendingRef.current = null;
         repriceSeq.current++;
         for (const c of data.cards) putCard(c);
+        if (data.state.project) track("project_started", { type: data.state.project.type, via: "share" });
         historyRef.current = [...historyRef.current, { role: "assistant", content: data.message ?? "" }];
         patchAssistant(aId, (m) => ({ ...m, text: data.message ?? "", cards: data.cards! }));
       } catch (e) {
@@ -442,4 +470,13 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     ui,
     sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0 },
   };
+}
+
+/** One chat answer as usage events: the reply itself, and a new project or a sketch change if it made one. */
+function trackTurn(turn: { mode?: string; tools: Set<string>; cards: Card[]; error: boolean }, via: Via, ms: number) {
+  track("agent_reply", { mode: turn.mode ?? "", ms, tools: [...turn.tools], cards: turn.cards.map((c) => c.kind), error: turn.error });
+  const project = turn.cards.findLast((c): c is CardOf<"project"> => c.kind === "project");
+  if (!project) return;
+  if (turn.cards.some((c) => c.kind === "change")) track("sketch_edited", { type: project.project.type, via });
+  else if (!project.project.layoutHistory?.length) track("project_started", { type: project.project.type, via });
 }

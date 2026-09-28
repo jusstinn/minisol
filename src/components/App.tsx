@@ -10,6 +10,7 @@ import Workspace from "./workspace/Workspace";
 import { clearSaved, useSavedSummary } from "@/lib/savedSession";
 import { clearPendingShare, readPendingShare, stashIncomingShare } from "@/lib/shareLink";
 import IncomingShare from "./entry/IncomingShare";
+import { setUsageTenant, trackOnce } from "@/lib/track";
 
 export default function App({
   tenant,
@@ -35,6 +36,10 @@ export default function App({
     stashIncomingShare();
     const token = readPendingShare();
     if (token) queueMicrotask(() => setIncoming(token));
+    setUsageTenant(tenant.id);
+    trackOnce("visit", { entry: token ? "share" : fromPass ? "pass" : "landing", device: matchMedia("(max-width: 767px)").matches ? "phone" : "desktop", lang });
+    // Once per page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

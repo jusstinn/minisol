@@ -7,6 +7,7 @@ import type { Tenant } from "@/config/tenant";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { lei } from "@/lib/format";
+import { track } from "@/lib/track";
 import { useDialog } from "@/lib/useDialog";
 import { IconCheck, IconClose, IconPin } from "../ui/icons";
 
@@ -34,6 +35,9 @@ export default function WalletListModal({
 }) {
   const [flipped, setFlipped] = useState(false);
   const dialogRef = useDialog<HTMLDivElement>(open, onClose);
+  useEffect(() => {
+    if (open) track("wallet_saved");
+  }, [open]);
   const [qr, setQr] = useState<string>("");
   const [ticked, setTicked] = useState<Set<string>>(new Set());
 

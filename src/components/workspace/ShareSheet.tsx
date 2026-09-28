@@ -9,6 +9,7 @@ import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
 import { encodeSnapshot, shareUrl, snapshotOf } from "@/lib/shareLink";
+import { track } from "@/lib/track";
 import { useDialog } from "@/lib/useDialog";
 import { IconCheck, IconClose } from "../ui/icons";
 import { Portal } from "../ui/Portal";
@@ -31,6 +32,7 @@ export function ShareButton({ getState, tenant, lang }: { getState: () => Sessio
     const url = shareUrl(window.location, tenant.id, token, lang);
     const qr = await QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "L", color: { dark: "#141311", light: "#ffffff00" } }).catch(() => "");
     setLink({ url, qr, bytes: new TextEncoder().encode(url).length });
+    track("share_created");
   };
 
   return (

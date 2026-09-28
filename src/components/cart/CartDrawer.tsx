@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
@@ -14,6 +14,7 @@ import { Counter } from "../ui/primitives";
 import { ProductArt } from "../ui/ProductArt";
 import { ProductName, ProductThumb } from "../board/ProductSheet";
 import { slotLabel } from "@/lib/pickup";
+import { track } from "@/lib/track";
 import { useDialog } from "@/lib/useDialog";
 import { ReservationDone, ReservePickup } from "./ReservePickup";
 import type { Reservation } from "./ReservePickup";
@@ -80,6 +81,13 @@ export default function CartDrawer({
     }
   };
   const dialogRef = useDialog<HTMLElement>(open, close);
+  useEffect(() => {
+    if (open) track("cart_opened");
+  }, [open]);
+  const confirmReservation = (r: Reservation) => {
+    setReservation(r);
+    track("reserved", { fulfilment, lines: r.items.length, redeemed: redeem });
+  };
 
   const deliveryFee = fulfilment === "delivery" ? quote.delivery.fee : 0;
   const redeemValue = redeem ? quote.points.redeemableValue : 0;
@@ -125,7 +133,7 @@ export default function CartDrawer({
               {reservation ? (
                 <ReservationDone r={reservation} lang={lang} onWallet={() => setWalletOpen(true)} onClose={close} />
               ) : step === "reserve" && fulfilment === "pickup" ? (
-                <ReservePickup quote={quote} lang={lang} payable={payable} onBack={() => setStep("cart")} onMoveStore={onMoveStore} onConfirm={setReservation} />
+                <ReservePickup quote={quote} lang={lang} payable={payable} onBack={() => setStep("cart")} onMoveStore={onMoveStore} onConfirm={confirmReservation} />
               ) : done ? (
                 <Confirmation en={en} orderNo={orderNo} storeName={quote.storeName} fulfilment={fulfilment} total={payable} lang={lang} onWallet={() => setWalletOpen(true)} />
               ) : (
