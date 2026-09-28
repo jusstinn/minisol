@@ -100,3 +100,28 @@ describe("plan policy per retailer", async () => {
     expect(plan?.steps[0].title).toBe("Pas inventat");
   });
 });
+
+describe("modify_basket understands how models actually phrase a swap", async () => {
+  const { executeTool } = await import("../tools");
+  const sources = getDataSources("demo");
+  const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+  const now = new Date();
+  const calc = await executeTool(
+    "calculate_project",
+    JSON.stringify({ projectType: "deck", params: { lengthM: 4, widthM: 3 }, quality: null, storeId: null, includeOptional: null, keepSketch: null }),
+    { sources, customer, state: { basket: [] }, lang: "ro", now },
+  );
+  const current = calc.state!.basket.find((b) => b.role === "deck_board")!.sku;
+  const cases = [
+    { op: "choose", sku: "11018655", qty: null, withSku: null },
+    { op: "choose", sku: current, qty: null, withSku: "11018655" },
+    { op: "choose", sku: current, qty: null, withSku: "11018655 · Deck WPC compozit gri Kronwald 25 × 140 mm" },
+    { op: "choose", sku: "WPC gri", qty: null, withSku: null },
+  ];
+  it.each(cases)("%o → WPC boards, re-sized", async (op) => {
+    const r = await executeTool("modify_basket", JSON.stringify({ operations: [op], storeId: null }), { sources, customer, state: calc.state!, lang: "ro", now });
+    const boards = r.state!.basket.filter((b) => b.role === "deck_board");
+    expect(boards.map((b) => b.sku)).toEqual(["11018655"]);
+    expect((r.forModel as { errors?: string[] }).errors).toBeUndefined();
+  });
+});

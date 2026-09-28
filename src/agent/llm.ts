@@ -135,7 +135,7 @@ export class OpenAIResponsesClient implements LlmClient {
         clean.push({ type: "function_call", call_id: it.call_id, name: it.name, arguments: String(it.arguments ?? "{}") });
       } else if (it.type === "function_call_output" && typeof it.call_id === "string") {
         const out = String(it.output ?? "");
-        clean.push({ type: "function_call_output", call_id: it.call_id, output: out.length > 6000 ? out.slice(0, 6000) + "…[truncated]" : out });
+        clean.push({ type: "function_call_output", call_id: it.call_id, output: out.length > 9000 ? out.slice(0, 9000) + "…[truncated]" : out });
       } else if ((it.type === "message" || it.type === undefined) && ALLOWED_ROLES.has(String(it.role))) {
         const text = extractText(it.content);
         if (text) clean.push({ role: it.role, content: text });

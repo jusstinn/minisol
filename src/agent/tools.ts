@@ -17,6 +17,7 @@ import { sizeHelp } from "@/domain/sizes";
 import type { Look } from "@/domain/look";
 import { specHighlights } from "@/domain/specs";
 import { lineOptions, productLineKey, resolveRequirements } from "@/domain/resolve";
+import { fold } from "@/domain/search";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
@@ -185,7 +186,7 @@ export const TOOL_DEFINITIONS = [
     description:
       "Change the shopping list: add/remove products, set quantities, choose another option for a job, handle the optional suggestions, and/or move the list to another store. Returns the re-priced quote. " +
       "Ops: add (a suggested SKU with qty null gets the suggested quantity and leaves the suggestions), remove, set_qty, " +
-      "choose (switch the product doing a job to another option — any SKU from productOptions; quantities are re-sized for THIS project, prefer it over replace), " +
+      "choose (switch the product doing a job to another option: put the option's SKU from productOptions in sku — or a short description like \"WPC gri\" if you don't have it; quantities are re-sized for THIS project, prefer it over replace), " +
       "replace (swap one SKU for another, quantity converted for pack sizes), dismiss_suggestion (stop suggesting that SKU).",
     strict: true,
     parameters: {
@@ -504,6 +505,9 @@ async function storeIdOrDefault(ctx: ToolContext, requested: unknown): Promise<{
   return hit ? { id: hit.id } : { id: fallback, error: `Unknown store "${requested}". Valid ids: ${stores.map((s) => s.id).join(", ")}` };
 }
 
+/** "11018655 · Deck WPC…" → "11018655"; anything else is returned as is (a SKU or a description). */
+const skuIn = (v: string) => v.trim().match(/^(\d{6,10})\b/)?.[1] ?? v.trim();
+
 /** Suggestion cards for the SKUs still on offer. */
 async function suggestionViews(ctx: ToolContext, items: SuggestedItem[]): Promise<SuggestionView[]> {
   if (!items.length) return [];
@@ -526,13 +530,25 @@ async function sizedOption(
 ): Promise<{ role: MaterialRole; label: string; basis: string; isTool: boolean; items: { sku: string; qty: number }[] } | { error: string }> {
   const project = ctx.state.project;
   if (!project) return { error: "No project yet — choose needs a calculated project (use add/replace instead)." };
-  const [p] = await ctx.sources.catalog.getMany([sku]);
-  if (!p) return { error: `Unknown SKU ${sku}` };
   let reqs: CalculationResult["requirements"];
   try {
     reqs = calculateProject(project.type, { ...project.inputs, ...layoutParams(project.layout ?? defaultLayout(project.type, project.inputs)) }, ctx.lang).requirements;
   } catch {
     return { error: "The project could not be recalculated." };
+  }
+  let [p] = await ctx.sources.catalog.getMany([sku]);
+  if (!p) {
+    // Not a SKU: treat it as a description of the option ("WPC gri", "pin 120 mm") among this project's jobs.
+    const words = fold(sku).split(/[^a-z0-9]+/).filter((w) => w.length >= 2);
+    const roles = [...new Set(reqs.map((r) => r.role))];
+    const inBasket = new Set(ctx.state.basket.map((b) => b.sku));
+    const scored = (await ctx.sources.catalog.byRoles(roles))
+      .filter((c) => !inBasket.has(c.sku))
+      .map((c) => ({ c, n: words.filter((w) => fold(`${c.name} ${c.nameEn} ${c.brand}`).includes(w)).length }))
+      .filter((x) => x.n > 0)
+      .sort((a, b) => b.n - a.n || a.c.price - b.c.price);
+    p = scored[0]?.c;
+    if (!p) return { error: `No product matches "${sku}". Use a SKU from productOptions.` };
   }
   const req = reqs.find((r) => p.roles.includes(r.role));
   if (!req) return { error: `${p.name} doesn't do any job in this project.` };
@@ -879,15 +895,15 @@ const handlers: Record<string, Handler> = {
         project: { title: calc.title, inputsUsed: calc.inputs, measurements: calc.measurements, assumptions: calc.assumptions, estimate: calc.estimate, safetyNotes: calc.safetyNotes },
         sketch: describeLayout(layout),
         quality,
+        // The customer can browse these in the "options" drawer on each line; mention a notable saving/upgrade if useful.
+        // To switch, use modify_basket op "choose" with the option's sku (quantities are re-sized automatically).
+        productOptions: r.choices.map((g) => ({
+          role: g.role,
+          options: g.options.map((o) => `${o.sku} · ${o.name} · ${o.quality} · ${o.total} lei${o.inStock ? "" : " · not in stock"}`),
+        })),
         quote: quoteForModel(r.quote, ctx.lang),
         ownedToolsSkipped: r.owned.map((o) => `${o.roleLabel} (${o.productName}, bought ${o.date})`),
         optionalSuggestions: r.suggestions.map((s) => ({ sku: s.sku, name: s.name, qty: s.qty, total: s.total, why: s.basis })),
-        // The customer can browse these in the "options" drawer on each line; mention a notable saving/upgrade if useful.
-        productOptions: r.choices.map((g) => ({
-          for: g.label,
-          role: g.role,
-          options: g.options.map((o) => ({ sku: o.sku, name: o.name, quality: o.quality, total: o.total, inStock: o.inStock, items: o.items })),
-        })),
         unavailableRoles: r.unavailable,
         uiNote: "The customer now sees the project card (3D sketch + measurements) and the full priced shopping list card. Do not repeat the list in text. The sketch can be reshaped with edit_sketch.",
       },
@@ -946,7 +962,7 @@ const handlers: Record<string, Handler> = {
     let suggestions = [...(ctx.state.suggestions ?? [])];
     const errors: string[] = [];
     const changes: string[] = [];
-    const involved = ops.flatMap((o) => [o.sku, o.withSku]).filter((s): s is string => typeof s === "string");
+    const involved = ops.flatMap((o) => [o.sku, o.withSku]).filter((s): s is string => typeof s === "string").map(skuIn);
     const known = new Map((await ctx.sources.catalog.getMany([...involved, ...basket.map((b) => b.sku)])).map((p) => [p.sku, p]));
 
     for (const o of ops) {
@@ -977,7 +993,7 @@ const handlers: Record<string, Handler> = {
           changes.push(`${known.get(sku)?.name ?? sku} → ${qty}`);
           break;
         case "replace": {
-          const withSku = typeof o.withSku === "string" ? o.withSku : "";
+          const withSku = typeof o.withSku === "string" ? skuIn(o.withSku) : "";
           const oldP = known.get(sku);
           const newP = known.get(withSku);
           if (idx < 0 || !oldP) { errors.push(`SKU ${sku} is not in the basket`); break; }
@@ -990,7 +1006,9 @@ const handlers: Record<string, Handler> = {
           break;
         }
         case "choose": {
-          const opt = await sizedOption(ctx, sku);
+          // Models often phrase it like replace (sku = current, withSku = target) or paste the option label.
+          const target = typeof o.withSku === "string" && o.withSku.trim() ? o.withSku : sku;
+          const opt = await sizedOption(ctx, skuIn(target));
           if ("error" in opt) { errors.push(opt.error); break; }
           // The chosen option takes the place of whatever did that job, sized for this project.
           const at = basket.findIndex((b) => b.role === opt.role);
