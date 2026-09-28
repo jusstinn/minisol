@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <rect width="1200" height="900" fill="#fff"/>
+  <text x="60" y="70" font-family="Helvetica, Arial" font-size="30" font-weight="700">PLAN PARTER — BAIE</text>
+  <text x="60" y="104" font-family="Helvetica, Arial" font-size="20" fill="#444">Scara 1:50 · cote în metri</text>
+  <!-- walls (outer line) -->
+  <rect x="186" y="156" width="828" height="628" fill="none" stroke="#111" stroke-width="28"/>
+  <!-- door opening 0.80 m in the south wall, with its swing -->
+  <rect x="300" y="768" width="200" height="32" fill="#fff"/>
+  <path d="M300 770L300 570" stroke="#111" stroke-width="3"/>
+  <path d="M300 570A200 200 0 0 1 500 770" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <!-- window 1.00 m in the north wall -->
+  <rect x="600" y="142" width="250" height="28" fill="#fff" stroke="#111" stroke-width="2"/>
+  <line x1="600" y1="156" x2="850" y2="156" stroke="#111" stroke-width="2"/>
+  <!-- fixtures -->
+  <rect x="775" y="182.5" width="212.5" height="400" rx="18" fill="none" stroke="#111" stroke-width="2.5"/>
+  <text x="880" y="395" font-family="Helvetica, Arial" font-size="18" text-anchor="middle" fill="#444">cadă</text>
+  <ellipse cx="287.5" cy="245" rx="50" ry="65" fill="none" stroke="#111" stroke-width="2.5"/>
+  <rect x="425" y="175" width="150" height="112.5" rx="10" fill="none" stroke="#111" stroke-width="2.5"/>
+  <!-- room label -->
+  <text x="525" y="507.5" font-family="Helvetica, Arial" font-size="34" font-weight="700" text-anchor="middle">BAIE</text>
+  <text x="525" y="543.5" font-family="Helvetica, Arial" font-size="24" text-anchor="middle">S = 7,68 m²</text>
+  <!-- dimension lines (inner faces) -->
+  <line x1="200" y1="850" x2="1000" y2="850" stroke="#111" stroke-width="1.5"/><path d="M193 857L207 843" stroke="#111" stroke-width="2"/><path d="M993 857L1007 843" stroke="#111" stroke-width="2"/>
+      <text x="600" y="838" font-family="Helvetica, Arial" font-size="26" text-anchor="middle" >3,20</text>
+  <line x1="200" y1="790" x2="200" y2="862" stroke="#111" stroke-width="1"/>
+  <line x1="1000" y1="790" x2="1000" y2="862" stroke="#111" stroke-width="1"/>
+  <line x1="1080" y1="170" x2="1080" y2="770" stroke="#111" stroke-width="1.5"/><path d="M1073 177L1087 163" stroke="#111" stroke-width="2"/><path d="M1073 777L1087 763" stroke="#111" stroke-width="2"/>
+      <text x="1066" y="470" font-family="Helvetica, Arial" font-size="26" text-anchor="middle" transform="rotate(-90 1066 470)">2,40</text>
+  <line x1="1020" y1="170" x2="1092" y2="170" stroke="#111" stroke-width="1"/>
+  <line x1="1020" y1="770" x2="1092" y2="770" stroke="#111" stroke-width="1"/>
+  <line x1="300" y1="810" x2="500" y2="810" stroke="#111" stroke-width="1.5"/><path d="M293 817L307 803" stroke="#111" stroke-width="2"/><path d="M493 817L507 803" stroke="#111" stroke-width="2"/>
+      <text x="400" y="798" font-family="Helvetica, Arial" font-size="26" text-anchor="middle" >0,80</text>
+  <!-- north arrow -->
+  <path d="M1110 90l14 36-14-9-14 9z" fill="#111"/><text x="1110" y="150" font-family="Helvetica, Arial" font-size="20" text-anchor="middle">N</text>
+</svg>
