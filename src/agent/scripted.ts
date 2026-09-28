@@ -25,8 +25,8 @@ type Intent =
   | { kind: "sketch"; edits: (Partial<SketchOp> | { op: "undo" })[] }
   | { kind: "view"; command: UiCommand }
   | { kind: "sizes"; type?: ProjectType }
-  | { kind: "choose"; text: string }
-  | { kind: "remove"; text: string }
+  | { kind: "choose"; text: string; view?: UiCommand }
+  | { kind: "remove"; text: string; view?: UiCommand }
   | { kind: "move"; text: string }
   | { kind: "requality"; quality: QualityTier }
   | { kind: "offers" }
@@ -203,6 +203,9 @@ export function parseIntent(raw: string, state: SessionState): Intent {
   if (state.project && sameProject) {
     if (/\b(anuleaz\w*|undo|revino|varianta anterioara|previous version|inapoi la)\b/.test(t)) return { kind: "sketch", edits: [{ op: "undo" }] };
     const view = parseView(t);
+    // "Alege WPC și arată-mi-o în vedere reală": do the change, then show it.
+    if (view && /\b(alege\w*|schimba\w*|foloseste|inlocuieste|switch|choose|use)\b/.test(t)) return { kind: "choose", text: t, view: { ...view, highlight: undefined } };
+    if (view && /\b(scoate\w*|elimina\w*|sterge\w*|remove|drop)\b/.test(t)) return { kind: "remove", text: t, view: { ...view, highlight: undefined } };
     if (view) return { kind: "view", command: view };
   }
   // Reshaping the current project ("add steps", "a gate in the middle") is an edit, not a new project.
@@ -589,6 +592,10 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         op = { op: "choose", sku: best.p.sku, qty: null, withSku: null };
         label = lang === "en" ? best.p.nameEn : best.p.name;
       }
+    }
+    if ((intent.kind === "choose" || intent.kind === "remove") && intent.view && Object.values(intent.view).some((v) => v !== undefined)) {
+      const c = intent.view;
+      yield* runTool("control_view", { view: c.view ?? null, highlight: null, editor: c.editor ?? null, panel: c.panel ?? null, product: null, redeemPoints: c.redeemPoints ?? null }, 200);
     }
     if (!op && !storeId) {
       reply =

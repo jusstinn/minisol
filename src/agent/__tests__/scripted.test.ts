@@ -206,3 +206,19 @@ describe("customers who don't know their measurements", () => {
     expect(await kinds("Nu știu dimensiunile", [{ role: "user", content: "Vreau un gard nou" }, { role: "assistant", content: "Cât de lung?" }])).toEqual(["sizes"]);
   }, 20000);
 });
+
+describe("two requests in one message", () => {
+  it("switches the option and then shows it", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    let state: Parameters<typeof runScriptedAgent>[0]["state"] = { basket: [] };
+    for await (const ev of runScriptedAgent({ sources, tenant, customer, message: "Terasă 4 × 3 m", state, lang: "ro" })) if (ev.type === "state") state = ev.state;
+    const events: AgentEvent[] = [];
+    for await (const ev of runScriptedAgent({ sources, tenant, customer, message: "Alege varianta din WPC și arată-mi-o în vedere reală", state, lang: "ro" })) events.push(ev);
+    const last = events.filter((e) => e.type === "state").at(-1) as Extract<AgentEvent, { type: "state" }>;
+    const boards = await sources.catalog.getMany(last.state.basket.filter((b) => b.role === "deck_board").map((b) => b.sku));
+    expect(boards[0].name).toMatch(/WPC/);
+    expect(events.find((e) => e.type === "ui")).toMatchObject({ command: { view: "real" } });
+  }, 20000);
+});
