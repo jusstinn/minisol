@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { RO_MAP, projectRO } from "@/data/romania-map";
+import { km } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { PanelHeader } from "../ui/primitives";
 
@@ -89,7 +90,7 @@ export default function StockPanel({ quote, lang, onMoveStore }: { quote: Quote;
                       {s.name.split(" ").slice(1).join(" ")}
                     </text>
                     <text x={x > RO_MAP.width * 0.6 ? x - 10 - Math.max(250, s.name.length * 15) : x + 42} y={y + 14} fill={color} fontSize={22} fontFamily="var(--font-jetbrains)">
-                      {lineCount - s.missingCount}/{lineCount} · {s.distanceKm} km
+                      {lineCount - s.missingCount}/{lineCount} · {km(s.distanceKm, lang)}
                     </text>
                   </g>
                 )}
@@ -111,7 +112,7 @@ export default function StockPanel({ quote, lang, onMoveStore }: { quote: Quote;
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-[13px] text-white">
                   <span className="truncate">{s.name}</span>
-                  <span className="shrink-0 font-mono text-[10px] text-[#9fbcf0]">{s.distanceKm} km</span>
+                  <span className="shrink-0 font-mono text-[10px] text-[#9fbcf0]">{km(s.distanceKm, lang)}</span>
                 </div>
                 <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
                   <motion.div

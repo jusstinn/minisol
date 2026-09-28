@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import type { CategoryId, Lang, QualityTier } from "@/domain/types";
-import { dec, int, lei, monthYear } from "@/lib/format";
+import { dec, int, km, lei, monthYear } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
@@ -332,7 +332,7 @@ export default function QuotePanel({
               {tr("missingAt", lang)} {quote.storeName}: {quote.availability.missing.map((m) => m.name.split(" ").slice(0, 3).join(" ")).join(", ")}
               {best && (
                 <button onClick={() => onMoveStore(best.storeId)} className="rounded-full bg-ink px-2.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-paper hover:bg-accent hover:text-on-accent">
-                  {tr("moveTo", lang)} {best.name.split(" ").slice(1).join(" ")} · {best.distanceKm} km
+                  {tr("moveTo", lang)} {best.name.split(" ").slice(1).join(" ")} · {km(best.distanceKm, lang)}
                 </button>
               )}
             </span>
