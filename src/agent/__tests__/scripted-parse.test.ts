@@ -153,6 +153,24 @@ describe("moving the list", () => {
   }, 20000);
 });
 
+describe("a quality tier carried over to the next project", () => {
+  it("is named in the reply ('placare baie (varianta premium) costă …')", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    let state: SessionState = empty;
+    let text = "";
+    for (const message of ["Vreau să vopsesc dormitorul 4 x 3,5 m", "Vreau premium", "Refac baia 2,5 x 2 m"]) {
+      text = "";
+      for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state, lang: "ro" })) {
+        if (ev.type === "state") state = ev.state;
+        if (ev.type === "text") text += ev.delta;
+      }
+    }
+    expect(text).toMatch(/^Gata — placare baie \(varianta premium\) costă/);
+  }, 20000);
+});
+
 describe("reply wording", () => {
   it("short names never end on a preposition", () => {
     expect(shortName("Genunchiere Protekt cu gel, mărime universală")).toBe("genunchiere Protekt");

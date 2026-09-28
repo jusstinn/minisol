@@ -481,10 +481,12 @@ export function projectReply(
 ): string {
   const en = lang === "en";
   const parts: string[] = [];
+  // A tier picked earlier carries over to the next project: say so, or "premium bathroom" looks like the normal price.
+  const tier = card.quality === "budget" ? (en ? " (budget version)" : " (varianta economică)") : card.quality === "premium" ? (en ? " (premium version)" : " (varianta premium)") : "";
   parts.push(
     en
-      ? `Done — ${title.toLowerCase()} comes to **${lei(q.total, lang)}**${q.saving > 0 ? `, including **${lei(q.saving, lang)}** off from your offers` : ""}.`
-      : `Gata — ${title.toLowerCase()} costă **${lei(q.total, lang)}**${q.saving > 0 ? `, cu **${lei(q.saving, lang)}** reducere din ofertele tale` : ""}.`,
+      ? `Done — ${title.toLowerCase()}${tier} comes to **${lei(q.total, lang)}**${q.saving > 0 ? `, including **${lei(q.saving, lang)}** off from your offers` : ""}.`
+      : `Gata — ${title.toLowerCase()}${tier} costă **${lei(q.total, lang)}**${q.saving > 0 ? `, cu **${lei(q.saving, lang)}** reducere din ofertele tale` : ""}.`,
   );
   parts.push(
     en
