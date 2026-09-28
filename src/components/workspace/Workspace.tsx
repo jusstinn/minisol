@@ -12,7 +12,8 @@ import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
 import CartDrawer from "../cart/CartDrawer";
-import { ProductSheetProvider } from "../board/ProductSheet";
+import { ProductSheetProvider, useProductSheet } from "../board/ProductSheet";
+import type { UiSignal } from "@/lib/useAgent";
 import { IconArrowUp, IconBag, IconCheck, IconClose, Logo } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
@@ -52,6 +53,7 @@ export default function Workspace({
   return (
     // Product sheets open from the list, options, cart and search results; stock is shown for the quote's store.
     <ProductSheetProvider tenantId={tenant.id} lang={lang} storeId={quote?.storeId ?? member.homeStoreId}>
+    <UiBridge ui={agent.ui} onHighlight={setHighlight} onCart={() => setCartOpen(true)} />
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
       <header className="flex items-center gap-3 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:px-6">
@@ -139,6 +141,7 @@ export default function Workspace({
                 onTier={agent.applyTier}
                 onChoose={agent.chooseOption}
                 sketch={agent.sketch}
+                ui={agent.ui}
                 inline
               />
             )
@@ -158,6 +161,7 @@ export default function Workspace({
             onTier={agent.applyTier}
                 onChoose={agent.chooseOption}
                 sketch={agent.sketch}
+                ui={agent.ui}
           />
         </div>
         )}
@@ -211,6 +215,7 @@ export default function Workspace({
               onTier={agent.applyTier}
                 onChoose={agent.chooseOption}
                 sketch={agent.sketch}
+                ui={agent.ui}
             />
           </motion.div>
         )}
@@ -382,3 +387,28 @@ const fmtT = (ms: number) => {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 };
 
+
+/**
+ * Carries out the assistant's screen commands that live outside the sketch panel:
+ * highlight a material, open the cart, open a product sheet, scroll to a panel.
+ */
+function UiBridge({ ui, onHighlight, onCart }: { ui: UiSignal | null; onHighlight: (l: string | null) => void; onCart: () => void }) {
+  const sheet = useProductSheet();
+  const seq = ui?.seq;
+  useEffect(() => {
+    if (!ui) return;
+    const c = ui.command;
+    if (c.highlight !== undefined) onHighlight(c.highlight);
+    if (c.panel === "cart" || c.panel === "wallet") onCart();
+    if (c.product) sheet?.open(c.product);
+    const target = c.panel && c.panel !== "cart" && c.panel !== "wallet" ? c.panel : c.view || c.editor || c.highlight ? "sketch" : null;
+    if (target) {
+      // Desktop board anchors; on phones the latest inline card of that kind.
+      const els = document.querySelectorAll(`[data-panel="${target}"]`);
+      els[els.length - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    // Run once per command.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seq]);
+  return null;
+}

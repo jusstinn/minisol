@@ -10,6 +10,7 @@ import type { Layout, SketchOp } from "@/domain/layout";
 import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
 import { tr } from "@/lib/i18n";
+import type { UiSignal } from "@/lib/useAgent";
 import { buildScene } from "../blueprint/builders";
 import type { ViewMode } from "../blueprint/Scene";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
@@ -50,6 +51,7 @@ export default function BlueprintPanel({
   inline,
   sketch,
   change,
+  ui,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -59,12 +61,22 @@ export default function BlueprintPanel({
   inline?: boolean;
   sketch?: SketchControls;
   change?: Extract<Card, { kind: "change" }>;
+  /** Screen commands from the assistant (view, highlight, editor, replay). */
+  ui?: UiSignal | null;
 }) {
   const sketchMode = useSketchMode(tenant);
+  const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
+  // Asking the assistant to show something on the sketch opens it (on-demand tenants).
+  const closed = sketchMode === "on_demand" && !project.sketched;
+  useEffect(() => {
+    if (closed && wantsSketch && ui && Date.now() - ui.at < 5000) sketch?.open();
+    // Once per command.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ui?.seq]);
   if (sketchMode === "on_demand" && !project.sketched && sketch) {
     return <SketchCta project={project} lang={lang} inline={inline} onOpen={sketch.open} />;
   }
-  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} />;
+  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} />;
 }
 
 function SketchView({
@@ -76,6 +88,7 @@ function SketchView({
   inline,
   sketch,
   change,
+  ui,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -85,6 +98,7 @@ function SketchView({
   inline?: boolean;
   sketch?: SketchControls;
   change?: Extract<Card, { kind: "change" }>;
+  ui?: UiSignal | null;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -95,6 +109,17 @@ function SketchView({
   const [seenLayout, setSeenLayout] = useState(project.layout);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [diff, setDiff] = useState<{ added: number; changed: number; removed: number; at: number } | null>(null);
+
+  // Apply the assistant's screen commands once each (fresh ones also when this view mounts).
+  const [uiSeen, setUiSeen] = useState<number | null>(() => (ui && Date.now() - ui.at > 5000 ? ui.seq : null));
+  if (ui && ui.seq !== uiSeen) {
+    setUiSeen(ui.seq);
+    const c = ui.command;
+    if (c.view) setMode(c.view);
+    if (typeof c.editor === "boolean") setEditing(c.editor && Boolean(sketch && project.layout));
+    if (c.replay) setReplay((r) => r + 1);
+    if (c.view || c.editor || c.highlight) setRotate(false);
+  }
 
   // A newly committed layout replaces any drag preview.
   if (seenLayout !== project.layout) {

@@ -11,11 +11,11 @@ import { bestPercentOff, buildQuote } from "@/domain/quote";
 import type { BasketItem, Quote } from "@/domain/quote";
 import { artOf } from "@/domain/art";
 import { specHighlights } from "@/domain/specs";
-import { lineOptions, resolveRequirements } from "@/domain/resolve";
+import { lineOptions, productLineKey, resolveRequirements } from "@/domain/resolve";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
-import type { Card, ChoiceGroup, OwnedToolView, ProjectSnapshot, QualityOption, SessionState, SketchChange, StockStoreView, SuggestionView } from "./types";
+import type { Card, ChoiceGroup, OwnedToolView, ProjectSnapshot, QualityOption, SessionState, SketchChange, StockStoreView, SuggestedItem, SuggestionView, UiCommand } from "./types";
 
 export interface ToolContext {
   sources: DataSources;
@@ -30,7 +30,12 @@ export interface ToolResult {
   forModel: unknown;
   cards?: Card[];
   state?: SessionState;
+  /** Screen changes (view, highlight, panels) — no data changes. */
+  ui?: UiCommand;
 }
+
+/** A sketch edit, or "undo" (step back to the previous layout). */
+export type EditOp = SketchOp | { op: "undo" };
 
 type Handler = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 
@@ -125,7 +130,7 @@ export const TOOL_DEFINITIONS = [
       "Use for: resizing (resize), L/U shapes (add_zone attaches a rectangle to a side of an existing zone; remove_zone), deck height (set_height, metres) and steps (add_steps / remove_steps; count defaults to height ÷ 17 cm), " +
       "doors/windows/gates (add_opening / move_opening / remove_opening; fence gates: width 1 = pedestrian, 3 = driveway, on a segment index), fence corners (add_fence_segment with turn left/right/straight; set_segment_length; remove_fence_segment), " +
       "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (set_option key/value: base, direction, pattern, subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode). " +
-      "Sides/walls: n = back, s = front, e = right, w = left as seen in the sketch. Zone ids and segment indexes are in the state section of your instructions. Set unused fields to null. Several edits can be sent at once.",
+      "undo reverts the last sketch change (alone, nothing else in the same call). Sides/walls: n = back, s = front, e = right, w = left as seen in the sketch. Zone ids and segment indexes are in the state section of your instructions. Set unused fields to null. Several edits can be sent at once.",
     strict: true,
     parameters: {
       type: "object",
@@ -137,7 +142,7 @@ export const TOOL_DEFINITIONS = [
             properties: {
               op: {
                 type: "string",
-                enum: ["resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening", "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option"],
+                enum: ["resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening", "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option", "undo"],
               },
               zone: { type: ["string", "null"], description: "Zone id (A, B…). resize/add_zone/add_steps/remove_zone; null = first zone" },
               w: { type: ["number", "null"], description: "Width in m (east–west). resize, add_zone; for walls/fences: total length" },
@@ -171,7 +176,10 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     name: "modify_basket",
     description:
-      "Change the current basket: add/remove products, set quantities, replace a product with an alternative (quantity is converted automatically for different pack sizes), and/or move the basket to another store. Returns the re-priced quote.",
+      "Change the shopping list: add/remove products, set quantities, choose another option for a job, handle the optional suggestions, and/or move the list to another store. Returns the re-priced quote. " +
+      "Ops: add (a suggested SKU with qty null gets the suggested quantity and leaves the suggestions), remove, set_qty, " +
+      "choose (switch the product doing a job to another option — any SKU from productOptions; quantities are re-sized for THIS project, prefer it over replace), " +
+      "replace (swap one SKU for another, quantity converted for pack sizes), dismiss_suggestion (stop suggesting that SKU).",
     strict: true,
     parameters: {
       type: "object",
@@ -181,7 +189,7 @@ export const TOOL_DEFINITIONS = [
           items: {
             type: "object",
             properties: {
-              op: { type: "string", enum: ["add", "remove", "set_qty", "replace"] },
+              op: { type: "string", enum: ["add", "remove", "set_qty", "replace", "choose", "dismiss_suggestion"] },
               sku: { type: "string" },
               qty: { type: ["number", "null"] },
               withSku: { type: ["string", "null"], description: "For replace: the new SKU" },
@@ -193,6 +201,26 @@ export const TOOL_DEFINITIONS = [
         storeId: { type: ["string", "null"], description: "Move the basket to this store (null = keep)" },
       },
       required: ["operations", "storeId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function" as const,
+    name: "control_view",
+    description:
+      "Change what the customer SEES (no data changes): the 3D sketch view (blueprint / real / exploded layers), highlight one material in the sketch and the list (a role id from the shopping list, e.g. deck_joist, fence_post, wall_tiles; null clears), open the plan editor, scroll to a panel (sketch, list, stock, offers, plan), open the cart or the wallet shopping list, open a product's technical sheet, show the total paid with points. Use it whenever the customer asks to see, show, open or point out something. Set unused fields to null.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: {
+        view: { type: ["string", "null"], enum: ["blueprint", "real", "exploded", null] },
+        highlight: { type: ["string", "null"], description: "Role id to highlight (e.g. deck_joist), \"none\" to clear, null to leave as is" },
+        editor: { type: ["boolean", "null"], description: "Open (true) / close (false) the plan editor" },
+        panel: { type: ["string", "null"], enum: ["sketch", "list", "stock", "offers", "plan", "cart", "wallet", null] },
+        product: { type: ["string", "null"], description: "SKU whose technical sheet to open" },
+        redeemPoints: { type: ["boolean", "null"], description: "Show totals paid partly with points (true) or not (false)" },
+      },
+      required: ["view", "highlight", "editor", "panel", "product", "redeemPoints"],
       additionalProperties: false,
     },
   },
@@ -274,6 +302,7 @@ export const TOOL_STATUS: Record<string, { ro: string; en: string }> = {
   get_customer_context: { ro: "Citesc profilul tău WalletLoop", en: "Reading your WalletLoop profile" },
   calculate_project: { ro: "Calculez materialele și prețul", en: "Calculating materials and price" },
   edit_sketch: { ro: "Redesenez schița și recalculez", en: "Redrawing the sketch and recalculating" },
+  control_view: { ro: "Îți arăt pe schiță", en: "Showing you" },
   modify_basket: { ro: "Actualizez lista de cumpărături", en: "Updating your shopping list" },
   search_products: { ro: "Caut în catalog", en: "Searching the catalogue" },
   check_stock: { ro: "Verific stocul în magazine", en: "Checking stock in stores" },
@@ -447,6 +476,50 @@ async function storeIdOrDefault(ctx: ToolContext, requested: unknown): Promise<{
   return hit ? { id: hit.id } : { id: fallback, error: `Unknown store "${requested}". Valid ids: ${stores.map((s) => s.id).join(", ")}` };
 }
 
+/** Suggestion cards for the SKUs still on offer. */
+async function suggestionViews(ctx: ToolContext, items: SuggestedItem[]): Promise<SuggestionView[]> {
+  if (!items.length) return [];
+  const products = new Map((await ctx.sources.catalog.getMany(items.map((i) => i.sku))).map((p) => [p.sku, p]));
+  return items
+    .filter((i) => products.has(i.sku))
+    .map((i) => {
+      const p = products.get(i.sku)!;
+      return { sku: i.sku, name: pn(p, ctx.lang), qty: i.qty, unitPrice: p.price, total: Math.round(p.price * i.qty * 100) / 100, basis: i.basis ?? "", isTool: i.isTool };
+    });
+}
+
+/**
+ * The option (product line, sized for this project) that contains `sku` — what the
+ * options drawer would offer for that job. Used by modify_basket "choose".
+ */
+async function sizedOption(
+  ctx: ToolContext,
+  sku: string,
+): Promise<{ role: MaterialRole; label: string; basis: string; isTool: boolean; items: { sku: string; qty: number }[] } | { error: string }> {
+  const project = ctx.state.project;
+  if (!project) return { error: "No project yet — choose needs a calculated project (use add/replace instead)." };
+  const [p] = await ctx.sources.catalog.getMany([sku]);
+  if (!p) return { error: `Unknown SKU ${sku}` };
+  let reqs: CalculationResult["requirements"];
+  try {
+    reqs = calculateProject(project.type, { ...project.inputs, ...layoutParams(project.layout ?? defaultLayout(project.type, project.inputs)) }, ctx.lang).requirements;
+  } catch {
+    return { error: "The project could not be recalculated." };
+  }
+  const req = reqs.find((r) => p.roles.includes(r.role));
+  if (!req) return { error: `${p.name} doesn't do any job in this project.` };
+  const options = lineOptions(req, await ctx.sources.catalog.byRoles([req.role]));
+  const opt = options.find((o) => o.items.some((it) => it.sku === sku)) ?? options.find((o) => o.key === (req.isTool ? p.sku : productLineKey(p)));
+  if (!opt) return { error: `${p.name} doesn't fit this project (e.g. wrong size/height).` };
+  return {
+    role: req.role,
+    label: t(ctx.lang, MATERIAL_ROLES[req.role].label, MATERIAL_ROLES[req.role].labelEn),
+    basis: req.basis,
+    isTool: Boolean(req.isTool),
+    items: opt.items,
+  };
+}
+
 // ───────────────────────── project pricing ─────────────────────────
 
 interface ProjectRunOptions {
@@ -464,6 +537,9 @@ interface ProjectRunOptions {
   keepOptional?: Set<MaterialRole>;
   /** Hand-added lines unrelated to the calculation, carried over unchanged. */
   carry?: BasketItem[];
+  layoutHistory?: Layout[];
+  /** Which optional roles may still be suggested (e.g. not the ones the customer dismissed). */
+  suggestRole?: (role: MaterialRole) => boolean;
 }
 
 /** Resolve products, price every tier, build the options drawer — shared by calculate_project and edit_sketch. */
@@ -506,7 +582,8 @@ async function priceProject(ctx: ToolContext, calc: CalculationResult, o: Projec
   );
   const bySku = new Map(catalog.map((p) => [p.sku, p]));
   const choices = await projectChoices(ctx, calc.requirements, basket, catalog, offers, o.storeId);
-  const suggestions: SuggestionView[] = resolved.suggestions.map((sg) => {
+  const suggested = resolved.suggestions.filter((sg) => !o.suggestRole || o.suggestRole(sg.role));
+  const suggestions: SuggestionView[] = suggested.map((sg) => {
     const p = bySku.get(sg.sku)!;
     return { sku: sg.sku, name: pn(p, ctx.lang), qty: sg.qty, unitPrice: p.price, total: Math.round(p.price * sg.qty * 100) / 100, basis: sg.basis, isTool: sg.isTool };
   });
@@ -528,8 +605,16 @@ async function priceProject(ctx: ToolContext, calc: CalculationResult, o: Projec
     layout: o.layout,
     sketched: o.sketched,
     revision: o.revision,
+    layoutHistory: o.layoutHistory ?? [],
   };
-  const state: SessionState = { ...ctx.state, basket, storeId: o.storeId, quality: o.quality, project };
+  const state: SessionState = {
+    ...ctx.state,
+    basket,
+    storeId: o.storeId,
+    quality: o.quality,
+    project,
+    suggestions: suggested.map((sg) => ({ sku: sg.sku, qty: sg.qty, role: sg.role, basis: sg.basis, isTool: sg.isTool })),
+  };
   return {
     state,
     project,
@@ -552,16 +637,24 @@ const signedLei = (v: number, lang: Lang) => `${v > 0 ? "+" : v < 0 ? "−" : "�
  * leaving out what they removed. Returns the updated cards plus a change card
  * with the per-line and total price difference.
  */
-export async function applySketchEdit(ctx: ToolContext, edits: SketchOp[], source: SketchChange["source"]): Promise<ToolResult & { error?: string }> {
+export async function applySketchEdit(ctx: ToolContext, edits: EditOp[], source: SketchChange["source"]): Promise<ToolResult & { error?: string }> {
   const prev = ctx.state.project;
   if (!prev) return { error: "no_project", forModel: { error: "There is no project yet — call calculate_project first." } };
   const layout0 = prev.layout ?? defaultLayout(prev.type, prev.inputs);
   if (!edits.length) return { error: "no_edits", forModel: { error: "No edits given.", sketch: describeLayout(layout0) } };
+  const history = prev.layoutHistory ?? [];
+  const undo = edits.some((e) => e.op === "undo");
+  if (undo && !history.length) {
+    const msg = ctx.lang === "en" ? "There is no earlier version of the sketch to go back to." : "Nu există o versiune anterioară a schiței.";
+    return { error: msg, forModel: { error: msg } };
+  }
 
   let edited: ReturnType<typeof applyOps>;
   let calc: CalculationResult;
   try {
-    edited = applyOps(layout0, edits, ctx.lang);
+    edited = undo
+      ? { layout: history[history.length - 1], changes: [ctx.lang === "en" ? "Went back to the previous version of the sketch" : "Am revenit la versiunea anterioară a schiței"] }
+      : applyOps(layout0, edits as SketchOp[], ctx.lang);
     calc = calculateProject(prev.type, { ...prev.inputs, ...layoutParams(edited.layout) }, ctx.lang);
   } catch (e) {
     if (e instanceof SketchEditError || e instanceof CalculatorInputError) {
@@ -587,6 +680,9 @@ export async function applySketchEdit(ctx: ToolContext, edits: SketchOp[], sourc
   const keepOptional = new Set(prevReqs.filter((r) => r.optional && inBasket.has(r.role)).map((r) => r.role));
   const carry = basket0.filter((b) => !b.role || !projectRoles.has(b.role));
 
+  // Keep suggesting only what was still on offer (not dismissed/added), plus anything new to this shape.
+  const stillSuggested = new Set((ctx.state.suggestions ?? []).map((sg) => sg.role));
+  const optionalBefore = new Set(prevReqs.filter((r) => r.optional).map((r) => r.role));
   const storeId = ctx.state.storeId ?? ctx.customer.homeStoreId;
   const quality = ctx.state.quality ?? "standard";
   const [quote0, r] = await Promise.all([
@@ -602,6 +698,8 @@ export async function applySketchEdit(ctx: ToolContext, edits: SketchOp[], sourc
       excludeRoles: removedByCustomer,
       keepOptional,
       carry,
+      layoutHistory: undo ? history.slice(0, -1) : [...history, layout0].slice(-10),
+      suggestRole: (role) => stillSuggested.has(role) || !optionalBefore.has(role),
     }),
   ]);
 
@@ -738,6 +836,7 @@ const handlers: Record<string, Handler> = {
       layout,
       revision: keep ? (keep.revision ?? 0) : 0,
       sketched: keep?.sketched,
+      layoutHistory: keep?.layoutHistory,
     });
     return {
       state: r.state,
@@ -756,7 +855,8 @@ const handlers: Record<string, Handler> = {
         // The customer can browse these in the "options" drawer on each line; mention a notable saving/upgrade if useful.
         productOptions: r.choices.map((g) => ({
           for: g.label,
-          options: g.options.map((o) => ({ name: o.name, quality: o.quality, total: o.total, inStock: o.inStock, items: o.items })),
+          role: g.role,
+          options: g.options.map((o) => ({ sku: o.sku, name: o.name, quality: o.quality, total: o.total, inStock: o.inStock, items: o.items })),
         })),
         unavailableRoles: r.unavailable,
         uiNote: "The customer now sees the project card (3D sketch + measurements) and the full priced shopping list card. Do not repeat the list in text. The sketch can be reshaped with edit_sketch.",
@@ -767,13 +867,40 @@ const handlers: Record<string, Handler> = {
   async edit_sketch(args, ctx) {
     const edits = (Array.isArray(args.edits) ? (args.edits as Record<string, unknown>[]) : []).map((e) =>
       e.op === "set_option" && e.option != null ? { ...e, value: e.option } : e,
-    ) as unknown as SketchOp[];
+    ) as unknown as EditOp[];
     return applySketchEdit(ctx, edits, "agent");
+  },
+
+  async control_view(args, ctx) {
+    const ui: UiCommand = {};
+    if (args.view === "blueprint" || args.view === "real" || args.view === "exploded") ui.view = args.view;
+    if (args.highlight === "none") ui.highlight = null;
+    else if (typeof args.highlight === "string" && args.highlight) {
+      const role = args.highlight as MaterialRole;
+      if (!MATERIAL_ROLES[role]) return { forModel: { error: `Unknown role "${args.highlight}". Use a role id from the shopping list.` } };
+      ui.highlight = role;
+      // Lifting the layers apart makes one material easy to see.
+      if (!ui.view) ui.view = "exploded";
+    }
+    if (typeof args.editor === "boolean") {
+      if (args.editor && !ctx.state.project) return { forModel: { error: "There is no project sketch yet." } };
+      ui.editor = args.editor;
+    }
+    if (["sketch", "list", "stock", "offers", "plan", "cart", "wallet"].includes(String(args.panel))) ui.panel = args.panel as UiCommand["panel"];
+    if (typeof args.product === "string" && args.product) {
+      const [p] = await ctx.sources.catalog.getMany([args.product]);
+      if (!p) return { forModel: { error: `Unknown SKU ${args.product}` } };
+      ui.product = p.sku;
+    }
+    if (typeof args.redeemPoints === "boolean") ui.redeemPoints = args.redeemPoints;
+    if (!Object.keys(ui).length) return { forModel: { error: "Nothing to show — set at least one field." } };
+    return { ui, forModel: { shown: ui, note: "Done on screen; mention it in a few words." } };
   },
 
   async modify_basket(args, ctx) {
     const ops = Array.isArray(args.operations) ? (args.operations as Record<string, unknown>[]) : [];
     let basket = [...ctx.state.basket];
+    let suggestions = [...(ctx.state.suggestions ?? [])];
     const errors: string[] = [];
     const changes: string[] = [];
     const involved = ops.flatMap((o) => [o.sku, o.withSku]).filter((s): s is string => typeof s === "string");
@@ -787,9 +914,11 @@ const handlers: Record<string, Handler> = {
         case "add": {
           const p = known.get(sku);
           if (!p) { errors.push(`Unknown SKU ${sku}`); break; }
-          const n = qty && qty > 0 ? qty : 1;
+          const sug = suggestions.find((sg) => sg.sku === sku);
+          const n = qty && qty > 0 ? qty : sug?.qty ?? 1;
           if (idx >= 0) basket[idx] = { ...basket[idx], qty: basket[idx].qty + n };
-          else basket.push({ sku, qty: n, role: p.roles[0], isTool: p.isTool });
+          else basket.push({ sku, qty: n, role: sug?.role ?? p.roles[0], basis: sug?.basis, isTool: p.isTool });
+          suggestions = suggestions.filter((sg) => sg.sku !== sku);
           changes.push(`+${n} ${pn(p, ctx.lang)}`);
           break;
         }
@@ -801,7 +930,7 @@ const handlers: Record<string, Handler> = {
         case "set_qty":
           if (idx < 0) { errors.push(`SKU ${sku} is not in the basket`); break; }
           if (!qty || qty <= 0) { basket = basket.filter((b) => b.sku !== sku); changes.push(`removed ${sku}`); break; }
-          basket[idx] = { ...basket[idx], qty };
+          basket[idx] = { ...basket[idx], qty: Math.min(999, qty) };
           changes.push(`${known.get(sku)?.name ?? sku} → ${qty}`);
           break;
         case "replace": {
@@ -817,6 +946,23 @@ const handlers: Record<string, Handler> = {
           changes.push(`${oldP.name} → ${newQty}× ${newP.name}`);
           break;
         }
+        case "choose": {
+          const opt = await sizedOption(ctx, sku);
+          if ("error" in opt) { errors.push(opt.error); break; }
+          // The chosen option takes the place of whatever did that job, sized for this project.
+          const at = basket.findIndex((b) => b.role === opt.role);
+          const others = basket.filter((b) => b.role !== opt.role);
+          const chosen = opt.items.map((it) => ({ sku: it.sku, qty: it.qty, role: opt.role, basis: opt.basis, isTool: opt.isTool }));
+          basket = at < 0 ? [...others, ...chosen] : [...others.slice(0, at), ...chosen, ...others.slice(at)];
+          suggestions = suggestions.filter((sg) => sg.role !== opt.role);
+          changes.push(`${opt.label} → ${opt.items.map((it) => `${it.qty}× ${it.sku}`).join(" + ")}`);
+          break;
+        }
+        case "dismiss_suggestion":
+          if (!suggestions.some((sg) => sg.sku === sku)) { errors.push(`SKU ${sku} is not among the suggestions`); break; }
+          suggestions = suggestions.filter((sg) => sg.sku !== sku);
+          changes.push(`no longer suggesting ${known.get(sku)?.name ?? sku}`);
+          break;
         default:
           errors.push(`Unknown op ${String(o.op)}`);
       }
@@ -824,12 +970,17 @@ const handlers: Record<string, Handler> = {
     basket = mergeBasket(basket);
     const store = await storeIdOrDefault(ctx, args.storeId);
     if (store.error) errors.push(store.error);
-    const quote = await priceBasket(ctx, basket, store.id);
-    const state: SessionState = { ...ctx.state, basket, storeId: store.id };
+    const [quote, views] = await Promise.all([priceBasket(ctx, basket, store.id), suggestionViews(ctx, suggestions)]);
+    const state: SessionState = { ...ctx.state, basket, storeId: store.id, suggestions };
     return {
       state,
-      cards: [{ kind: "quote", id: cardId("quote"), quote, suggestions: [], owned: [] }],
-      forModel: { changes, errors: errors.length ? errors : undefined, quote: quoteForModel(quote, ctx.lang) },
+      cards: [{ kind: "quote", id: cardId("quote"), quote, suggestions: views, owned: [] }],
+      forModel: {
+        changes,
+        errors: errors.length ? errors : undefined,
+        quote: quoteForModel(quote, ctx.lang),
+        remainingSuggestions: views.map((v) => ({ sku: v.sku, name: v.name, qty: v.qty, total: v.total })),
+      },
     };
   },
 

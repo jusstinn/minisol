@@ -10,6 +10,33 @@ export interface SessionState {
   storeId?: string;
   quality?: QualityTier;
   project?: ProjectSnapshot;
+  /** Optional extras offered for the project that are not in the basket (yet). */
+  suggestions?: SuggestedItem[];
+}
+
+export interface SuggestedItem {
+  sku: string;
+  qty: number;
+  role: MaterialRole;
+  basis?: string;
+  isTool: boolean;
+}
+
+/**
+ * Something the assistant wants the screen to do (not data): switch the 3D view,
+ * highlight a material, open the plan editor, the cart, a product sheet, scroll to a panel.
+ */
+export interface UiCommand {
+  view?: "blueprint" | "real" | "exploded";
+  /** A material layer / role to highlight in the sketch and the list (null clears). */
+  highlight?: string | null;
+  editor?: boolean;
+  panel?: "sketch" | "list" | "stock" | "offers" | "plan" | "cart" | "wallet";
+  /** Open this product's sheet. */
+  product?: string;
+  /** Show totals paid partly with points. */
+  redeemPoints?: boolean;
+  replay?: boolean;
 }
 
 export interface ProjectSnapshot {
@@ -26,6 +53,8 @@ export interface ProjectSnapshot {
   sketched?: boolean;
   /** Bumps on every sketch edit. */
   revision?: number;
+  /** Earlier layouts, most recent last, so "undo" works from the chat too. */
+  layoutHistory?: Layout[];
 }
 
 /** What one sketch edit did to the shopping list and the price. */
@@ -175,6 +204,7 @@ export type AgentEvent =
   /** Result of checking every money amount in the reply against the quote engine. */
   | { type: "verified"; ok: boolean; checked: number; replaced?: boolean }
   | { type: "card"; card: Card }
+  | { type: "ui"; command: UiCommand }
   | { type: "state"; state: SessionState }
   | { type: "history"; items: unknown[] }
   | { type: "error"; message: string }

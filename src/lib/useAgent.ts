@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { AgentEvent, Card, ChoiceGroup, ProductOptionView, QualityOption, SessionState } from "@/agent/types";
+import type { AgentEvent, Card, ChoiceGroup, ProductOptionView, QualityOption, SessionState, UiCommand } from "@/agent/types";
 import type { SketchOp } from "@/domain/layout";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
@@ -51,6 +51,13 @@ function mergeItems(items: BasketItem[]): BasketItem[] {
   return [...out.values()].filter((i) => i.qty > 0);
 }
 
+/** A screen command from the assistant; `seq` makes repeats distinct, `at` lets late mounts ignore stale ones. */
+export interface UiSignal {
+  command: UiCommand;
+  seq: number;
+  at: number;
+}
+
 export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; forceScripted?: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [board, setBoard] = useState<Board>({ version: 0 });
@@ -60,6 +67,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   const historyRef = useRef<unknown[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const [pointsDelta, setPointsDelta] = useState<number | null>(null);
+  const [ui, setUi] = useState<UiSignal | null>(null);
 
   const patchAssistant = useCallback((id: string, fn: (m: ChatMessage) => ChatMessage) => {
     setMessages((ms) => ms.map((m) => (m.id === id ? fn(m) : m)));
@@ -151,6 +159,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 break;
               case "mode":
                 setMode({ mode: ev.mode, reason: ev.reason });
+                break;
+              case "ui":
+                setUi((u) => ({ command: ev.command, seq: (u?.seq ?? 0) + 1, at: Date.now() }));
                 break;
               case "replace_text":
                 patchAssistant(aId, (m) => ({ ...m, text: ev.text }));
@@ -244,6 +255,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     (item: BasketItem) => {
       if (busyRef.current) return;
       setBoard((b) => (b.quote ? { ...b, quote: { ...b.quote, suggestions: b.quote.suggestions.filter((s) => s.sku !== item.sku) } } : b));
+      stateRef.current = { ...stateRef.current, suggestions: (stateRef.current.suggestions ?? []).filter((s) => s.sku !== item.sku) };
       return reprice([...(pendingRef.current ?? stateRef.current.basket), item]);
     },
     [reprice],
@@ -260,6 +272,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       const at = Math.max(0, current.findIndex((b) => b.role === group.role));
       const others = current.filter((b) => b.role !== group.role);
       const chosen = option.items.map((it) => ({ sku: it.sku, qty: it.qty, role: group.role, basis: group.basis }));
+      stateRef.current = { ...stateRef.current, suggestions: (stateRef.current.suggestions ?? []).filter((s) => s.role !== group.role) };
       return reprice([...others.slice(0, at), ...chosen, ...others.slice(at)]);
     },
     [reprice],
@@ -354,6 +367,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     setMessages([]);
     setBoard({ version: 0 });
     setPointsDelta(null);
+    setUi(null);
   }, []);
 
   return {
@@ -370,6 +384,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     pointsDelta,
     state: stateRef,
     mode,
+    ui,
     sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0 },
   };
 }

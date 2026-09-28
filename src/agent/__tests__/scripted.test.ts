@@ -112,3 +112,65 @@ describe("sketch edits", () => {
     expect(verified?.ok).toBe(true);
   }, 20000);
 });
+
+describe("the chat can change everything on screen", () => {
+  const project = { type: "deck" as const, title: "", inputs: {}, measurements: [], assumptions: [], estimate: { hoursMin: 1, hoursMax: 2, difficulty: 1 as const, people: 1 as const }, safetyNotes: [] };
+  const st = { basket: [], project };
+
+  it("parses screen, list and undo requests", () => {
+    expect(parseIntent("Arată-mi grinzile", st)).toMatchObject({ kind: "view", command: { highlight: "deck_joist" } });
+    expect(parseIntent("Vreau vedere explodată", st)).toMatchObject({ kind: "view", command: { view: "exploded" } });
+    expect(parseIntent("Deschide coșul", st)).toMatchObject({ kind: "view", command: { panel: "cart" } });
+    expect(parseIntent("Plătesc cu puncte", st)).toMatchObject({ kind: "view", command: { redeemPoints: true } });
+    expect(parseIntent("Anulează ultima modificare", st)).toMatchObject({ kind: "sketch", edits: [{ op: "undo" }] });
+    expect(parseIntent("Scoate geotextilul din listă", st)).toMatchObject({ kind: "remove" });
+    expect(parseIntent("Alege varianta din pin", st)).toMatchObject({ kind: "choose" });
+    expect(parseIntent("Mută lista la Berceni", st)).toMatchObject({ kind: "move" });
+    expect(parseIntent("Adaugă sugestiile", st)).toEqual({ kind: "add_suggestions" });
+  });
+
+  it("chooses options, removes, moves, adds extras and undoes — all from the chat", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    const run = async (message: string, state: Parameters<typeof runScriptedAgent>[0]["state"]) => {
+      const events: AgentEvent[] = [];
+      for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state, lang: "ro" })) events.push(ev);
+      const last = events.filter((e) => e.type === "state").at(-1) as Extract<AgentEvent, { type: "state" }> | undefined;
+      const text = events.filter((e) => e.type === "text").map((e) => (e as { delta: string }).delta).join("");
+      const verified = events.find((e) => e.type === "verified") as Extract<AgentEvent, { type: "verified" }> | undefined;
+      return { events, text, verified, state: last?.state ?? state };
+    };
+    const s0 = (await run("Vreau o terasă de 4 x 3 m pe pământ", { basket: [] })).state;
+    expect(s0.suggestions?.length).toBeGreaterThan(0);
+
+    const pine = await run("Alege varianta din pin", s0);
+    const boards = (await sources.catalog.getMany(pine.state.basket.filter((b) => b.role === "deck_board").map((b) => b.sku)))[0];
+    expect(boards.name).toMatch(/pin/i);
+    expect(pine.verified?.ok).toBe(true);
+
+    const noMembrane = await run("Scoate geotextilul din listă", pine.state);
+    expect(noMembrane.state.basket.some((b) => b.role === "weed_membrane")).toBe(false);
+
+    const moved = await run("Mută lista la Berceni", noMembrane.state);
+    expect(moved.state.storeId).not.toBe(noMembrane.state.storeId);
+    expect(moved.text).toMatch(/Berceni/);
+
+    const extras = await run("Adaugă sugestiile", moved.state);
+    expect(extras.state.suggestions ?? []).toHaveLength(0);
+    expect(extras.state.basket.length).toBeGreaterThan(moved.state.basket.length);
+
+    const view = await run("Arată-mi grinzile", extras.state);
+    const ui = view.events.find((e) => e.type === "ui") as Extract<AgentEvent, { type: "ui" }> | undefined;
+    expect(ui?.command).toMatchObject({ highlight: "deck_joist", view: "exploded" });
+
+    const edited = await run("Adaugă 2 trepte în față", extras.state);
+    expect(edited.state.project?.layoutHistory).toHaveLength(1);
+    const undone = await run("Anulează", edited.state);
+    const l = undone.state.project?.layout;
+    expect(l?.type === "deck" && l.steps).toHaveLength(0);
+    // the pine boards picked earlier are still there after edit + undo
+    const b2 = (await sources.catalog.getMany(undone.state.basket.filter((b) => b.role === "deck_board").map((b) => b.sku)))[0];
+    expect(b2.name).toMatch(/pin/i);
+  }, 30000);
+});

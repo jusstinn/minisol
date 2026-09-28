@@ -77,6 +77,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         if (card.kind === "change") lastChange = card;
         yield { type: "card", card };
       }
+      if (result.ui) yield { type: "ui", command: result.ui };
       input.push(opts.llm.toolOutput(call.callId, JSON.stringify(result.forModel)));
     }
     if (step === maxSteps - 1) {

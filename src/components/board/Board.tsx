@@ -7,7 +7,7 @@ import type { Tenant } from "@/config/tenant";
 import type { BasketItem } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
-import type { Board as BoardState } from "@/lib/useAgent";
+import type { Board as BoardState, UiSignal } from "@/lib/useAgent";
 import BlueprintPanel from "./BlueprintPanel";
 import type { SketchControls } from "./BlueprintPanel";
 import ChangeCard from "./ChangeCard";
@@ -34,10 +34,12 @@ interface Props {
   inline?: boolean;
   /** Sketch editing (plan editor, undo, on-demand sketch). */
   sketch?: SketchControls;
+  /** Screen commands from the assistant. */
+  ui?: UiSignal | null;
 }
 
 export default function Board(props: Props) {
-  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onChoose, onlyCards, inline, sketch } = props;
+  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onChoose, onlyCards, inline, sketch, ui } = props;
 
   if (onlyCards) {
     return (
@@ -73,6 +75,7 @@ export default function Board(props: Props) {
             inline={inline}
             sketch={current ? sketch : undefined}
             change={current ? board.change : undefined}
+            ui={current ? ui : undefined}
           />
         );
       }
@@ -117,33 +120,43 @@ export default function Board(props: Props) {
     <div className="mx-auto max-w-[1280px] space-y-5 p-4 sm:p-6 xl:p-8">
       {empty && <EmptyBoard lang={lang} />}
       {board.project && (
-        <Flash on={board.last === "project"} v={board.version}>
-          {renderCard(board.project)}
-        </Flash>
+        <div data-panel="sketch">
+          <Flash on={board.last === "project"} v={board.version}>
+            {renderCard(board.project)}
+          </Flash>
+        </div>
       )}
       {(quote || board.offers) && (
         <div className="grid items-start gap-5 2xl:grid-cols-[1.4fr_1fr]">
           {board.quote && (
-            <Flash on={board.last === "quote"} v={board.version}>
-              {renderCard(board.quote)}
-            </Flash>
+            <div data-panel="list">
+              <Flash on={board.last === "quote"} v={board.version}>
+                {renderCard(board.quote)}
+              </Flash>
+            </div>
           )}
           <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-1">
             {quote && (
-              <Flash on={board.last === "stock"} v={board.version}>
-                <StockPanel quote={quote} lang={lang} onMoveStore={onMoveStore} />
-              </Flash>
+              <div data-panel="stock">
+                <Flash on={board.last === "stock"} v={board.version}>
+                  <StockPanel quote={quote} lang={lang} onMoveStore={onMoveStore} />
+                </Flash>
+              </div>
             )}
-            <Flash on={board.last === "offers"} v={board.version}>
-              <OffersPanel offers={board.offers?.offers} quote={quote} lang={lang} />
-            </Flash>
+            <div data-panel="offers">
+              <Flash on={board.last === "offers"} v={board.version}>
+                <OffersPanel offers={board.offers?.offers} quote={quote} lang={lang} />
+              </Flash>
+            </div>
           </div>
         </div>
       )}
       {board.plan && (
-        <Flash on={board.last === "plan"} v={board.version}>
-          {renderCard(board.plan)}
-        </Flash>
+        <div data-panel="plan">
+          <Flash on={board.last === "plan"} v={board.version}>
+            {renderCard(board.plan)}
+          </Flash>
+        </div>
       )}
       {board.project && quote && ["deck", "fence", "lawn"].includes(board.project.project.type) && (
         <WeatherPanel

@@ -1,13 +1,14 @@
 import { getDataSources } from "@/adapters";
 import { sanitizeState } from "@/agent/state";
 import { applySketchEdit } from "@/agent/tools";
+import type { EditOp } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
-import type { SketchOp } from "@/domain/layout";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
-const OPS = new Set<SketchOp["op"]>([
+const OPS = new Set<EditOp["op"]>([
+  "undo",
   "resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening",
   "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option",
 ]);
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
   if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
   const stores = await sources.stores.list();
   const state = sanitizeState(body.state as never, stores.map((s) => s.id));
-  const edits = (body.edits as SketchOp[]).filter((e) => e && typeof e === "object" && OPS.has(e.op)).slice(0, 12);
+  const edits = (body.edits as EditOp[]).filter((e) => e && typeof e === "object" && OPS.has(e.op)).slice(0, 12);
   const lang = body.lang === "en" ? "en" : body.lang === "ro" ? "ro" : customer.language;
 
   const r = await applySketchEdit({ sources, customer, state, lang, now: new Date() }, edits, "editor");

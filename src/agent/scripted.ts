@@ -3,13 +3,14 @@ import type { Tenant } from "@/config/tenant";
 import type { ProjectType } from "@/domain/calculators";
 import type { Quote } from "@/domain/quote";
 import { fold } from "@/domain/search";
-import type { Customer, Lang, QualityTier } from "@/domain/types";
+import type { Customer, Lang, MaterialRole, QualityTier } from "@/domain/types";
+import { MATERIAL_ROLES } from "@/domain/types";
 import type { SketchOp, Side } from "@/domain/layout";
 import { lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
-import { TOOL_STATUS, executeTool } from "./tools";
+import { TOOL_STATUS, executeTool, priceBasket } from "./tools";
 import type { ToolContext } from "./tools";
-import type { AgentEvent, Card, SessionState } from "./types";
+import type { AgentEvent, Card, SessionState, UiCommand } from "./types";
 import { verifyReply } from "./verify";
 
 /**
@@ -21,7 +22,11 @@ import { verifyReply } from "./verify";
 
 type Intent =
   | { kind: "project"; type: ProjectType; params: Record<string, unknown>; quality?: QualityTier; missing?: string }
-  | { kind: "sketch"; edits: Partial<SketchOp>[] }
+  | { kind: "sketch"; edits: (Partial<SketchOp> | { op: "undo" })[] }
+  | { kind: "view"; command: UiCommand }
+  | { kind: "choose"; text: string }
+  | { kind: "remove"; text: string }
+  | { kind: "move"; text: string }
   | { kind: "requality"; quality: QualityTier }
   | { kind: "offers" }
   | { kind: "stock" }
@@ -49,6 +54,11 @@ const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
   ["lawn", /\b(gazon|gazonul|lawn|iarba|grass|turf)\b/],
   ["paint_room", /\b(vops\w*|zugrav\w*|paint\w*|repaint)\b/],
 ];
+
+/** Words that never identify a product/store in "remove X" / "choose X" / "move to X". */
+const STOP_WORDS = new Set(
+  "scoate scot elimina sterge remove drop fara vreau nu mai din lista cos coșul alege schimba schimb foloseste inlocuieste loc instead switch use choose prefer prefera varianta variant option optiunea the and with pentru mea meu mele muta move mut lista magazin magazinul store la in pe de cu un una doua sau".split(" "),
+);
 
 const SIDE_WORDS: [Side, RegExp][] = [
   ["s", /\b(in fata|din fata|la fata|fata casei|front|sud|south)\b/],
@@ -119,6 +129,48 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
   return edits.length ? edits : null;
 }
 
+/** Words for materials the customer may ask to see ("show me the joists"). */
+const MATERIAL_WORDS: [MaterialRole, RegExp][] = [
+  ["deck_joist", /\b(grinz\w*|grinda|joists?)\b/],
+  ["deck_support", /\b(suport\w*|plot\w*|pedestal\w*|supports?)\b/],
+  ["deck_board", /\b(scandur\w*|deck(-ul)?|boards?|decking)\b/],
+  ["weed_membrane", /\b(geotextil\w*|membran\w*|membrane)\b/],
+  ["fence_post", /\b(stalp\w*|posts?)\b/],
+  ["fence_panel", /\b(panou\w*|panels?)\b/],
+  ["fence_gate", /\b(poart\w*|gates?)\b/],
+  ["post_concrete", /\b(fundati\w*|beton\w*|footings?|concrete)\b/],
+  ["wall_tiles", /\b(faiant\w*|wall tiles?)\b/],
+  ["floor_tiles", /\b(gresi\w*|floor tiles?)\b/],
+  ["waterproofing", /\b(hidroizol\w*|waterproof\w*)\b/],
+  ["interior_paint", /\b(vopse\w*|paint)\b/],
+  ["laminate", /\b(parchet\w*|laminate)\b/],
+  ["underlay", /\b(folie|underlay)\b/],
+  ["skirting_board", /\b(plint\w*|skirting)\b/],
+  ["cw_profile", /\b(montant\w*|profile\w*|studs?)\b/],
+  ["drywall_board", /\b(gips\w*|placi|plasterboard)\b/],
+  ["mineral_wool", /\b(vata|wool|izolati\w*)\b/],
+  ["topsoil", /\b(pamant\w*|topsoil|soil)\b/],
+];
+
+/** "Show me the joists", "exploded view", "open the cart", "pay with points" → a screen command. */
+export function parseView(t: string): UiCommand | null {
+  const show = /\b(arat\w*|show|evidentiaz\w*|highlight|unde (e|sunt|se vad)|where (is|are)|vreau sa vad|let me see|see|vezi|deschide|open)\b/.test(t);
+  const c: UiCommand = {};
+  if (/\b(explodat\w*|exploded|pe straturi|layers?)\b/.test(t)) c.view = "exploded";
+  else if (/\b(vedere reala|realist\w*|real view|realistic|in culori)\b/.test(t)) c.view = "real";
+  else if (/\b(blueprint|vedere plan|vedere tehnica)\b/.test(t)) c.view = "blueprint";
+  if (/\b(editor\w*|de mana|manual|by hand|myself)\b/.test(t) && /\b(modific\w*|edit\w*|deschide|open|schimb\w*)\b/.test(t)) c.editor = true;
+  if (show && /\b(cos\w*|cart|basket)\b/.test(t)) c.panel = "cart";
+  if (/\b(wallet|portofel)\b/.test(t) && /\b(trimite|send|pune|put|arat\w*|show|deschide|open)\b/.test(t)) c.panel = "wallet";
+  if (show && /\b(planul de lucru|pasii|work plan|the plan|planul)\b/.test(t) && !c.editor) c.panel = "plan";
+  if (/\b(cu (toate )?punctele|cu puncte|with (my )?points|use (my )?points|foloseste punctele)\b/.test(t)) c.redeemPoints = !/\b(fara|without|nu)\b/.test(t);
+  if (show) {
+    const role = MATERIAL_WORDS.find(([, re]) => re.test(t))?.[0];
+    if (role) c.highlight = role;
+  }
+  return Object.keys(c).length ? c : null;
+}
+
 export function parseIntent(raw: string, state: SessionState): Intent {
   const t = fold(raw);
   const quality: QualityTier | undefined = /\b(ieftin\w*|cheap\w*|budget|economic\w*)\b/.test(t)
@@ -130,17 +182,27 @@ export function parseIntent(raw: string, state: SessionState): Intent {
   if (unsafe) return { kind: "unsafe", topic: unsafe[0] };
   const type = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
 
+  const sameProject = state.project && (!type || type === state.project.type || /\b(arat\w*|show|evidentiaz\w*|highlight|scoate\w*|remove|alege\w*|choose)\b/.test(t));
+  if (state.project && sameProject) {
+    if (/\b(anuleaz\w*|undo|revino|varianta anterioara|previous version|inapoi la)\b/.test(t)) return { kind: "sketch", edits: [{ op: "undo" }] };
+    const view = parseView(t);
+    if (view) return { kind: "view", command: view };
+  }
   // Reshaping the current project ("add steps", "a gate in the middle") is an edit, not a new project.
   if (state.project && (!type || type === state.project.type)) {
     const edits = parseSketchEdit(t, state.project.type);
     if (edits) return { kind: "sketch", edits };
   }
 
-  if (!type && state.project) {
+  if (state.project && (!type || sameProject)) {
     if (quality) return { kind: "requality", quality };
     if (/\b(ofert\w*|offer\w*|reducer\w*|discount\w*|cupon\w*)\b/.test(t)) return { kind: "offers" };
+    if (/\b(muta\w*|move|transfer\w*|schimba magazinul|other store|alt magazin)\b/.test(t)) return { kind: "move", text: t };
     if (/\b(stoc\w*|stock|unde|where|magazin\w*|store\w*)\b/.test(t)) return { kind: "stock" };
-    if (/\b(sugest\w*|suggest\w*|adaug\w*|add)\b/.test(t)) return { kind: "add_suggestions" };
+    if (/\b(sugest\w*|suggest\w*|extra\w*)\b/.test(t) || /^\s*(adauga|add)\s*(le|them|tot|all)?\s*[.!]?\s*$/.test(t)) return { kind: "add_suggestions" };
+    if (/\b(scoate\w*|elimina\w*|sterge\w*|remove|drop|nu mai vreau|fara)\b/.test(t)) return { kind: "remove", text: t };
+    if (/\b(alege\w*|schimba\w*|foloseste|inlocuieste|in loc de|instead|switch|use|choose|prefer\w*)\b/.test(t)) return { kind: "choose", text: t };
+    if (/\b(adaug\w*|add)\b/.test(t)) return { kind: "add_suggestions" };
   }
   if (!type) return { kind: "unknown" };
 
@@ -334,6 +396,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       if (card.kind === "quote") lastQuote = card.quote;
       yield { type: "card", card } as AgentEvent;
     }
+    if (r.ui) yield { type: "ui", command: r.ui } as AgentEvent;
     return r;
   };
 
@@ -414,6 +477,122 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       : lang === "en"
         ? "No nearby store has every item right now — I can swap the missing ones for in-stock alternatives or deliver them."
         : "Niciun magazin din apropiere nu are acum toate produsele — pot înlocui ce lipsește cu alternative pe stoc sau livrare.";
+  } else if (intent.kind === "view") {
+    const c = intent.command;
+    yield* runTool(
+      "control_view",
+      {
+        view: c.view ?? null,
+        highlight: c.highlight === null ? "none" : (c.highlight ?? null),
+        editor: c.editor ?? null,
+        panel: c.panel ?? null,
+        product: c.product ?? null,
+        redeemPoints: c.redeemPoints ?? null,
+      },
+      350,
+    );
+    const what = c.highlight && MATERIAL_ROLES[c.highlight as MaterialRole];
+    const en = lang === "en";
+    reply = [
+      what ? (en ? `Here are the **${what.labelEn.toLowerCase()}** — highlighted in the sketch and in your list.` : `Uite **${what.label.toLowerCase()}** — evidențiate pe schiță și în listă.`) : "",
+      c.view === "exploded" && !what ? (en ? "Exploded view: every layer lifted apart, in build order." : "Vedere explodată: fiecare strat ridicat separat, în ordinea montajului.") : "",
+      c.view === "real" ? (en ? "Here's the realistic view, with the materials' colours." : "Iată vederea realistă, cu culorile materialelor.") : "",
+      c.editor ? (en ? "The plan editor is open — drag an edge or tap + to change the shape; the list follows every change." : "Am deschis editorul de plan — trage de o margine sau apasă + ca să schimbi forma; lista se actualizează la fiecare modificare.") : "",
+      c.panel === "cart" ? (en ? "Your cart is open." : "Ți-am deschis coșul.") : "",
+      c.panel === "wallet" ? (en ? "Your cart is open — tap the Wallet button to send the list to your pass." : "Ți-am deschis coșul — apasă butonul Wallet ca să trimiți lista pe card.") : "",
+      c.panel === "plan" ? (en ? "Here's the step-by-step plan." : "Iată planul pas cu pas.") : "",
+      c.redeemPoints === true ? (en ? "Totals now show part of the price paid with your points." : "Totalurile arată acum plata parțială cu punctele tale.") : "",
+      c.redeemPoints === false ? (en ? "Totals no longer use your points." : "Totalurile nu mai folosesc punctele.") : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  } else if ((intent.kind === "choose" || intent.kind === "remove" || intent.kind === "move") && state.project) {
+    const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
+    // Light stemming for Romanian articles/plurals: "geotextilul" → "geotextil", "grinzile" → "grinz".
+    const stem = (w: string) => (w.length >= 6 ? w.replace(/(urile|ului|elor|ilor|ele|ile|ul|ii|le|a|e|i)$/, "") : w);
+    const words = intent.text
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
+      .map(stem);
+    const hit = (name: string) => words.filter((w) => fold(name).includes(w)).length;
+    let op: Record<string, unknown> | null = null;
+    let storeId: string | null = null;
+    let label = "";
+    if (intent.kind === "move") {
+      const stores = await opts.sources.stores.list();
+      const best = stores.map((st) => ({ st, n: hit(`${st.name} ${st.city}`) })).sort((a, b) => b.n - a.n)[0];
+      if (best?.n) {
+        storeId = best.st.id;
+        label = best.st.name;
+      }
+    } else if (intent.kind === "remove") {
+      const inBasket = await opts.sources.catalog.getMany(state.basket.map((b) => b.sku));
+      const best = inBasket
+        .map((p) => ({ p, n: hit(`${p.name} ${p.nameEn} ${p.roles.map((r) => `${MATERIAL_ROLES[r].label} ${MATERIAL_ROLES[r].labelEn}`).join(" ")}`) }))
+        .sort((a, b) => b.n - a.n)[0];
+      if (best?.n) {
+        op = { op: "remove", sku: best.p.sku, qty: null, withSku: null };
+        label = lang === "en" ? best.p.nameEn : best.p.name;
+      }
+    } else {
+      const roles = [...new Set(state.basket.map((b) => b.role).filter(Boolean))] as MaterialRole[];
+      const inBasket = new Set(state.basket.map((b) => b.sku));
+      // "din pin" means the main material unless a part is named ("grinzi din pin"):
+      // rank by words matched, then a named part, then the role's share of the list.
+      const named = new Set(MATERIAL_WORDS.filter(([, re]) => re.test(intent.text)).map(([r]) => r));
+      const basketProducts = new Map((await opts.sources.catalog.getMany([...inBasket])).map((p) => [p.sku, p]));
+      const spend = new Map<string, number>();
+      for (const b of state.basket) if (b.role) spend.set(b.role, (spend.get(b.role) ?? 0) + (basketProducts.get(b.sku)?.price ?? 0) * b.qty);
+      const roleOf = (p: { roles: MaterialRole[] }) => p.roles.find((r) => roles.includes(r)) ?? p.roles[0];
+      const candidates = (await opts.sources.catalog.byRoles(roles)).filter((p) => !inBasket.has(p.sku));
+      const best = candidates
+        .map((p) => ({ p, n: hit(`${p.name} ${p.nameEn} ${p.brand}`), named: named.has(roleOf(p)) ? 1 : 0, spend: spend.get(roleOf(p)) ?? 0 }))
+        .filter((c) => c.n > 0)
+        .sort((a, b) => b.n - a.n || b.named - a.named || b.spend - a.spend || a.p.price - b.p.price)[0];
+      if (best?.n) {
+        op = { op: "choose", sku: best.p.sku, qty: null, withSku: null };
+        label = lang === "en" ? best.p.nameEn : best.p.name;
+      }
+    }
+    if (!op && !storeId) {
+      reply =
+        intent.kind === "move"
+          ? lang === "en" ? "Which store should I move your list to? Tap one on the stock map, or tell me its name." : "La ce magazin să mut lista? Alege unul din harta de stoc sau spune-mi numele lui."
+          : intent.kind === "remove"
+            ? lang === "en" ? "Which item should I take off the list?" : "Ce produs să scot din listă?"
+            : lang === "en" ? "Which option would you like? Open the options on any line of the list, or tell me the material (e.g. pine, WPC)." : "Ce variantă preferi? Deschide opțiunile de pe orice linie din listă sau spune-mi materialul (ex. pin, WPC).";
+    } else {
+      const r = yield* runTool("modify_basket", { operations: op ? [op] : [], storeId }, 500);
+      const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
+      const errs = (r.forModel as { errors?: string[] }).errors;
+      if (!q || errs?.length) {
+        reply = lang === "en" ? `That didn't work: ${errs?.join("; ") ?? "unknown error"}.` : `Nu a mers: ${errs?.join("; ") ?? "eroare necunoscută"}.`;
+      } else {
+        const diff = Math.round((q.quote.total - before.total) * 100) / 100;
+        extraAmounts.push(Math.abs(diff), before.total);
+        const delta = diff === 0 ? "" : ` (${diff < 0 ? "−" : "+"}${lei(Math.abs(diff), lang)})`;
+        const en = lang === "en";
+        reply =
+          intent.kind === "move"
+            ? `${en ? `Moved your list to **${label}**` : `Am mutat lista la **${label}**`}. ${stockSentence(q.quote, lang)}`
+            : intent.kind === "remove"
+              ? en ? `Removed ${label} — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am scos ${label} — total nou **${lei(q.quote.total, lang)}**${delta}.`
+              : en ? `Switched to ${label}, sized for your project — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am trecut la ${label}, calculat pentru proiectul tău — total nou **${lei(q.quote.total, lang)}**${delta}.`;
+      }
+    }
+  } else if (intent.kind === "add_suggestions" && state.project && state.suggestions?.length) {
+    const added = state.suggestions.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
+    const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
+    const r = yield* runTool("modify_basket", { operations: added, storeId: null }, 500);
+    const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
+    if (q) {
+      const diff = Math.round((q.quote.total - before.total) * 100) / 100;
+      extraAmounts.push(Math.abs(diff));
+      reply =
+        lang === "en"
+          ? `Added the extras (+${lei(diff, lang)}) — new total **${lei(q.quote.total, lang)}**, and **${int(q.quote.points.earned, lang)} points** to earn.`
+          : `Am adăugat extra-urile (+${lei(diff, lang)}) — total nou **${lei(q.quote.total, lang)}** și **${int(q.quote.points.earned, lang)} puncte** de câștigat.`;
+    }
   } else if (intent.kind === "add_suggestions" && state.project) {
     const r = yield* runTool(
       "calculate_project",
