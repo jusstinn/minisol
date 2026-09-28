@@ -39,6 +39,8 @@ export interface CalculationResult {
 export class CalculatorInputError extends Error {}
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
+/** A number in Romanian text: "49,3", not "49.3". */
+const ro = (n: number) => String(r1(n)).replace(".", ",");
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function positive(name: string, v: unknown, { max = 1000 }: { max?: number } = {}): number {
@@ -149,7 +151,7 @@ function paintRoom(p: Params, lang: Lang): CalculationResult {
   b.measure("Total de vopsit", "Total to paint", area, "m²");
   if (p.heightM === undefined) b.assume("Înălțime cameră presupusă 2,6 m.", "Assumed ceiling height of 2.6 m.");
   b.assume(
-    openings ? `Scăzute ușile și ferestrele din schiță (${r1(openingArea)} m²).` : `Scăzute ${doors} uși (0,9×2,1 m) și ${windows} ferestre (1,2×1,5 m).`,
+    openings ? `Scăzute ușile și ferestrele din schiță (${ro(openingArea)} m²).` : `Scăzute ${doors} uși (0,9×2,1 m) și ${windows} ferestre (1,2×1,5 m).`,
     openings ? `Deducted the doors and windows from the sketch (${r1(openingArea)} m²).` : `Deducted ${doors} door(s) (0.9×2.1 m) and ${windows} window(s) (1.2×1.5 m).`,
   );
   const effCoats = surface === "dark_to_light" ? Math.max(coats, 3) : coats;
@@ -159,7 +161,7 @@ function paintRoom(p: Params, lang: Lang): CalculationResult {
   );
 
   const toCover = area * effCoats * 1.1;
-  b.need("interior_paint", toCover / 10, `${r1(area)} m² × ${effCoats} straturi`, `${r1(area)} m² × ${effCoats} coats`, {
+  b.need("interior_paint", toCover / 10, `${ro(area)} m² × ${effCoats} straturi`, `${r1(area)} m² × ${effCoats} coats`, {
     areaToCover: r2(toCover),
   });
 
@@ -224,7 +226,7 @@ function laminateFloor(p: Params, lang: Lang): CalculationResult {
     `${Math.round(waste * 100)}% cutting waste (${diagonal ? "diagonal" : "straight"} laying).`,
   );
 
-  b.need("laminate", area * (1 + waste), `${r1(area)} m² + ${Math.round(waste * 100)}% pierderi`, `${r1(area)} m² + ${Math.round(waste * 100)}% waste`);
+  b.need("laminate", area * (1 + waste), `${ro(area)} m² + ${Math.round(waste * 100)}% pierderi`, `${r1(area)} m² + ${Math.round(waste * 100)}% waste`);
   b.need("underlay", area * 1.05, "suprafața + 5% suprapuneri", "area + 5% overlap");
   if (subfloor === "concrete") {
     b.need("vapor_barrier", area * 1.15, "obligatorie pe șapă de beton (suprapunere 20 cm)", "required on concrete screed (20 cm overlap)");
@@ -297,8 +299,8 @@ function tiling(p: Params, lang: Lang): CalculationResult {
     b.assume("Faianță până la 2,1 m pe toți pereții băii.", "Wall tiles up to 2.1 m on all bathroom walls.");
   }
 
-  if (floor) b.need("floor_tiles", floor * 1.1, `${r1(floor)} m² + 10%`, `${r1(floor)} m² + 10%`);
-  if (wall) b.need("wall_tiles", wall * 1.1, `${r1(wall)} m² + 10%`, `${r1(wall)} m² + 10%`);
+  if (floor) b.need("floor_tiles", floor * 1.1, `${ro(floor)} m² + 10%`, `${r1(floor)} m² + 10%`);
+  if (wall) b.need("wall_tiles", wall * 1.1, `${ro(wall)} m² + 10%`, `${r1(wall)} m² + 10%`);
   const adhesive = floor * (largeFormat ? 5.5 : 4) + wall * 3.5;
   b.need(
     "tile_adhesive",
@@ -529,11 +531,11 @@ function fence(p: Params, lang: Lang): CalculationResult {
   b.measure("Panouri", "Panels", panels, "buc");
   b.measure("Stâlpi", "Posts", posts, "buc");
   if (gates.length) b.measure("Porți", "Gates", gates.length, "buc");
-  b.assume(`Panouri de 1,8 m lățime, înălțime ${H} m; stâlp de 9 cm între panouri.`, `1.8 m wide panels, ${H} m high; 9 cm post between panels.`);
+  b.assume(`Panouri de 1,8 m lățime, înălțime ${ro(H)} m; stâlp de 9 cm între panouri.`, `1.8 m wide panels, ${H} m high; 9 cm post between panels.`);
   if (segments.length > 1) b.assume("Stâlpii de colț sunt comuni celor două segmente.", "Corner posts are shared by both segments.");
-  if (hIn !== H) b.assume(`Înălțimea a fost rotunjită la standardul de ${H} m.`, `Height rounded to the standard ${H} m.`);
+  if (hIn !== H) b.assume(`Înălțimea a fost rotunjită la standardul de ${ro(H)} m.`, `Height rounded to the standard ${H} m.`);
 
-  b.need("fence_panel", panels, `${r1(len)} m ÷ 1,89 m${gates.length ? " (fără porți)" : ""}`, `${r1(len)} m ÷ 1.89 m${gates.length ? " (excl. gates)" : ""}`, { match: { heightM: H } });
+  b.need("fence_panel", panels, `${ro(len)} m ÷ 1,89 m${gates.length ? " (fără porți)" : ""}`, `${r1(len)} m ÷ 1.89 m${gates.length ? " (excl. gates)" : ""}`, { match: { heightM: H } });
   b.need("fence_post", posts, gates.length ? "panouri + 1 + câte unul la fiecare poartă" : "panouri + 1", gates.length ? "panels + 1 + one per gate" : "panels + 1", {
     match: { heightM: H >= 1.8 ? 2.4 : H >= 1.2 ? 1.8 : 1.5 },
   });
@@ -586,6 +588,9 @@ function drywallPartition(p: Params, lang: Lang): CalculationResult {
   const layers = bool(p.doubleLayer, false) ? 2 : 1;
   const wet = p.wetRoom === true;
 
+  if (doors * 0.9 > L - 0.2) {
+    throw new CalculatorInputError(`${doors} door(s) of 0.9 m don't fit in a ${L} m wall`);
+  }
   const wallArea = Math.max(0, L * H - doors * 0.9 * 2.05);
   const boardArea = wallArea * 2 * layers * 1.1;
   const studs = Math.ceil(L / 0.6) + 1 + doors * 2;
@@ -597,11 +602,11 @@ function drywallPartition(p: Params, lang: Lang): CalculationResult {
   );
   if (p.heightM === undefined) b.assume("Înălțime presupusă 2,6 m.", "Assumed height of 2.6 m.");
 
-  b.need("drywall_board", boardArea, `${r1(wallArea)} m² × 2 fețe × ${layers} + 10%`, `${r1(wallArea)} m² × 2 sides × ${layers} + 10%`, {
+  b.need("drywall_board", boardArea, `${ro(wallArea)} m² × 2 fețe × ${layers} + 10%`, `${r1(wallArea)} m² × 2 sides × ${layers} + 10%`, {
     match: wet ? { type: "hidro" } : undefined,
   });
   b.need("uw_profile", (2 * L + doors * 1.2) * 1.05, "sus + jos (+ deasupra ușilor)", "top + bottom (+ door headers)");
-  b.need("cw_profile", studs * H * 1.05, `${studs} montanți × ${r1(H)} m`, `${studs} studs × ${r1(H)} m`, { members: [{ count: studs, lengthM: r2(H) }] });
+  b.need("cw_profile", studs * H * 1.05, `${studs} montanți × ${ro(H)} m`, `${studs} studs × ${r1(H)} m`, { members: [{ count: studs, lengthM: r2(H) }] });
   b.need("drywall_screws", boardArea * 18, "~18 șuruburi / m² de placă", "~18 screws per m² of board");
   b.need("anchor_dowels", Math.ceil((2 * L) / 0.5) + 4, "prindere UW la 50 cm", "UW fixing every 50 cm");
   b.need("sealing_tape", 2 * L + 2 * H, "sub profilele de contur", "under perimeter profiles");
