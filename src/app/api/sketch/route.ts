@@ -3,7 +3,9 @@ import { sanitizeState } from "@/agent/state";
 import { applySketchEdit } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
 import type { SketchOp } from "@/domain/layout";
+import { requirePassLink } from "@/lib/passToken";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { memberFromRequest } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -18,14 +20,18 @@ const OPS = new Set<SketchOp["op"]>([
  */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { memberId?: string; tenant?: string; lang?: "ro" | "en"; state?: unknown; edits?: unknown } | null;
-  if (!body?.memberId || !Array.isArray(body.edits)) return Response.json({ error: "memberId and edits required" }, { status: 400 });
+  // In product mode (signed pass links) the member comes from the session, so memberId is not required.
+  if (!body || !Array.isArray(body.edits) || (!body.memberId && !requirePassLink())) {
+    return Response.json({ error: "memberId and edits required" }, { status: 400 });
+  }
   const limit = rateLimit(`sketch:${clientKey(req)}`, 120, 10 * 60_000);
   if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfterS) } });
 
   const tenant = getTenant(body.tenant);
   const sources = getDataSources(tenant.id);
-  const customer = await sources.loyalty.getMember(body.memberId);
-  if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
+  const who = await memberFromRequest(req, sources, { tenantId: tenant.id, claimedMemberId: body.memberId });
+  if (!who.ok) return Response.json({ error: who.error }, { status: who.status });
+  const customer = who.customer;
   const stores = await sources.stores.list();
   const state = sanitizeState(body.state as never, stores.map((s) => s.id));
   const edits = (body.edits as SketchOp[]).filter((e) => e && typeof e === "object" && OPS.has(e.op)).slice(0, 12);

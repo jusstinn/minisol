@@ -7,6 +7,7 @@ import { sanitizeState } from "@/agent/state";
 import type { AgentEvent, SessionState } from "@/agent/types";
 import { getTenant } from "@/config/tenant";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { memberFromRequest } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -40,8 +41,10 @@ export async function POST(req: Request) {
 
   const tenant = getTenant(body.tenant);
   const sources = getDataSources(tenant.id);
-  const customer = await sources.loyalty.getMember(String(body.memberId ?? ""));
-  if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
+  // Product mode: the member comes from the pass-link session; body.memberId is ignored.
+  const who = await memberFromRequest(req, sources, { tenantId: tenant.id, claimedMemberId: body.memberId });
+  if (!who.ok) return Response.json({ error: who.error }, { status: who.status });
+  const customer = who.customer;
 
   const ip = clientKey(req);
   const hard = rateLimit(`all:${ip}`, 60, 10 * 60_000);
