@@ -82,6 +82,9 @@ export default function Board(props: Props) {
       }
       case "change":
         return <ChangeCard change={c.change} lang={lang} />;
+      case "sizes":
+        // Rendered in the conversation (it's a question to answer).
+        return null;
       case "quote":
         return (
           <QuotePanel

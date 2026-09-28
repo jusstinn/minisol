@@ -24,6 +24,7 @@ type Intent =
   | { kind: "project"; type: ProjectType; params: Record<string, unknown>; quality?: QualityTier; missing?: string }
   | { kind: "sketch"; edits: (Partial<SketchOp> | { op: "undo" })[] }
   | { kind: "view"; command: UiCommand }
+  | { kind: "sizes"; type?: ProjectType }
   | { kind: "choose"; text: string }
   | { kind: "remove"; text: string }
   | { kind: "move"; text: string }
@@ -171,6 +172,18 @@ export function parseView(t: string): UiCommand | null {
   return Object.keys(c).length ? c : null;
 }
 
+/** The project type mentioned in the latest earlier user message, if any. */
+function projectTypeFromHistory(history: unknown[] | undefined): ProjectType | undefined {
+  for (const it of [...(history ?? [])].reverse()) {
+    const m = it as { role?: string; content?: unknown };
+    if (m.role !== "user" || typeof m.content !== "string") continue;
+    const t = fold(m.content);
+    const found = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
+    if (found) return found;
+  }
+  return undefined;
+}
+
 export function parseIntent(raw: string, state: SessionState): Intent {
   const t = fold(raw);
   const quality: QualityTier | undefined = /\b(ieftin\w*|cheap\w*|budget|economic\w*)\b/.test(t)
@@ -181,6 +194,10 @@ export function parseIntent(raw: string, state: SessionState): Intent {
   const unsafe = UNSAFE.find(([, re]) => re.test(t));
   if (unsafe) return { kind: "unsafe", topic: unsafe[0] };
   const type = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
+  // "I don't know the size" → typical sizes + pace estimator (type may come from an earlier message).
+  if (/\b(nu stiu|nu cunosc|habar n-am|n-am masurat|nu am masurat|don'?t know|do not know|not sure|no idea)\b/.test(t) && !/\d/.test(t)) {
+    return { kind: "sizes", type: type ?? state.project?.type };
+  }
 
   const sameProject = state.project && (!type || type === state.project.type || /\b(arat\w*|show|evidentiaz\w*|highlight|scoate\w*|remove|alege\w*|choose)\b/.test(t));
   if (state.project && sameProject) {
@@ -420,7 +437,19 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang);
     }
   } else if (intent.kind === "project") {
+    yield* runTool("suggest_sizes", { projectType: intent.type }, 250);
     reply = askFor(intent.missing!, intent.type, lang);
+  } else if (intent.kind === "sizes") {
+    const type = intent.type ?? projectTypeFromHistory(opts.history);
+    if (type) {
+      yield* runTool("suggest_sizes", { projectType: type }, 250);
+      reply =
+        lang === "en"
+          ? "No problem — pick a typical size or pace it out below (one pace ≈ 75 cm). You can fine-tune everything in the sketch afterwards."
+          : "Nicio problemă — alege o dimensiune tipică sau măsoară cu pașii mai jos (un pas ≈ 75 cm). Poți ajusta totul din schiță după aceea.";
+    } else {
+      reply = lang === "en" ? "No problem — first, what would you like to build or renovate?" : "Nicio problemă — mai întâi, ce vrei să construiești sau să renovezi?";
+    }
   } else if (intent.kind === "sketch" && state.project) {
     const blank: Omit<SketchOp, "op"> = {
       zone: null, w: null, d: null, h: null, side: null, align: null, width: null, count: null, value: null,

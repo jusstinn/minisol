@@ -12,6 +12,7 @@ import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
 import CartDrawer from "../cart/CartDrawer";
+import SizesCard from "./SizesCard";
 import { ProductSheetProvider, useProductSheet } from "../board/ProductSheet";
 import type { UiSignal } from "@/lib/useAgent";
 import { IconArrowUp, IconBag, IconCheck, IconClose, Logo } from "../ui/icons";
@@ -315,7 +316,8 @@ function Rail({
                   {tr("error", lang)} <span className="font-mono text-[11px] opacity-70">({m.error})</span>
                 </div>
               )}
-              {m.cards.length > 0 && renderInlineBoard(m)}
+              {m.cards.map((c) => c.kind === "sizes" && <SizesCard key={c.id} card={c} lang={lang} onSend={onSend} disabled={busy} />)}
+              {m.cards.some((c) => c.kind !== "sizes") && renderInlineBoard(m)}
             </div>
           ),
         )}

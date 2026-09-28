@@ -174,3 +174,35 @@ describe("the chat can change everything on screen", () => {
     expect(b2.name).toMatch(/pin/i);
   }, 30000);
 });
+
+describe("customers who don't know their measurements", () => {
+  it("every preset and pace estimate is a complete project request (RO + EN)", async () => {
+    const { sizeHelp, estimateMessage } = await import("@/domain/sizes");
+    const { PROJECT_TYPES } = await import("@/domain/calculators");
+    for (const type of PROJECT_TYPES) {
+      for (const lang of ["ro", "en"] as const) {
+        const help = sizeHelp(type, lang);
+        const msgs = [...help.presets.map((p) => p.message), estimateMessage(type, lang, 4.5, 3)];
+        for (const m of msgs) {
+          const i = parseIntent(m, { basket: [] });
+          expect(i, `${type}/${lang}: ${m}`).toMatchObject({ kind: "project", type });
+          if (i.kind === "project") expect(i.missing, m).toBeUndefined();
+        }
+      }
+    }
+  });
+
+  it("shows sizes when dimensions are missing, and understands 'I don't know' later", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    const kinds = async (message: string, history: unknown[] = []) => {
+      const out: string[] = [];
+      for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state: { basket: [] }, lang: "ro", history })) if (ev.type === "card") out.push(ev.card.kind);
+      return out;
+    };
+    expect(await kinds("Vreau parchet nou")).toEqual(["sizes"]);
+    expect(parseIntent("Nu știu dimensiunile", { basket: [] })).toEqual({ kind: "sizes", type: undefined });
+    expect(await kinds("Nu știu dimensiunile", [{ role: "user", content: "Vreau un gard nou" }, { role: "assistant", content: "Cât de lung?" }])).toEqual(["sizes"]);
+  }, 20000);
+});

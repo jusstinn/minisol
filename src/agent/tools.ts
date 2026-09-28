@@ -11,6 +11,7 @@ import { bestPercentOff, buildQuote } from "@/domain/quote";
 import type { BasketItem, Quote } from "@/domain/quote";
 import { artOf } from "@/domain/art";
 import { lookForBasket } from "@/domain/look";
+import { sizeHelp } from "@/domain/sizes";
 import type { Look } from "@/domain/look";
 import { specHighlights } from "@/domain/specs";
 import { lineOptions, productLineKey, resolveRequirements } from "@/domain/resolve";
@@ -208,6 +209,19 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: "function" as const,
+    name: "suggest_sizes",
+    description:
+      "When the customer doesn't know their measurements (or only says 'small'/'big' and you're unsure), show typical sizes for the project, measuring tips and a pace-counting estimator they can tap. Then ask them to pick one or measure — they can fine-tune in the sketch later.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: { projectType: { type: "string", enum: [...PROJECT_TYPES] } },
+      required: ["projectType"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function" as const,
     name: "control_view",
     description:
       "Change what the customer SEES (no data changes): the 3D sketch view (blueprint / real / exploded layers), highlight one material in the sketch and the list (a role id from the shopping list, e.g. deck_joist, fence_post, wall_tiles; null clears), open the plan editor, scroll to a panel (sketch, list, stock, offers, plan), open the cart or the wallet shopping list, open a product's technical sheet, show the total paid with points. Use it whenever the customer asks to see, show, open or point out something. Set unused fields to null.",
@@ -305,6 +319,7 @@ export const TOOL_STATUS: Record<string, { ro: string; en: string }> = {
   calculate_project: { ro: "Calculez materialele și prețul", en: "Calculating materials and price" },
   edit_sketch: { ro: "Redesenez schița și recalculez", en: "Redrawing the sketch and recalculating" },
   control_view: { ro: "Îți arăt pe schiță", en: "Showing you" },
+  suggest_sizes: { ro: "Pregătesc dimensiuni tipice", en: "Preparing typical sizes" },
   modify_basket: { ro: "Actualizez lista de cumpărături", en: "Updating your shopping list" },
   search_products: { ro: "Caut în catalog", en: "Searching the catalogue" },
   check_stock: { ro: "Verific stocul în magazine", en: "Checking stock in stores" },
@@ -880,6 +895,19 @@ const handlers: Record<string, Handler> = {
       e.op === "set_option" && e.option != null ? { ...e, value: e.option } : e,
     ) as unknown as EditOp[];
     return applySketchEdit(ctx, edits, "agent");
+  },
+
+  async suggest_sizes(args, ctx) {
+    const type = args.projectType as ProjectType;
+    if (!PROJECT_TYPES.includes(type)) return { forModel: { error: `Unknown project type ${String(args.projectType)}` } };
+    const help = sizeHelp(type, ctx.lang);
+    return {
+      cards: [{ kind: "sizes", id: cardId("sizes"), projectType: type, help }],
+      forModel: {
+        shown: help.presets.map((p) => p.label),
+        note: "The customer sees these presets, measuring tips and a pace estimator as tappable buttons. Ask in one sentence which fits, or to pace it out — don't repeat the list.",
+      },
+    };
   },
 
   async control_view(args, ctx) {

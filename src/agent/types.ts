@@ -3,6 +3,7 @@ import type { BasketItem, Quote } from "@/domain/quote";
 import type { ArtSpec } from "@/domain/art";
 import type { Layout } from "@/domain/layout";
 import type { Look } from "@/domain/look";
+import type { SizeHelp } from "@/domain/sizes";
 import type { MaterialRole, Offer, QualityTier } from "@/domain/types";
 
 /** Conversation state the client round-trips with every request (server stays stateless). */
@@ -196,7 +197,9 @@ export type Card =
   | { kind: "offers"; id: string; offers: OfferView[] }
   | { kind: "products"; id: string; query: string; products: ProductView[] }
   | { kind: "plan"; id: string; plan: PlanView }
-  | { kind: "change"; id: string; change: SketchChange };
+  | { kind: "change"; id: string; change: SketchChange }
+  /** Typical sizes + a pace estimator, for customers who don't know their measurements. */
+  | { kind: "sizes"; id: string; projectType: ProjectType; help: SizeHelp };
 
 export type AgentEvent =
   | { type: "mode"; mode: "live" | "scripted"; reason?: string }
