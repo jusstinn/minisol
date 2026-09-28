@@ -1000,14 +1000,15 @@ const handlers: Record<string, Handler> = {
     for (const o of ops) {
       const sku = String(o.sku);
       const idx = basket.findIndex((b) => b.sku === sku);
-      const qty = typeof o.qty === "number" ? Math.round(o.qty) : undefined;
+      // Whatever the model (or an injected instruction) asks for, a line holds 1–999.
+      const qty = typeof o.qty === "number" && Number.isFinite(o.qty) ? Math.min(999, Math.round(o.qty)) : undefined;
       switch (o.op) {
         case "add": {
           const p = known.get(sku);
           if (!p) { errors.push(`Unknown SKU ${sku}`); break; }
           const sug = suggestions.find((sg) => sg.sku === sku);
           const n = qty && qty > 0 ? qty : sug?.qty ?? 1;
-          if (idx >= 0) basket[idx] = { ...basket[idx], qty: basket[idx].qty + n };
+          if (idx >= 0) basket[idx] = { ...basket[idx], qty: Math.min(999, basket[idx].qty + n) };
           else basket.push({ sku, qty: n, role: sug?.role ?? p.roles[0], basis: sug?.basis, isTool: p.isTool });
           suggestions = suggestions.filter((sg) => sg.sku !== sku);
           changes.push(`+${n} ${pn(p, ctx.lang)}`);
@@ -1033,7 +1034,7 @@ const handlers: Record<string, Handler> = {
           // Keep the same amount of material when pack sizes differ (e.g. 10 l → 15 l buckets).
           const sameUnit = oldP.content.unit === newP.content.unit && !oldP.isTool;
           const newQty = qty ?? (sameUnit ? Math.max(1, Math.ceil((basket[idx].qty * oldP.content.amount) / newP.content.amount - 1e-9)) : basket[idx].qty);
-          basket[idx] = { ...basket[idx], sku: withSku, qty: newQty, role: newP.roles[0], isTool: newP.isTool };
+          basket[idx] = { ...basket[idx], sku: withSku, qty: Math.min(999, Math.max(1, newQty)), role: newP.roles[0], isTool: newP.isTool };
           changes.push(`${oldP.name} → ${newQty}× ${newP.name}`);
           break;
         }

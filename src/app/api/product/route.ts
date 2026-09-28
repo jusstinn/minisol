@@ -4,6 +4,7 @@ import { AISLES } from "@/data/stores";
 import { productDetail } from "@/domain/detail";
 import type { StockAtStore } from "@/domain/detail";
 import { sessionFromRequest } from "@/lib/session";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 /**
  * Product sheet ("fișă tehnică"): names and description in the reader's language,
@@ -12,6 +13,8 @@ import { sessionFromRequest } from "@/lib/session";
  * GET /api/product?sku=11938736&tenant=hornbach&lang=ro&storeId=buc-militari
  */
 export async function GET(req: Request) {
+  const limit = rateLimit(`product:${clientKey(req)}`, 300, 10 * 60_000);
+  if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfterS) } });
   const q = new URL(req.url).searchParams;
   const tenant = getTenant(q.get("tenant"));
   // Product mode: only customers who arrived through a signed pass link (no member data here, just the gate).

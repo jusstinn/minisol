@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getTenant } from "@/config/tenant";
-import { passLinkSecret, requirePassLink, verifyPassToken } from "@/lib/passToken";
+import { claimOnce } from "@/lib/budget";
+import { maxLinkLifetimeS, passLinkSecret, requirePassLink, verifyPassToken } from "@/lib/passToken";
 import { createSession, sessionCookieName, sessionCookieOptions } from "@/lib/session";
 
 /**
@@ -12,7 +13,7 @@ import { createSession, sessionCookieName, sessionCookieOptions } from "@/lib/se
  * URL without `t`, so the token never stays in the address bar, history or Referer headers.
  * Only runs for page requests that carry `t` (see matcher); in the demo it is a no-op.
  */
-export function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   if (!requirePassLink()) return NextResponse.next();
 
   const secret = passLinkSecret();
@@ -22,7 +23,12 @@ export function proxy(req: NextRequest) {
   url.searchParams.delete("pass");
 
   const tenant = getTenant(url.searchParams.get("retailer"));
-  const v = verifyPassToken(token, { secret, tenant: tenant.id });
+  let v = verifyPassToken(token, { secret, tenant: tenant.id, maxLifetimeS: maxLinkLifetimeS() });
+  // Single-use links (when the pass backend mints one per tap): a second use is refused.
+  if (v.ok && process.env.PASS_LINK_SINGLE_USE === "1") {
+    const first = v.payload.n ? await claimOnce(`pass:${tenant.id}:${v.payload.n}`, (v.payload.exp + 120) * 1000 - Date.now()) : false;
+    if (!first) v = { ok: false, reason: "used" };
+  }
   const session = v.ok ? createSession(v.payload, secret) : null;
   const name = sessionCookieName();
 

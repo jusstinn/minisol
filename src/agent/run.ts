@@ -175,9 +175,13 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     const safe =
       lastQuote && state.project
         ? projectReply(lastQuote.quote, lastQuote, state.project.title, lang, state.suggestions)
-        : lang === "en"
-          ? "Here's your updated plan — all figures are in the cards on the right."
-          : "Iată planul actualizat — toate cifrele sunt în cardurile din dreapta.";
+        : lastQuote
+          ? lang === "en"
+            ? "Here's your updated plan — all figures are in the cards on the right."
+            : "Iată planul actualizat — toate cifrele sunt în cardurile din dreapta."
+          : lang === "en"
+            ? "I can't confirm that. Your real prices and offers are always in the cards next to this chat — tell me about your project and I'll work them out."
+            : "Nu pot confirma asta. Prețurile și ofertele tale reale sunt mereu în cardurile de lângă conversație — spune-mi ce proiect ai și le calculez.";
     yield { type: "replace_text", text: safe };
     // Drop the rejected reply from the history so the model doesn't see its own invented numbers next turn.
     for (let i = input.length - 1; i >= 0; i--) {

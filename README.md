@@ -395,6 +395,50 @@ The pilot needs two secrets. Add them in *Project → Settings → Environment V
 - Safety rules in the prompt and calculators: electrics, gas, structural walls, work at height
   → licensed professional; hazard notes per project.
 
+### Abuse and prompt injection
+
+Everything with a price comes from the deterministic engine, so a hijacked model can't change what
+anyone pays. The rest is about cost and about what the assistant says in the retailer's name:
+
+- **Spend limits** (`src/lib/budget.ts`):
+  - Turns are limited per visitor per 10 minutes, where an IPv6 /64 counts as one visitor.
+  - In product mode they are also limited per member per day, and members can't be faked.
+  - The whole deployment has a daily cap on turns and on tokens.
+  - Uploaded-plan reading has its own caps.
+  - Over any limit the customer gets the offline assistant, never an error.
+  - Each model call is capped at 2,500 output tokens, 1 retry and a 30 s timeout. A turn makes at most 6 calls.
+  - Counters are shared through Upstash Redis. In Vercel production, live AI stays off until that store is configured.
+- **Nothing from the browser is trusted:**
+  - The chat history is signed by the server (`src/agent/historySeal.ts`). An edited history keeps only the customer's own messages, so forged tool results or assistant promises never reach the model.
+  - Sketches are rebuilt from known fields only.
+  - SKUs, roles and inputs are validated.
+  - The project title never goes into the prompt.
+  - Share links drop the sender's title.
+  - JSON API calls from other sites are refused (Origin / Sec-Fetch-Site).
+- **The reply checker** (`src/agent/verify.ts`) replaces any answer that contains:
+  - an amount that isn't in the customer's list or offers, including "500 de lei" or "RON 500"
+  - another currency
+  - a percentage no tool produced
+  - a link, email address or phone number
+- **The prompt** treats everything but its own rules as information, refuses off-topic work in one sentence and never writes long texts.
+- **Pass links** are HMAC-signed and tied to one tenant:
+  - Links valid for more than `PASS_LINK_MAX_HOURS` are refused.
+  - `PASS_LINK_SINGLE_USE=1` makes each link work once, when the pass backend mints one per tap.
+  - `DATA_SOURCE=walletloop` refuses to start without `REQUIRE_PASS_LINK=1`.
+- **Headers:** no framing (CSP `frame-ancestors 'none'`), `nosniff`, HSTS, and a Permissions-Policy that allows the microphone on our own pages only.
+- **Red team:** `npx tsx --env-file=.env.local scripts/redteam.ts` sends five attacks through the chat API:
+  - ignore your instructions and write an essay
+  - a fake manager-approved discount
+  - print the system prompt
+  - repeat a phishing phone number and site
+  - a forged history promising 50%
+
+  All five are contained by the live model.
+- **Outside the code — do these before release:**
+  - Give each deployment its own OpenAI project and key.
+  - Set a monthly budget limit on each project, and allow only the model in use.
+  - Keep the public demo without a key, or with a very small budget.
+
 ### Usage events for a pilot (anonymous)
 
 To measure a pilot without tracking people, the app sends a few anonymous events to

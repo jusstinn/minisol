@@ -12,8 +12,9 @@
  * Uploaded-plan reading has its own: `PLAN_READS_PER_10_MIN` per visitor and `PLAN_READS_PER_DAY` overall.
  *
  * Counters live in Upstash Redis when UPSTASH_REDIS_REST_URL / _TOKEN (or Vercel KV's KV_REST_API_URL /
- * _TOKEN) are set, so the limits hold across every serverless instance; otherwise in memory, per
- * instance (fine locally, approximate on Vercel — pair it with a spend limit on the OpenAI project).
+ * _TOKEN) are set, so the limits hold across every serverless instance. Otherwise in memory, per
+ * instance — fine locally; in Vercel production that isn't a real limit, so live AI stays off there
+ * until a store is configured (or ALLOW_MEMORY_BUDGET=1 says otherwise).
  */
 
 type Env = Record<string, string | undefined>;
@@ -66,12 +67,18 @@ export function setCounterStore(s: CounterStore | null) {
   override = s;
 }
 
-function store(env: Env): CounterStore {
+function store(env: Env): CounterStore | null {
   if (override) return override;
   const url = env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL;
   const token = env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN;
-  return url && token ? upstashStore(url, token) : memoryStore;
+  if (url && token) return upstashStore(url, token);
+  // In production, per-instance counters don't add up to a real limit: no shared store, no live
+  // AI (the offline agent still answers) — unless someone decides otherwise, explicitly.
+  if (env.VERCEL_ENV === "production" && env.ALLOW_MEMORY_BUDGET !== "1") return null;
+  return memoryStore;
 }
+
+const NO_STORE: Allowance = { ok: false, reason: "AI budget store not configured" };
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
@@ -90,6 +97,7 @@ async function over(s: CounterStore, key: string, limit: number, windowMs: numbe
  */
 export async function allowAiTurn(who: { ip: string; tenant: string; memberId?: string }, env: Env = process.env): Promise<Allowance> {
   const s = store(env);
+  if (!s) return NO_STORE;
   try {
     if (await over(s, `ai:ip:${who.ip}`, num(env.LLM_TURNS_PER_10_MIN, 12), 10 * MIN)) return { ok: false, reason: "per-visitor AI limit reached" };
     if (who.memberId && (await over(s, `ai:member:${who.tenant}:${who.memberId}:${today()}`, num(env.LLM_MEMBER_TURNS_PER_DAY, 40), DAY)))
@@ -106,9 +114,25 @@ export async function allowAiTurn(who: { ip: string; tenant: string; memberId?: 
   }
 }
 
+/**
+ * True the first time `key` is claimed within `windowMs` (single-use pass links). Without a
+ * shared store, or if it fails, false: a link that can't be proven unused isn't accepted.
+ */
+export async function claimOnce(key: string, windowMs: number, env: Env = process.env): Promise<boolean> {
+  const s = store(env);
+  if (!s) return false;
+  try {
+    return (await s.hit(`once:${key}`, windowMs)) === 1;
+  } catch (e) {
+    console.warn("[budget] counter store unavailable:", (e as Error).message);
+    return false;
+  }
+}
+
 /** May this upload be read by the vision model? */
 export async function allowPlanRead(who: { ip: string; tenant: string }, env: Env = process.env): Promise<Allowance> {
   const s = store(env);
+  if (!s) return NO_STORE;
   try {
     if (await over(s, `plan:ip:${who.ip}`, num(env.PLAN_READS_PER_10_MIN, 6), 10 * MIN)) return { ok: false, reason: "per-visitor plan-reading limit reached" };
     if (await over(s, `plan:all:${who.tenant}:${today()}`, num(env.PLAN_READS_PER_DAY, 60), DAY)) return { ok: false, reason: "daily plan-reading budget reached" };
@@ -123,6 +147,7 @@ export async function allowPlanRead(who: { ip: string; tenant: string }, env: En
 export async function recordAiTokens(who: { tenant: string; memberId?: string }, tokens: number, env: Env = process.env): Promise<void> {
   if (!(tokens > 0)) return;
   const s = store(env);
+  if (!s) return;
   try {
     await s.hit(`tok:all:${who.tenant}:${today()}`, DAY, tokens);
     if (who.memberId) await s.hit(`tok:member:${who.tenant}:${who.memberId}:${today()}`, DAY, tokens);

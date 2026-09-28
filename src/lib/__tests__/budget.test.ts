@@ -59,6 +59,14 @@ describe("allowAiTurn", () => {
     expect(await allowAiTurn({ ip: "c", tenant: "hornbach", memberId: "WL-3" }, env)).toEqual({ ok: false, reason: "daily AI budget reached" });
   });
 
+  it("in Vercel production, no shared store means no live AI — unless explicitly allowed", async () => {
+    const prod = { VERCEL_ENV: "production" };
+    expect(await allowAiTurn({ ip: "p1", tenant: "demo" }, prod)).toEqual({ ok: false, reason: "AI budget store not configured" });
+    expect((await allowPlanRead({ ip: "p1", tenant: "demo" }, prod)).ok).toBe(false);
+    expect((await allowAiTurn({ ip: "p2", tenant: "demo" }, { ...prod, ALLOW_MEMORY_BUDGET: "1" })).ok).toBe(true);
+    expect((await allowAiTurn({ ip: "p3", tenant: "demo" }, { VERCEL_ENV: "preview" })).ok).toBe(true);
+  });
+
   it("fails closed when the counter store is down", async () => {
     setCounterStore({ hit: async () => Promise.reject(new Error("timeout")) });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

@@ -14,9 +14,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("proxy: signed pass link → session cookie", () => {
-  it("sets an httpOnly session cookie and redirects to the same URL without the token", () => {
+  it("sets an httpOnly session cookie and redirects to the same URL without the token", async () => {
     const link = buildPassLink({ memberId: "WL-RO-100231", tenant: "hornbach", hours: 1, secret: SECRET, baseUrl: BASE });
-    const res = proxy(new NextRequest(`${link}&lang=en`));
+    const res = await proxy(new NextRequest(`${link}&lang=en`));
     expect(res.status).toBe(303);
     const location = new URL(res.headers.get("location")!);
     expect(location.searchParams.get("t")).toBeNull();
@@ -35,32 +35,52 @@ describe("proxy: signed pass link → session cookie", () => {
     expect(verifySession(cookie.value, "hornbach")).toMatchObject({ memberId: "WL-RO-100231" });
   });
 
-  it("refuses a link for another retailer and clears any existing session", () => {
+  it("refuses a link for another retailer and clears any existing session", async () => {
     const link = buildPassLink({ memberId: "WL-RO-100231", tenant: "brico", secret: SECRET, baseUrl: BASE }).replace("retailer=brico", "retailer=hornbach");
-    const res = proxy(new NextRequest(link, { headers: { cookie: "blueprint_session=old" } }));
+    const res = await proxy(new NextRequest(link, { headers: { cookie: "blueprint_session=old" } }));
     const location = new URL(res.headers.get("location")!);
     expect(location.searchParams.get("t")).toBeNull();
     expect(location.searchParams.get("pass")).toBe("invalid");
     expect(res.cookies.get("blueprint_session")).toMatchObject({ value: "", maxAge: 0 });
   });
 
-  it("flags an expired link", () => {
+  it("flags an expired link", async () => {
     const link = buildPassLink({ memberId: "WL-RO-100231", tenant: "hornbach", hours: 1, secret: SECRET, baseUrl: BASE, now: Date.now() - 2 * 3600_000 });
-    const res = proxy(new NextRequest(link));
+    const res = await proxy(new NextRequest(link));
     expect(new URL(res.headers.get("location")!).searchParams.get("pass")).toBe("expired");
     expect(res.cookies.get("blueprint_session")?.value).toBe("");
   });
 
-  it("does nothing in the demo (REQUIRE_PASS_LINK unset)", () => {
+  it("does nothing in the demo (REQUIRE_PASS_LINK unset)", async () => {
     vi.stubEnv("REQUIRE_PASS_LINK", "");
     const link = buildPassLink({ memberId: "WL-RO-100231", tenant: "hornbach", secret: SECRET, baseUrl: BASE });
-    const res = proxy(new NextRequest(link));
+    const res = await proxy(new NextRequest(link));
     expect(res.headers.get("location")).toBeNull();
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
-  it("fails loudly in product mode without a secret", () => {
+  it("fails loudly in product mode without a secret", async () => {
     vi.stubEnv("PASS_LINK_SECRET", "");
-    expect(() => proxy(new NextRequest(`${BASE}/?t=v1.a.b`))).toThrow(/PASS_LINK_SECRET/);
+    await expect(proxy(new NextRequest(`${BASE}/?t=v1.a.b`))).rejects.toThrow(/PASS_LINK_SECRET/);
+  });
+});
+
+describe("proxy: link lifetime and single use", () => {
+  it("refuses a link valid for longer than PASS_LINK_MAX_HOURS", async () => {
+    vi.stubEnv("PASS_LINK_MAX_HOURS", "2");
+    const long = buildPassLink({ memberId: "WL-RO-100231", tenant: "hornbach", hours: 24 * 30, secret: SECRET, baseUrl: BASE });
+    const res = await proxy(new NextRequest(long));
+    expect(new URL(res.headers.get("location")!).searchParams.get("pass")).toBe("invalid");
+    expect(res.cookies.get("blueprint_session")?.value).toBe("");
+    const ok = buildPassLink({ memberId: "WL-RO-100231", tenant: "hornbach", hours: 1, secret: SECRET, baseUrl: BASE });
+    expect((await proxy(new NextRequest(ok))).cookies.get("blueprint_session")?.value).toMatch(/^v1\./);
+  });
+
+  it("with PASS_LINK_SINGLE_USE=1 a link works once", async () => {
+    vi.stubEnv("PASS_LINK_SINGLE_USE", "1");
+    const link = buildPassLink({ memberId: "WL-RO-100231", tenant: "hornbach", hours: 1, secret: SECRET, baseUrl: BASE });
+    expect((await proxy(new NextRequest(link))).cookies.get("blueprint_session")?.value).toMatch(/^v1\./);
+    const again = await proxy(new NextRequest(link));
+    expect(new URL(again.headers.get("location")!).searchParams.get("pass")).toBe("invalid");
   });
 });

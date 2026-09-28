@@ -2,6 +2,7 @@ import { getDataSources } from "@/adapters";
 import { basketLook, priceBasket } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
 import { readJson } from "@/lib/body";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
 import type { BasketItem } from "@/domain/quote";
 import { requirePassLink } from "@/lib/passToken";
 import { memberFromRequest } from "@/lib/session";
@@ -11,6 +12,8 @@ import { memberFromRequest } from "@/lib/session";
  * directly in the UI (qty steppers, "add suggestion", switch store).
  */
 export async function POST(req: Request) {
+  const limit = rateLimit(`quote:${clientKey(req)}`, 240, 10 * 60_000);
+  if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfterS) } });
   const parsed = await readJson(req, 256_000);
   if (!parsed.ok) return parsed.res;
   const body = parsed.body as { memberId?: string; items?: BasketItem[]; storeId?: string; tenant?: string; lang?: "ro" | "en" } | null;

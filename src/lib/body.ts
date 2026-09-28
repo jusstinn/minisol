@@ -19,10 +19,27 @@ export async function readCapped(req: Request, max: number): Promise<string | nu
 }
 
 /**
+ * A browser request from another site (a form or script on some other page posting to our API
+ * with the customer's session cookie). Browsers always send Origin on POST; other clients may not.
+ */
+export function crossSite(req: Request): boolean {
+  if (req.headers.get("sec-fetch-site") === "cross-site") return true;
+  const origin = req.headers.get("origin");
+  if (!origin || origin === "null") return origin === "null";
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  try {
+    return !host || new URL(origin).host !== host;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Parse a JSON body of at most `max` bytes. Returns the value, or the Response to send
- * (413 when too large, 400 when not JSON) — so a 10 MB body is never parsed.
+ * (403 from another site, 413 when too large, 400 when not JSON) — so a 10 MB body is never parsed.
  */
 export async function readJson(req: Request, max: number): Promise<{ ok: true; body: unknown } | { ok: false; res: Response }> {
+  if (crossSite(req)) return { ok: false, res: Response.json({ error: "Cross-site request refused" }, { status: 403 }) };
   let raw: string | null;
   try {
     raw = await readCapped(req, max);

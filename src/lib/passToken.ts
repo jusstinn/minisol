@@ -34,7 +34,7 @@ export interface PassPayload {
 /** "link": tokens minted by the pass backend. "session": the app's own session cookie. */
 export type TokenPurpose = "link" | "session";
 
-export type VerifyFailure = "malformed" | "version" | "signature" | "expired" | "tenant";
+export type VerifyFailure = "malformed" | "version" | "signature" | "expired" | "tenant" | "lifetime" | "used";
 export type VerifyResult = { ok: true; payload: PassPayload } | { ok: false; reason: VerifyFailure };
 
 export const PASS_TOKEN_VERSION = "v1";
@@ -104,7 +104,7 @@ export function signPassToken(payload: PassPayload, secret: string, purpose: Tok
 
 export function verifyPassToken(
   token: unknown,
-  opts: { secret: string; tenant: string; purpose?: TokenPurpose; now?: number },
+  opts: { secret: string; tenant: string; purpose?: TokenPurpose; now?: number; maxLifetimeS?: number },
 ): VerifyResult {
   if (typeof token !== "string" || !token || token.length > MAX_TOKEN_LENGTH) return { ok: false, reason: "malformed" };
   const parts = token.split(".");
@@ -131,6 +131,8 @@ export function verifyPassToken(
 
   const nowS = Math.floor((opts.now ?? Date.now()) / 1000);
   if (nowS > payload.exp + CLOCK_SKEW_S) return { ok: false, reason: "expired" };
+  // A link valid for months is a password printed on a card: refuse lifetimes above the limit.
+  if (opts.maxLifetimeS !== undefined && payload.exp - nowS > opts.maxLifetimeS + CLOCK_SKEW_S) return { ok: false, reason: "lifetime" };
   if (payload.t !== opts.tenant) return { ok: false, reason: "tenant" };
   return { ok: true, payload };
 }
@@ -163,4 +165,10 @@ export function buildPassLink(opts: {
   url.searchParams.set("retailer", opts.tenant);
   url.searchParams.set("t", token);
   return url.toString();
+}
+
+/** The longest a pass link may still be valid for, from PASS_LINK_MAX_HOURS (default 24). */
+export function maxLinkLifetimeS(env: Record<string, string | undefined> = process.env): number {
+  const h = Number(env.PASS_LINK_MAX_HOURS);
+  return Math.round((Number.isFinite(h) && h > 0 ? h : 24) * 3600);
 }

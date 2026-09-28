@@ -1,4 +1,5 @@
 import { getTenant } from "@/config/tenant";
+import { requirePassLink } from "@/lib/passToken";
 import { createDemoSources } from "./demo";
 import type { DataSources } from "./types";
 import { WalletLoopLoyaltyProvider } from "./walletloop";
@@ -16,6 +17,10 @@ export function getDataSources(tenantId?: string | null): DataSources {
   if (hit) return hit;
   let sources = createDemoSources(tenant);
   if (process.env.DATA_SOURCE === "walletloop") {
+    // Real members: never with the demo's member picker, where any memberId is accepted.
+    if (!requirePassLink()) {
+      throw new Error("DATA_SOURCE=walletloop requires REQUIRE_PASS_LINK=1 (real members must come from signed pass links)");
+    }
     const { WALLETLOOP_API_URL, WALLETLOOP_API_KEY, WALLETLOOP_PROGRAM_ID } = process.env;
     if (!WALLETLOOP_API_URL || !WALLETLOOP_API_KEY || !WALLETLOOP_PROGRAM_ID) {
       throw new Error("DATA_SOURCE=walletloop requires WALLETLOOP_API_URL, WALLETLOOP_API_KEY, WALLETLOOP_PROGRAM_ID");
