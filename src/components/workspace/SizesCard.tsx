@@ -99,13 +99,13 @@ function Stepper({ label, value, onChange, lang }: { label: string; value: numbe
     <div className="flex items-center gap-2">
       <span className="text-[12.5px] text-ink-3">{label}</span>
       <div className="flex items-center rounded-full border border-rule bg-paper">
-        <button onClick={() => onChange(Math.max(1, value - 1))} className="grid h-7 w-7 place-items-center text-ink-3 hover:text-ink" aria-label="−">
+        <button onClick={() => onChange(Math.max(1, value - 1))} className="grid h-7 w-7 place-items-center text-ink-3 hover:text-ink" aria-label={`${label}: ${lang === "en" ? "one pace less" : "un pas mai puțin"}`}>
           <IconMinus size={13} />
         </button>
         <span className="w-14 text-center font-mono text-[12.5px] tabular-nums">
           {value} {lang === "en" ? (value === 1 ? "pace" : "paces") : value === 1 ? "pas" : "pași"}
         </span>
-        <button onClick={() => onChange(Math.min(200, value + 1))} className="grid h-7 w-7 place-items-center text-ink-3 hover:text-ink" aria-label="+">
+        <button onClick={() => onChange(Math.min(200, value + 1))} className="grid h-7 w-7 place-items-center text-ink-3 hover:text-ink" aria-label={`${label}: ${lang === "en" ? "one pace more" : "un pas în plus"}`}>
           <IconPlus size={13} />
         </button>
       </div>

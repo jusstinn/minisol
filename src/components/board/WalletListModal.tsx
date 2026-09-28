@@ -78,7 +78,7 @@ export default function WalletListModal({
             style={{ perspective: 1400 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button onClick={onClose} className="absolute -top-12 right-0 grid h-9 w-9 place-items-center rounded-full bg-paper text-ink" aria-label="close">
+            <button onClick={onClose} className="absolute -top-12 right-0 grid h-9 w-9 place-items-center rounded-full bg-paper text-ink" aria-label={lang === "en" ? "Close" : "Închide"}>
               <IconClose size={18} />
             </button>
             <motion.div

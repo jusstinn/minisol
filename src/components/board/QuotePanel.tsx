@@ -433,11 +433,11 @@ function LineGroup({
                   <LowestPriceNote line={l} lang={lang} className="mt-0.5" />
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg border border-rule bg-paper">
-                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
+                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One less" : "Unul mai puțin"}: ${l.name}`}>
                         <IconMinus size={12} />
                       </button>
                       <span className="num w-7 text-center text-[12.5px] font-semibold">{l.qty}</span>
-                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
+                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One more" : "Încă unul"}: ${l.name}`}>
                         <IconPlus size={12} />
                       </button>
                     </div>
