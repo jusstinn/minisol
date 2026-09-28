@@ -162,10 +162,10 @@ const GENERIC_LAMP = /\b(lamp[ai]|lampa|lampi|becuri|bec|corp de iluminat|lumin[
 
 /** Where, in one clause: next to something, a corner, a wall/side (or nothing = the middle). */
 function placementIn(t: string, self?: ItemKind): Pick<SketchOp, "near" | "corner" | "wall"> {
-  const nearM = t.match(/\b(langa|linga|sub|deasupra|next to|by|near|beside|under|above|la)\s+(usa|usii|intrare|fereastra|ferestrei|geam|poarta|portii|trepte|treptele|scari|door|window|gate|steps|entrance)\b/);
+  const nearM = t.match(/\b(langa|linga|sub|deasupra|next to|by|near|beside|under|above|la)\s+(?:the\s+)?(usa|usii|intrare|fereastra|ferestrei|geam|poarta|portii|trepte|treptele|scari|door|window|gate|steps|entrance)\b/);
   let near: string | null = nearM ? (/usa|usii|intrare|door|entrance/.test(nearM[2]) ? "door" : /fereastr|geam|window/.test(nearM[2]) ? "window" : /poart|gate/.test(nearM[2]) ? "gate" : "steps") : null;
   if (!near) {
-    const nextTo = t.match(/\b(langa|linga|deasupra|next to|beside|above)\s+(\w+)/);
+    const nextTo = t.match(/\b(langa|linga|deasupra|next to|beside|above)\s+(?:the\s+)?(\w+)/);
     const anchor = nextTo && ITEM_PHRASES.find(([, re]) => re.test(nextTo[2]))?.[0];
     if (anchor && anchor !== self) near = anchor;
   }
@@ -200,7 +200,7 @@ function parseItems(t: string, type: ProjectType): Partial<SketchOp>[] | null {
   const placed: { kind: ItemKind; where: Pick<SketchOp, "near" | "corner" | "wall"> }[] = [];
   for (const c of clauses) {
     // The thing after "lângă / deasupra / sub" is where it goes, not something to add.
-    let kinds = kindsIn(c.replace(/\b(langa|linga|deasupra|sub|next to|beside|above|under|near|by)\s+\S+/g, " "));
+    let kinds = kindsIn(c.replace(/\b(langa|linga|deasupra|sub|next to|beside|above|under|near|by)\s+(?:the\s+)?\S+/g, " "));
     if (!kinds.length && GENERIC_LAMP.test(c)) kinds = [outdoor ? "garden_light" : /\b(perete\w*|wall)\b/.test(c) ? "wall_lamp" : "ceiling_lamp"];
     const where = placementIn(c, kinds[0]);
     if (!kinds.length) {

@@ -113,7 +113,29 @@ function wing(z: { w: number; d: number }) {
   return { w, d };
 }
 
+/** One "place something" suggestion per project, while the sketch has no items yet. */
+const ITEM_CHIP: Record<Layout["type"], [ro: string, en: string]> = {
+  tiling: ["Pune un vas WC lângă ușă", "Put a toilet next to the door"],
+  deck: ["Pune o masă pe terasă", "Put a table on the deck"],
+  paint_room: ["Adaugă o plafonieră", "Add a ceiling light"],
+  laminate_floor: ["Adaugă o plafonieră", "Add a ceiling light"],
+  lawn: ["Pune un grătar", "Add a BBQ grill"],
+  fence: ["Pune o lampă de grădină", "Add a garden light"],
+  drywall_partition: ["Pune o aplică pe perete", "Add a wall light"],
+};
+
 function shapeSteps(layout: Layout | undefined, lang: Lang): NextStep[] {
+  const en = lang === "en";
+  const out: NextStep[] = shapeOnly(layout, lang);
+  if (layout && !layout.items?.length) {
+    const [ro, e] = ITEM_CHIP[layout.type];
+    const prefix = { tiling: "tiling", deck: "deck", paint_room: "paint", laminate_floor: "laminate", lawn: "lawn", fence: "fence", drywall_partition: "drywall" }[layout.type];
+    out.splice(Math.min(1, out.length), 0, { id: `${prefix}.item`, kind: "shape", text: en ? e : ro });
+  }
+  return out;
+}
+
+function shapeOnly(layout: Layout | undefined, lang: Lang): NextStep[] {
   const en = lang === "en";
   const out: NextStep[] = [];
   if (!layout) return out;

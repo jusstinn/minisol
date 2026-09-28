@@ -94,7 +94,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   const putCard = useCallback((card: Card) => {
     // A basket changed by modify_basket no longer matches the tier comparison (that card has none),
     // but the per-job options still belong to the same project, so they carry over.
-    const heroShown = turnKinds.current.has("project") && (card.kind === "plan" || card.kind === "offers" || card.kind === "stock" || card.kind === "products");
+    const heroShown = turnKinds.current.has("project") && (card.kind === "quote" || card.kind === "plan" || card.kind === "offers" || card.kind === "stock" || card.kind === "products");
     turnKinds.current.add(card.kind);
     setBoard((b) => {
       const next = card.kind === "quote" && !card.choices && b.quote?.choices ? { ...card, choices: b.quote.choices } : card;
