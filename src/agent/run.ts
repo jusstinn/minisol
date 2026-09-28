@@ -43,7 +43,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let turnText = "";
   let lastQuote: Extract<Card, { kind: "quote" }> | undefined;
   let lastChange: Extract<Card, { kind: "change" }> | undefined;
-  const toolCtx = () => ({ sources: opts.sources, customer: opts.customer, state, lang, now });
+  const toolCtx = () => ({ sources: opts.sources, customer: opts.customer, state, lang, now, tenant: opts.tenant });
 
   // ── Fast first answer ──────────────────────────────────────────────────────
   // Deterministic work that doesn't need the model runs first and is handed to it
@@ -108,7 +108,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       // Plan/presentation tools run last so they see the final basket.
       const ordered = [...completed.toolCalls].sort((a, b) => Number(a.name === "present_plan") - Number(b.name === "present_plan"));
       for (const call of ordered) {
-        const result = await executeTool(call.name, call.arguments, { sources: opts.sources, customer: opts.customer, state, lang, now });
+        const result = await executeTool(call.name, call.arguments, { sources: opts.sources, customer: opts.customer, state, lang, now, tenant: opts.tenant });
         if (result.state) {
           state = result.state;
           yield { type: "state", state };
@@ -131,7 +131,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     if (!prefilled || turnText || opts.signal?.aborted || !lastQuote || !state.project) throw e;
     console.warn("[agent] model unavailable after prefill, finishing deterministically:", (e as Error).message);
     yield { type: "mode", mode: "scripted", reason: (e as Error).message.slice(0, 160) };
-    yield { type: "card", card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: scriptedPlan(state.project.type, state.project.inputs, lang) } };
+    yield { type: "card", card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined } } };
     const text = projectReply(lastQuote.quote, lastQuote, state.project.title, lang);
     turnText = text;
     yield { type: "text", delta: text };

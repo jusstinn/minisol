@@ -1,4 +1,6 @@
 import type { DataSources } from "@/adapters/types";
+import type { Tenant } from "@/config/tenant";
+import { scriptedPlan } from "./scripted-plans";
 import { AISLES } from "@/data/stores";
 import { CalculatorInputError, PROJECT_PARAM_DOCS, PROJECT_TYPES, calculateProject } from "@/domain/calculators";
 import type { CalculationResult, ProjectType } from "@/domain/calculators";
@@ -26,6 +28,8 @@ export interface ToolContext {
   state: SessionState;
   lang: Lang;
   now: Date;
+  /** Retailer settings (plan policy…); optional for data-only callers. */
+  tenant?: Tenant;
 }
 
 export interface ToolResult {
@@ -1129,7 +1133,17 @@ const handlers: Record<string, Handler> = {
     };
   },
 
-  async present_plan(args) {
+  async present_plan(args, ctx) {
+    const aiTips = (Array.isArray(args.tips) ? args.tips : []).map(String).slice(0, 8);
+    // Retailers that require approved plans get their reviewed template; the model's tips stay, labelled as AI.
+    if (ctx.tenant?.plans === "approved" && ctx.state.project) {
+      const template = scriptedPlan(ctx.state.project.type, ctx.state.project.inputs, ctx.lang);
+      const plan = { ...template, approvedBy: ctx.tenant.name, aiTips: aiTips.slice(0, 3) };
+      return {
+        cards: [{ kind: "plan", id: cardId("plan"), plan }],
+        forModel: { shown: true, note: `${ctx.tenant.name}'s approved plan for this project type was shown instead of your steps; your tips are shown as personalised AI tips. Don't restate the steps.` },
+      };
+    }
     const plan = {
       title: String(args.title ?? ""),
       summary: String(args.summary ?? ""),
@@ -1138,8 +1152,9 @@ const handlers: Record<string, Handler> = {
         detail: String(s.detail ?? ""),
         duration: typeof s.duration === "string" ? s.duration : null,
       })),
-      tips: (Array.isArray(args.tips) ? args.tips : []).map(String).slice(0, 8),
+      tips: aiTips,
       safetyWarnings: (Array.isArray(args.safetyWarnings) ? args.safetyWarnings : []).map(String).slice(0, 6),
+      source: "ai" as const,
     };
     return { cards: [{ kind: "plan", id: cardId("plan"), plan }], forModel: { shown: true } };
   },

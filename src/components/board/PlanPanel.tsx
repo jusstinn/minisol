@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import type { PlanView } from "@/agent/types";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
-import { IconWarn } from "../ui/icons";
+import { IconCheck, IconWarn } from "../ui/icons";
 import { PanelHeader } from "../ui/primitives";
 
 /** Parse "2 h", "1 zi", "30 min", "overnight" → hours (for the Gantt bars). */
@@ -26,6 +26,7 @@ export default function PlanPanel({ plan, lang }: { plan: PlanView; lang: Lang }
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4 sm:p-7">
       <PanelHeader index="05" title={tr("plan", lang)} />
+      <PlanSource plan={plan} lang={lang} />
       <motion.h3 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="display mt-4 text-[clamp(26px,3vw,40px)] text-ink">
         {plan.title}
       </motion.h3>
@@ -87,6 +88,22 @@ export default function PlanPanel({ plan, lang }: { plan: PlanView; lang: Lang }
               </div>
             </div>
           )}
+          {plan.aiTips && plan.aiTips.length > 0 && (
+            <div className="rounded-xl border border-dashed border-ink/20 px-4 py-3">
+              <div className="mb-2 flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">
+                <span className="rounded-[4px] border border-ink/20 px-1 text-[9.5px]">AI</span>
+                {lang === "en" ? "Personalised tips" : "Sfaturi personalizate"}
+              </div>
+              <ul className="space-y-1.5 text-[13px] leading-snug text-ink-2">
+                {plan.aiTips.map((t, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-accent" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {plan.safetyWarnings.length > 0 && (
             <div className="hazard rounded-xl p-[5px]">
               <div className="rounded-lg bg-card px-4 py-3">
@@ -106,6 +123,25 @@ export default function PlanPanel({ plan, lang }: { plan: PlanView; lang: Lang }
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Where the steps come from: the retailer's approved plan, a standard template, or the AI. */
+function PlanSource({ plan, lang }: { plan: PlanView; lang: Lang }) {
+  const en = lang === "en";
+  if (plan.source === "template") {
+    return (
+      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-ok/10 px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-ok">
+        <IconCheck size={12} />
+        {plan.approvedBy ? (en ? `Plan approved by ${plan.approvedBy}` : `Plan aprobat de ${plan.approvedBy}`) : en ? "Standard plan" : "Plan standard"}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-paper-2 px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-3" title={en ? "Always follow the manufacturer's instructions for each product." : "Urmează întotdeauna instrucțiunile producătorului pentru fiecare produs."}>
+      <span className="rounded-[4px] border border-ink/20 px-1 text-[9.5px]">AI</span>
+      {en ? "Written by AI for your project · indicative" : "Scris de AI pentru proiectul tău · orientativ"}
     </div>
   );
 }

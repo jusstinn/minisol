@@ -392,7 +392,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       ? "ro"
       : opts.lang;
   let state: SessionState = { ...opts.state, basket: opts.state.basket ?? [] };
-  const ctx = (): ToolContext => ({ sources: opts.sources, customer: opts.customer, state, lang, now: new Date() });
+  const ctx = (): ToolContext => ({ sources: opts.sources, customer: opts.customer, state, lang, now: new Date(), tenant: opts.tenant });
   const status = (tool: string): AgentEvent => ({ type: "status", tool, label: TOOL_STATUS[tool]?.[lang] ?? tool });
 
   yield { type: "mode", mode: "scripted", reason: opts.reason };
@@ -433,7 +433,14 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     } else {
       yield status("present_plan");
       await sleep(700);
-      yield { type: "card", card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: scriptedPlan(state.project.type, state.project.inputs, lang) } };
+      yield {
+        type: "card",
+        card: {
+          kind: "plan",
+          id: `plan-${Date.now().toString(36)}`,
+          plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined },
+        },
+      };
       reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang);
     }
   } else if (intent.kind === "project") {

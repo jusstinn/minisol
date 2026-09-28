@@ -71,3 +71,32 @@ describe("fast first answer", async () => {
     expect(names).toEqual(["get_customer_context"]);
   });
 });
+
+describe("plan policy per retailer", async () => {
+  const { executeTool } = await import("../tools");
+  const sources = getDataSources("demo");
+  const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+  const now = new Date();
+  const calc = await executeTool(
+    "calculate_project",
+    JSON.stringify({ projectType: "deck", params: { lengthM: 4, widthM: 3 }, quality: null, storeId: null, includeOptional: null, keepSketch: null }),
+    { sources, customer, state: { basket: [] }, lang: "ro", now },
+  );
+  const args = JSON.stringify({ title: "Plan AI", summary: "s", steps: [{ title: "Pas inventat", detail: "d", duration: null }], tips: ["Sfat AI"], safetyWarnings: [] });
+
+  it("an 'approved' retailer shows its reviewed plan, with the model's tips labelled as AI", async () => {
+    const r = await executeTool("present_plan", args, { sources, customer, state: calc.state!, lang: "ro", now, tenant: getTenant("hornbach") });
+    const plan = r.cards?.[0].kind === "plan" ? r.cards[0].plan : undefined;
+    expect(plan?.source).toBe("template");
+    expect(plan?.approvedBy).toBe("HORNBACH");
+    expect(plan?.steps.some((s) => s.title === "Pas inventat")).toBe(false);
+    expect(plan?.aiTips).toEqual(["Sfat AI"]);
+  });
+
+  it("an 'ai' retailer shows the model's plan, marked as AI", async () => {
+    const r = await executeTool("present_plan", args, { sources, customer, state: calc.state!, lang: "ro", now, tenant: getTenant("demo") });
+    const plan = r.cards?.[0].kind === "plan" ? r.cards[0].plan : undefined;
+    expect(plan?.source).toBe("ai");
+    expect(plan?.steps[0].title).toBe("Pas inventat");
+  });
+});

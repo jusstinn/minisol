@@ -23,6 +23,11 @@ export interface Tenant {
    * most people just want the list; the sketch is an extra). ?sketch=auto|on_demand overrides.
    */
   sketch: "auto" | "on_demand";
+  /**
+   * Step-by-step plans: "ai" lets the model write them (demo); "approved" always shows the
+   * retailer-reviewed template for the project type, with the model's tips labelled as AI.
+   */
+  plans: "ai" | "approved";
 }
 
 export const TENANTS: Record<string, Tenant> = {
@@ -36,6 +41,7 @@ export const TENANTS: Record<string, Tenant> = {
     country: "RO",
     currency: "RON",
     sketch: "auto",
+    plans: "ai",
   },
   hornbach: {
     id: "hornbach",
@@ -47,6 +53,7 @@ export const TENANTS: Record<string, Tenant> = {
     country: "RO",
     currency: "RON",
     sketch: "on_demand",
+    plans: "approved",
   },
   brico: {
     id: "brico",
@@ -58,6 +65,7 @@ export const TENANTS: Record<string, Tenant> = {
     country: "RO",
     currency: "RON",
     sketch: "on_demand",
+    plans: "approved",
   },
 };
 

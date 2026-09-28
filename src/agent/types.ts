@@ -175,6 +175,12 @@ export interface PlanView {
   steps: { title: string; detail: string; duration: string | null }[];
   tips: string[];
   safetyWarnings: string[];
+  /** "template": reviewed plan text; "ai": written by the model for this customer. */
+  source?: "template" | "ai";
+  /** Retailer that approved the template (tenants with plans: "approved"). */
+  approvedBy?: string;
+  /** The model's personalised tips next to an approved plan, labelled as AI. */
+  aiTips?: string[];
 }
 
 export type Card =

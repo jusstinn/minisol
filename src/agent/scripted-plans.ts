@@ -245,5 +245,5 @@ const PLANS: Record<ProjectType, Record<Lang, Template>> = {
 
 export function scriptedPlan(type: ProjectType, inputs: Inputs, lang: Lang): PlanView {
   const { safety, ...plan } = PLANS[type][lang](inputs);
-  return { ...plan, safetyWarnings: safety };
+  return { ...plan, safetyWarnings: safety, source: "template" };
 }
