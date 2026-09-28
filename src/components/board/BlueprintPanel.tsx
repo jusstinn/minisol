@@ -299,6 +299,8 @@ function SketchView({
               <button
                 key={m.id}
                 onClick={() => setMode(m.id)}
+                aria-pressed={mode === m.id}
+                aria-label={m.label}
                 className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-wider transition ${
                   mode === m.id ? "bg-accent text-on-accent" : dark ? "text-[#dce9ff] hover:text-white" : "text-ink-2 hover:text-ink"
                 }`}
@@ -312,6 +314,8 @@ function SketchView({
             {canEdit && (
               <button
                 onClick={() => setEditing((e) => !e)}
+                aria-pressed={editing}
+                aria-label={editing ? (en ? "Done editing" : "Gata cu modificările") : en ? "Edit sketch" : "Modifică schița"}
                 className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full px-2 font-mono sm:px-3 text-[10.5px] uppercase tracking-wider backdrop-blur transition ${
                   editing ? "bg-accent text-on-accent" : dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
                 }`}
@@ -321,10 +325,10 @@ function SketchView({
               </button>
             )}
             {up.button}
-            <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title="Replay">
+            <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>
-            <RoundBtn dark={dark} active={rotate && !editing} onClick={() => setRotate((r) => !r)} title="Rotate">
+            <RoundBtn dark={dark} active={rotate && !editing} onClick={() => setRotate((r) => !r)} title={en ? "Rotate" : "Rotește"}>
               <IconRotate size={15} />
             </RoundBtn>
           </div>
@@ -683,6 +687,8 @@ function RoundBtn({ children, dark, active, onClick, title }: { children: React.
   return (
     <button
       title={title}
+      aria-label={title}
+      aria-pressed={active}
       onClick={onClick}
       className={`grid h-8 w-8 place-items-center rounded-full backdrop-blur transition ${
         active ? "bg-accent text-on-accent" : dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
