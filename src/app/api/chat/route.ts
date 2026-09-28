@@ -6,6 +6,7 @@ import { runScriptedAgent } from "@/agent/scripted";
 import { sanitizeState } from "@/agent/state";
 import type { AgentEvent, SessionState } from "@/agent/types";
 import { getTenant } from "@/config/tenant";
+import { readJson } from "@/lib/body";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { memberFromRequest } from "@/lib/session";
 
@@ -30,12 +31,10 @@ interface ChatBody {
  * so the demo never dead-ends.
  */
 export async function POST(req: Request) {
-  let body: ChatBody;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  // History + state round-trip from the browser: a couple of MB at most, never parse more.
+  const parsed = await readJson(req, 2_000_000);
+  if (!parsed.ok) return parsed.res;
+  const body = parsed.body as ChatBody;
   // Valid JSON is not necessarily an object ("null", "[]", 5): never let a TypeError become a 500.
   if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "Expected a JSON object" }, { status: 400 });
   const message = (typeof body.message === "string" ? body.message : "").trim().slice(0, 2000);

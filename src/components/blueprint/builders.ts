@@ -581,7 +581,9 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang, 
   for (let i = 0; i <= Math.ceil(L / 0.6); i++) xs.push(-L / 2 + Math.min(i * 0.6, L));
   for (const d of doors) xs.push(d.x - d.w / 2, d.x + d.w / 2);
   xs.sort((a, b) => a - b);
-  xs.forEach((x, i) => {
+  // A door edge can land on a regular stud position: one stud there, not two.
+  const studs = xs.filter((x, i) => i === 0 || Math.abs(x - xs[i - 1]) > 0.005);
+  studs.forEach((x, i) => {
     if (inDoor(x, -0.01)) return;
     parts.push({ id: `cw-${Math.round(x * 100)}`, layer: "cw_profile", pos: [x, H / 2, 0], size: [0.05, H - 0.08, 0.075], color: C.stud, delay: 0.7 + i * 0.08, grow: "rise" });
   });

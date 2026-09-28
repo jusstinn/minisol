@@ -198,7 +198,15 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
     case "deck": {
       const L = num(i.lengthM, 4);
       const W = num(i.widthM, 3);
-      return { type, zones: [{ id: "A", x: -L / 2, z: -W / 2, w: L, d: W }], heightM: 0.18, steps: [], direction: "x", base: (i.base as "soil") ?? "soil" };
+      return {
+        type,
+        zones: [{ id: "A", x: -L / 2, z: -W / 2, w: L, d: W }],
+        // "terasă ridicată la 50 cm" at creation must give tall enough supports.
+        heightM: typeof i.heightM === "number" && Number.isFinite(i.heightM) ? Math.min(1.2, Math.max(0.1, i.heightM)) : 0.18,
+        steps: [],
+        direction: i.direction === "z" ? "z" : "x",
+        base: (i.base as "soil") ?? "soil",
+      };
     }
     case "laminate_floor": {
       const L = num(i.lengthM, 5);
@@ -214,8 +222,9 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
     }
     case "lawn": {
       const area = num(i.areaM2, 80);
-      const w = r2(Math.sqrt(area * 1.4));
-      const d = r2(area / w);
+      const w = Math.round(Math.sqrt(area * 1.4) * 10) / 10;
+      // Not rounded: 80 m² must stay 80 m² (not 79,98).
+      const d = Math.round((area / w) * 10000) / 10000;
       return { type, zones: [{ id: "A", x: -w / 2, z: -d / 2, w, d }], mode: i.mode === "overseed" ? "overseed" : "new" };
     }
     case "paint_room": {
@@ -504,8 +513,16 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         if (l.steps.length >= 4) fail("Maximum 4 seturi de trepte", "Maximum 4 flights of steps");
         const z = findZone(l.zones, o.zone);
         const side = o.side ?? "s";
+        // Only on an edge that's actually open (on an L-shape, not under the other wing).
+        const mid = side === "n" || side === "s" ? { x: z.x + z.w / 2, z: side === "n" ? z.z : z.z + z.d } : { x: side === "w" ? z.x : z.x + z.w, z: z.z + z.d / 2 };
+        const open = exposedEdges(l.zones).some(
+          (e) => e.side === side && mid.x >= Math.min(e.x1, e.x2) - 0.01 && mid.x <= Math.max(e.x1, e.x2) + 0.01 && mid.z >= Math.min(e.z1, e.z2) - 0.01 && mid.z <= Math.max(e.z1, e.z2) + 0.01,
+        );
+        if (!open) fail(`Latura de ${SIDE_NAMES[side].ro} a zonei ${z.id} e lipită de altă zonă — alege altă latură`, `The ${SIDE_NAMES[side].en} side of zone ${z.id} joins another zone — pick another side`);
         const width = dim(o.width ?? Math.min(1.5, wallLength(z.w, z.d, side)), "width", 0.6, wallLength(z.w, z.d, side));
-        const count = Math.round(clamp(Number(o.count ?? Math.max(1, Math.round(l.heightM / 0.17))), 1, 6));
+        // ~17 cm per step; never more steps than the height needs.
+        const maxSteps = Math.max(1, Math.ceil(l.heightM / 0.15));
+        const count = Math.round(clamp(Number(o.count ?? Math.max(1, Math.round(l.heightM / 0.17))), 1, Math.min(6, maxSteps)));
         l.steps.push({ id: nid("st"), zone: z.id, side, width, count });
         say(
           `${count} ${count === 1 ? "treaptă" : "trepte"} de ${fmt(width, lang)} m pe latura de ${SIDE_NAMES[side].ro}`,
@@ -515,6 +532,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
       }
       case "remove_steps": {
         if (l.type !== "deck") fail("Treptele sunt doar pentru terase", "Steps are only for decks");
+        if (!l.steps.length) fail("Terasa nu are trepte", "The deck has no steps");
         l.steps = [];
         say("Treptele au fost eliminate", "Removed the steps");
         break;
@@ -556,19 +574,25 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
           if (kind === "window" && l.type !== "paint_room") fail("Ferestrele contează doar la zugrăvit", "Windows only affect painting projects here");
           const list = l.openings;
           if (list.length >= 8) fail("Maximum 8 goluri", "Maximum 8 openings");
-          const wall = (o.wall ?? o.side ?? (kind === "window" ? "n" : "s")) as Side;
+          const wall = (l.type === "drywall_partition" ? "s" : (o.wall ?? o.side ?? (kind === "window" ? "n" : "s"))) as Side;
           const width = dim(o.width ?? (kind === "window" ? 1.2 : 0.9), "width", 0.5, 3);
-          list.push({
-            id: nid(kind[0]),
-            kind,
-            wall,
-            zone: l.type === "laminate_floor" ? (o.zone ?? l.zones[0].id) : undefined,
-            pos: clamp(Number(o.pos ?? 0.5), 0.1, 0.9),
-            width,
-            height: kind === "window" ? 1.5 : 2.05,
-          });
+          const zone = l.type === "laminate_floor" ? (o.zone ?? l.zones[0].id) : undefined;
+          const wallLen =
+            l.type === "drywall_partition" ? l.length : l.type === "laminate_floor" ? (() => { const z = findZone(l.zones, zone); return wallLength(z.w, z.d, wall); })() : wallLength(l.w, l.d, wall);
+          // Don't stack a new opening on an existing one: take the requested spot, else the widest free gap.
+          const taken = list.filter((x) => x.wall === wall && x.zone === zone).map((x) => [x.pos * wallLen - x.width / 2 - 0.1, x.pos * wallLen + x.width / 2 + 0.1] as const);
+          const free = (c: number) => c - width / 2 >= 0.05 && c + width / 2 <= wallLen - 0.05 && taken.every(([a, b]) => c + width / 2 <= a || c - width / 2 >= b);
+          let centre = clamp(Number(o.pos ?? 0.5), 0.1, 0.9) * wallLen;
+          if (!free(centre)) {
+            const candidates: number[] = [];
+            for (let c = width / 2 + 0.05; c <= wallLen - width / 2 - 0.05; c += 0.05) if (free(c)) candidates.push(c);
+            if (!candidates.length) fail("Nu mai e loc pe peretele ăsta pentru încă un gol", "There's no room left on that wall for another opening");
+            centre = candidates.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre))[0];
+          }
+          list.push({ id: nid(kind[0]), kind, wall, zone, pos: r2(centre / wallLen), width, height: kind === "window" ? 1.5 : 2.05 });
           const label = kind === "door" ? (en ? "door" : "ușă") : en ? "window" : "fereastră";
-          say(`Adăugată ${label} (${fmt(width, lang)} m) pe peretele de ${SIDE_NAMES[wall]?.ro ?? wall}`, `Added a ${label} (${fmt(width, lang)} m) on the ${SIDE_NAMES[wall]?.en ?? wall} wall`);
+          if (l.type === "drywall_partition") say(`Adăugată ${label} (${fmt(width, lang)} m) în perete`, `Added a ${label} (${fmt(width, lang)} m) in the wall`);
+          else say(`Adăugată ${label} (${fmt(width, lang)} m) pe peretele de ${SIDE_NAMES[wall]?.ro ?? wall}`, `Added a ${label} (${fmt(width, lang)} m) on the ${SIDE_NAMES[wall]?.en ?? wall} wall`);
         } else fail("Proiectul nu are uși sau ferestre", "This project has no openings");
         break;
       }
@@ -653,7 +677,8 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         else if (l.type === "drywall_partition" && key === "doubleLayer") l.doubleLayer = bool;
         else if (l.type === "lawn" && key === "mode" && ["new", "overseed"].includes(String(v))) l.mode = v as "new";
         else fail(`Opțiunea „${key}” = ${JSON.stringify(v)} nu e validă pentru acest proiect`, `Option "${key}" = ${JSON.stringify(v)} is not valid for this project`);
-        say(`Setare actualizată: ${key}`, `Updated setting: ${key}`);
+        const [ro, enTxt] = optionSays(key, v, bool);
+        say(ro, enTxt);
         break;
       }
       case "add_item": {
@@ -700,6 +725,38 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
   // Coordinates stay put across edits (the scene centres the drawing itself), so
   // unchanged parts keep their exact position and only real changes animate.
   return { layout: l, changes };
+}
+
+/** What a changed option means, in words ("Fără tavan", "Montaj diagonal"). */
+function optionSays(key: string, v: unknown, on: boolean): [string, string] {
+  switch (key) {
+    case "base":
+      return v === "gravel" ? ["Bază: pietriș", "Base: gravel"] : v === "concrete_slab" ? ["Bază: placă de beton", "Base: concrete slab"] : ["Bază: pământ", "Base: soil"];
+    case "direction":
+      return v === "z" ? ["Deck-ul pe lățime", "Boards across"] : ["Deck-ul pe lungime", "Boards lengthwise"];
+    case "pattern":
+      return v === "diagonal" ? ["Montaj diagonal", "Laid diagonally"] : ["Montaj drept", "Laid straight"];
+    case "subfloor":
+      return v === "wood" ? ["Suport: lemn", "Subfloor: wood"] : v === "old_tiles" ? ["Suport: gresie veche", "Subfloor: old tiles"] : ["Suport: beton", "Subfloor: concrete"];
+    case "ceiling":
+      return on ? ["Cu tavan", "Ceiling included"] : ["Fără tavan", "No ceiling"];
+    case "coats":
+      return [`${Number(v)} ${Number(v) === 1 ? "strat" : "straturi"} de vopsea`, `${Number(v)} coat${Number(v) === 1 ? "" : "s"} of paint`];
+    case "surface":
+      return v === "fresh_plaster" ? ["Perete: tencuială nouă", "Wall: fresh plaster"] : v === "dark_to_light" ? ["De la culoare închisă la deschisă", "Dark to light colour"] : ["Revopsire", "Repaint"];
+    case "floor":
+      return on ? ["Cu gresie pe pardoseală", "Floor tiles included"] : ["Fără gresie pe pardoseală", "No floor tiles"];
+    case "largeFormat":
+      return on ? ["Plăci mari (≥ 60 cm)", "Large-format tiles"] : ["Plăci standard", "Standard tiles"];
+    case "insulation":
+      return on ? ["Cu vată minerală", "With mineral wool"] : ["Fără izolație", "No insulation"];
+    case "doubleLayer":
+      return on ? ["Placare dublă", "Double boarding"] : ["Placare simplă", "Single boarding"];
+    case "mode":
+      return v === "overseed" ? ["Reînsămânțare", "Overseeding"] : ["Gazon nou", "New lawn"];
+    default:
+      return [`Setare actualizată: ${key}`, `Updated setting: ${key}`];
+  }
 }
 
 /**

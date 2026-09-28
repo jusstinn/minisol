@@ -217,3 +217,33 @@ describe("the sketch shows the products actually chosen", () => {
     expect(b.filter((id) => a.includes(id)).length / b.length).toBeGreaterThan(0.9);
   });
 });
+
+describe("QA follow-ups", () => {
+  it("a raised deck requested up front gets its height (and tall supports)", () => {
+    const l = defaultLayout("deck", { lengthM: 4, widthM: 3, heightM: 0.5 });
+    expect(l.type === "deck" && l.heightM).toBe(0.5);
+  });
+  it("80 m² of lawn stays 80 m²", () => {
+    const r = calc(defaultLayout("lawn", { areaM2: 80 }));
+    expect(r.measurements.find((m) => m.unit === "m²")!.value).toBe(80);
+  });
+  it("steps can't go on a side covered by another zone; no phantom step removal", () => {
+    const l = applyOps(defaultLayout("deck", { lengthM: 4, widthM: 3 }), [{ op: "add_zone", zone: "A", side: "e", w: 2, d: 3 }]).layout;
+    expect(() => applyOps(l, [{ op: "add_steps", zone: "A", side: "e" }])).toThrow(SketchEditError);
+    expect(() => applyOps(l, [{ op: "remove_steps" }])).toThrow(SketchEditError);
+  });
+  it("a second door goes into a free spot instead of on top of the first", () => {
+    const l0 = defaultLayout("drywall_partition", { lengthM: 3.5, doors: 1 });
+    const l = applyOps(l0, [{ op: "add_opening", kind: "door" }]).layout;
+    if (l.type !== "drywall_partition") throw new Error();
+    const [a, b] = l.openings.map((o) => o.pos * 3.5);
+    expect(Math.abs(a - b)).toBeGreaterThanOrEqual(0.9);
+    expect(() => applyOps(defaultLayout("drywall_partition", { lengthM: 1.2, doors: 1 }), [{ op: "add_opening", kind: "door" }])).toThrow(SketchEditError);
+    const b3 = buildLayout(l, "ro");
+    expect(new Set(b3.parts.map((p) => p.id)).size).toBe(b3.parts.length);
+  });
+  it("option changes are described in words", () => {
+    const { changes } = applyOps(defaultLayout("paint_room", { lengthM: 4, widthM: 3 }), [{ op: "set_option", key: "ceiling", value: false }], "ro");
+    expect(changes[0]).toBe("Fără tavan");
+  });
+});

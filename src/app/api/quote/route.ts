@@ -1,6 +1,7 @@
 import { getDataSources } from "@/adapters";
 import { basketLook, priceBasket } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
+import { readJson } from "@/lib/body";
 import type { BasketItem } from "@/domain/quote";
 import { requirePassLink } from "@/lib/passToken";
 import { memberFromRequest } from "@/lib/session";
@@ -10,7 +11,9 @@ import { memberFromRequest } from "@/lib/session";
  * directly in the UI (qty steppers, "add suggestion", switch store).
  */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as { memberId?: string; items?: BasketItem[]; storeId?: string; tenant?: string; lang?: "ro" | "en" } | null;
+  const parsed = await readJson(req, 256_000);
+  if (!parsed.ok) return parsed.res;
+  const body = parsed.body as { memberId?: string; items?: BasketItem[]; storeId?: string; tenant?: string; lang?: "ro" | "en" } | null;
   // In product mode (signed pass links) the member comes from the session, so memberId is not required.
   if (!body || !Array.isArray(body.items) || (!body.memberId && !requirePassLink())) {
     return Response.json({ error: "memberId and items required" }, { status: 400 });

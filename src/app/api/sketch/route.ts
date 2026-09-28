@@ -5,6 +5,7 @@ import type { EditOp } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
 import { explainEditError } from "@/lib/editErrors";
 import { requirePassLink } from "@/lib/passToken";
+import { readJson } from "@/lib/body";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { memberFromRequest } from "@/lib/session";
 
@@ -22,7 +23,9 @@ const OPS = new Set<EditOp["op"]>([
  * edit ops as the agent's edit_sketch, recalculated and re-priced in one call.
  */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as { memberId?: string; tenant?: string; lang?: "ro" | "en"; state?: unknown; edits?: unknown } | null;
+  const parsed = await readJson(req, 512_000);
+  if (!parsed.ok) return parsed.res;
+  const body = parsed.body as { memberId?: string; tenant?: string; lang?: "ro" | "en"; state?: unknown; edits?: unknown } | null;
   // In product mode (signed pass links) the member comes from the session, so memberId is not required.
   if (!body || !Array.isArray(body.edits) || (!body.memberId && !requirePassLink())) {
     return Response.json({ error: "memberId and edits required" }, { status: 400 });

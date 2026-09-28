@@ -9,7 +9,7 @@ import { exposedEdges, fenceSegments } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
-import { dec } from "@/lib/format";
+import { dec, unitText } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { UiSignal } from "@/lib/useAgent";
 import type { LiteGraphics } from "@/lib/useLiteGraphics";
@@ -285,7 +285,7 @@ function SketchView({
               <motion.div key={m.label} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i * 0.12 }} className="flex gap-2">
                 <span className={dark ? "text-[#8fb0e8]" : "text-ink-3"}>{m.label}</span>
                 <motion.span key={`${m.value}`} initial={{ opacity: 0.3 }} animate={{ opacity: 1 }} className="font-medium">
-                  {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} {m.unit}
+                  {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} {unitText(m.unit, lang)}
                 </motion.span>
               </motion.div>
             ))}
@@ -338,7 +338,9 @@ function SketchView({
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className={`pointer-events-none absolute bottom-[58px] left-6 hidden gap-3 rounded-full px-3 py-1.5 font-mono text-[10.5px] tracking-wide backdrop-blur sm:flex ${
+              className={`pointer-events-none absolute left-6 hidden gap-3 rounded-full px-3 py-1.5 font-mono text-[10.5px] tracking-wide backdrop-blur sm:flex ${
+                editing ? "bottom-[92px]" : "bottom-[58px]"
+              } ${
                 dark ? "bg-[#0a1f47]/75 text-[#e6efff] ring-1 ring-[#dce9ff]/25" : "bg-white/80 text-ink ring-1 ring-ink/10"
               }`}
             >
@@ -588,7 +590,7 @@ function SketchCta({ project, lang, inline, onOpen }: { project: ProjectSnapshot
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[11px] text-[#dce9ff]">
             {project.measurements.slice(0, 3).map((m) => (
               <span key={m.label}>
-                <span className="text-[#8fb0e8]">{m.label}</span> {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} {m.unit}
+                <span className="text-[#8fb0e8]">{m.label}</span> {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} {unitText(m.unit, lang)}
               </span>
             ))}
           </div>

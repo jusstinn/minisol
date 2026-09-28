@@ -4,6 +4,8 @@ import { PLAN_READ_MAX_BODY, validatePlanReadBody } from "@/lib/planRead";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { sessionFromRequest } from "@/lib/session";
 
+import { readCapped } from "@/lib/body";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,25 +21,6 @@ export async function GET(req: Request) {
   const tenant = getTenant(new URL(req.url).searchParams.get("tenant"));
   const who = sessionFromRequest(req, tenant.id);
   return Response.json({ available: who.ok && planReadAvailable() }, { headers: { "Cache-Control": "no-store" } });
-}
-
-/** The body as text, or null once it grows past `max` bytes (never buffers more than that). */
-async function readCapped(req: Request, max: number): Promise<string | null> {
-  if (!req.body) return "";
-  const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel().catch(() => {});
-      return null;
-    }
-    chunks.push(value);
-  }
-  return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
 export async function POST(req: Request) {

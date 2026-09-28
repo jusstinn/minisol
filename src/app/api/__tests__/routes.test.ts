@@ -76,3 +76,12 @@ describe("POST /api/quote and /api/sketch input validation", () => {
     expect(res.status).toBeLessThan(500);
   });
 });
+
+describe("request size caps", () => {
+  it("refuses oversized bodies with 413 before parsing them", async () => {
+    const { POST } = await import("../chat/route");
+    const big = JSON.stringify({ memberId: "WL-RO-100231", message: "x".repeat(2_100_000) });
+    const res = await POST(new Request("http://t/api/chat", { method: "POST", body: big, headers: { "content-type": "application/json" } }));
+    expect(res.status).toBe(413);
+  });
+});

@@ -19,7 +19,7 @@ import { dec } from "@/lib/format";
 const VW = 360;
 const VH = 240;
 const PAD = 36;
-const snap = (v: number, step = 0.1) => Math.round(v / step) * step;
+const snap = (v: number, step = 0.1) => Math.round(Math.round(v / step) * step * 1000) / 1000;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 interface Frame {
@@ -204,8 +204,15 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
       key={key}
       role="button"
       tabIndex={0}
-      className="cursor-pointer"
+      aria-label={items.map((i) => i.label).join(" / ")}
+      className="cursor-pointer outline-none focus-visible:[&>circle]:stroke-[3px]"
       onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        if (items.length === 1) void run(items[0].ops);
+        else setMenu({ x, y, items });
+      }}
       onClick={(e) => {
         e.stopPropagation();
         if (items.length === 1) void run(items[0].ops);
@@ -221,8 +228,15 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
     <g
       key={key}
       role="button"
-      className="cursor-pointer"
+      tabIndex={0}
+      aria-label={en ? "Remove" : "Elimină"}
+      className="cursor-pointer outline-none"
       onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        void run(ops);
+      }}
       onClick={(e) => {
         e.stopPropagation();
         void run(ops);
