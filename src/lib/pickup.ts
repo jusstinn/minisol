@@ -153,6 +153,25 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.g
 
 export const slotTime = (s: PickupSlot) => `${hhmm(s.start)}–${hhmm(s.end)}`;
 
+const DAY_SHORT = { ro: ["D", "L", "Ma", "Mi", "J", "V", "S"], en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] } as const;
+const mm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/** Opening hours in the customer's language, Monday first: "L–S 07:00–21:00, D 09:00–19:00" / "Mon–Sat 07:00–21:00, Sun 09:00–19:00". */
+export function formatHours(week: WeekHours, lang: Lang): string {
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const same = (a: DayHours | null, b: DayHours | null) => (a && b ? a.open === b.open && a.close === b.close : a === b);
+  const runs: { from: number; to: number; h: DayHours }[] = [];
+  for (const d of order) {
+    const h = week[d];
+    if (!h) continue;
+    const last = runs[runs.length - 1];
+    if (last && same(week[last.to], h) && order.indexOf(d) === order.indexOf(last.to) + 1) last.to = d;
+    else runs.push({ from: d, to: d, h });
+  }
+  const names = DAY_SHORT[lang];
+  return runs.map((r) => `${names[r.from]}${r.from === r.to ? "" : `–${names[r.to]}`} ${mm(r.h.open)}–${mm(r.h.close)}`).join(", ");
+}
+
 export function dayLabel(offset: number, date: Date, lang: Lang): string {
   if (offset === 0) return lang === "en" ? "Today" : "Azi";
   if (offset === 1) return lang === "en" ? "Tomorrow" : "Mâine";

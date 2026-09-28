@@ -6,7 +6,7 @@ import { STORES } from "@/data/stores";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { dec, lei } from "@/lib/format";
-import { dateTimeLabel, dayLabel, heldUntil, parseOpeningHours, pickupSlots, reservationCode, slotLabel, slotTime, storeCheck } from "@/lib/pickup";
+import { dateTimeLabel, dayLabel, formatHours, heldUntil, parseOpeningHours, pickupSlots, reservationCode, slotLabel, slotTime, storeCheck } from "@/lib/pickup";
 import type { PickupSlot } from "@/lib/pickup";
 import { IconArrow, IconCheck, IconClock, IconPin, IconWallet, IconWarn } from "../ui/icons";
 import { Barcode } from "../ui/primitives";
@@ -135,7 +135,7 @@ export function ReservePickup({
                 <div className="text-[14px] font-semibold text-ink">{quote.storeName}</div>
                 <div className="font-mono text-[10.5px] leading-relaxed text-ink-3">
                   {info.address ? `${info.address} · ` : ""}
-                  {info.hours ?? (en ? "08:00–20:00 daily" : "zilnic 08:00–20:00")}
+                  {formatHours(info.week, lang)}
                 </div>
               </div>
               {onMoveStore && nearby.length > 1 && (

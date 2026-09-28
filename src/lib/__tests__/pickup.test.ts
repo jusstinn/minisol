@@ -4,7 +4,7 @@ import { executeTool } from "@/agent/tools";
 import type { Card } from "@/agent/types";
 import { getTenant } from "@/config/tenant";
 import { STORES } from "@/data/stores";
-import { DEFAULT_HOURS, dayLabel, heldUntil, parseOpeningHours, pickupSlots, reservationCode, slotLabel, slotTime, storeCheck } from "../pickup";
+import { DEFAULT_HOURS, dayLabel, formatHours, heldUntil, parseOpeningHours, pickupSlots, reservationCode, slotLabel, slotTime, storeCheck } from "../pickup";
 
 const STANDARD = "L–S 07:00–21:00, D 09:00–19:00";
 // 2026-09-29 is a Tuesday. Local time on purpose: slots are in the customer's own time.
@@ -28,6 +28,13 @@ describe("parseOpeningHours", () => {
   it("falls back to 08–20 every day", () => {
     expect(parseOpeningHours(undefined)).toEqual(Array(7).fill(DEFAULT_HOURS));
     expect(parseOpeningHours("nonstop, sună-ne")).toEqual(Array(7).fill(DEFAULT_HOURS));
+  });
+
+  it("writes the hours back in the customer's language", () => {
+    expect(formatHours(parseOpeningHours(STANDARD), "ro")).toBe("L–S 07:00–21:00, D 09:00–19:00");
+    expect(formatHours(parseOpeningHours(STANDARD), "en")).toBe("Mon–Sat 07:00–21:00, Sun 09:00–19:00");
+    expect(formatHours(parseOpeningHours("L–V 08:00–20:00, S 08:00–14:00"), "en")).toBe("Mon–Fri 08:00–20:00, Sat 08:00–14:00");
+    expect(formatHours(parseOpeningHours(undefined), "ro")).toBe("L–D 08:00–20:00");
   });
 
   it("every demo store has readable hours", () => {
