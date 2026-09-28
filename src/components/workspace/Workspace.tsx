@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
+import { lei } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { useAgent } from "@/lib/useAgent";
 import { useMediaQuery } from "@/lib/useMediaQuery";
@@ -127,7 +128,7 @@ export default function Workspace({
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
       <header className="flex items-center gap-2 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:gap-3 sm:px-6">
-        <button onClick={onExit} className="flex items-center gap-2" title={tr("newProject", lang)}>
+        <button onClick={onExit} className="flex items-center gap-2 rounded-lg" title={tr("newProject", lang)} aria-label={`Blueprint — ${tr("newProject", lang)}`}>
           <Logo className="text-ink" />
           <span className="display text-[17px] leading-none">Blueprint</span>
         </button>
@@ -137,6 +138,12 @@ export default function Workspace({
         <button
           onClick={() => setOffline((o) => !o)}
           title={agent.mode?.reason ?? ""}
+          aria-pressed={offline}
+          aria-label={
+            offline || agent.mode?.mode === "scripted"
+              ? lang === "en" ? "Offline demo mode (tap for live AI)" : "Mod demo offline (apasă pentru AI live)"
+              : lang === "en" ? "Live AI (tap for the offline demo)" : "AI live (apasă pentru demo offline)"
+          }
           className="ml-1 flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 transition hover:border-ink"
         >
           <span className={`h-1.5 w-1.5 rounded-full ${offline || agent.mode?.mode === "scripted" ? "bg-accent" : "bg-ok"} ${agent.busy ? "animate-pulse" : ""}`} />
@@ -152,7 +159,7 @@ export default function Workspace({
                 exit={{ opacity: 0, scale: 0.8 }}
                 onClick={() => setCartOpen(true)}
                 className="relative flex items-center gap-2 rounded-full bg-ink py-1.5 pl-2.5 pr-5 text-paper transition hover:bg-accent hover:text-on-accent"
-                aria-label={lang === "en" ? "Open cart" : "Deschide coșul"}
+                aria-label={`${lang === "en" ? "Open cart" : "Deschide coșul"} · ${quote.lines.length} ${lang === "en" ? "products" : "produse"} · ${lei(quote.total, lang)}`}
               >
                 <IconBag size={17} />
                 <span className="hidden font-mono text-[12px] md:inline">
@@ -172,9 +179,16 @@ export default function Workspace({
           <div className="hidden w-[250px] xl:block">
             <WalletPass member={member} tenant={tenant} lang={lang} compact pointsOverride={member.points} />
           </div>
-          <div className="flex items-center rounded-full border border-rule p-0.5 font-mono text-[10.5px]">
+          <div role="group" aria-label={lang === "en" ? "Language" : "Limba"} className="flex items-center rounded-full border border-rule p-0.5 font-mono text-[10.5px]">
             {(["ro", "en"] as const).map((l) => (
-              <button key={l} onClick={() => onLang(l)} className={`rounded-full px-2 py-1 uppercase ${lang === l ? "bg-ink text-paper" : "text-ink-2"}`}>
+              <button
+                key={l}
+                onClick={() => onLang(l)}
+                aria-pressed={lang === l}
+                aria-label={l === "en" ? "English" : "Română"}
+                lang={l}
+                className={`rounded-full px-2 py-1 uppercase ${lang === l ? "bg-ink text-paper" : "text-ink-2"}`}
+              >
                 {l}
               </button>
             ))}
@@ -312,6 +326,10 @@ function Rail({
     onTyping?.(drafting);
   }, [drafting, onTyping]);
 
+  // Screen readers: one announcement per finished answer (not every streamed word), and "working…".
+  const lastDone = [...messages].reverse().find((m) => m.role === "assistant" && !m.pending && (m.text || m.error));
+  const announce = busy ? `${tr("thinking", lang)}…` : lastDone ? (lastDone.error ? tr("error", lang) : lastDone.text.replace(/\*\*/g, "")) : "";
+
   const send = (t: string) => {
     if (!t.trim() || busy) return;
     onSend(t);
@@ -326,7 +344,18 @@ function Rail({
         <span className="mt-px shrink-0 rounded-[5px] border border-ink/15 px-1 font-mono text-[9px] font-semibold leading-[14px] tracking-[0.12em] text-ink-2">AI</span>
         <p className="font-mono text-[10.5px] leading-[1.45] text-ink-3">{tr("aiNotice", lang)}</p>
       </div>
-      <div ref={scrollRef} className="thin-scroll flex-1 space-y-6 overflow-y-auto px-4 pb-6 pt-6 sm:px-6">
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {announce}
+      </p>
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-live="off"
+        aria-busy={busy}
+        aria-label={lang === "en" ? "Conversation" : "Conversația"}
+        tabIndex={0}
+        className="thin-scroll flex-1 space-y-6 overflow-y-auto px-4 pb-6 pt-6 sm:px-6"
+      >
         {messages.map((m) =>
           m.role === "user" ? (
             <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
@@ -368,9 +397,10 @@ function Rail({
 
       <div className="border-t border-rule bg-paper px-3 pb-3 pt-2.5 sm:px-5 lg:pb-[max(12px,env(safe-area-inset-bottom))]">
         {chips.length > 0 && !busy && last?.role === "assistant" && <NextStepChips chips={chips} lang={lang} onSend={send} />}
-        <div data-coach="composer" className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink/40">
+        <div data-coach="composer" className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/40">
           <textarea
             rows={1}
+            aria-label={lang === "en" ? "Message to the assistant" : "Mesaj către asistent"}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

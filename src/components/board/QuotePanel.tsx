@@ -137,7 +137,7 @@ export default function QuotePanel({
             </div>
           </div>
           {quote.points.redeemablePoints > 0 && (
-            <button onClick={() => setRedeem((r) => !r)} className="flex items-center gap-2 text-left text-[12px] leading-tight">
+            <button onClick={() => setRedeem((r) => !r)} role="switch" aria-checked={redeem} className="flex items-center gap-2 text-left text-[12px] leading-tight">
               <span className={`relative h-5 w-9 shrink-0 rounded-full transition ${redeem ? "bg-accent" : "bg-paper/20"}`}>
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-paper transition-all ${redeem ? "left-[18px]" : "left-0.5"}`} />
               </span>
@@ -175,6 +175,7 @@ export default function QuotePanel({
                 <button
                   key={t.quality}
                   onClick={() => !active && onTier?.(t)}
+                  aria-pressed={active}
                   className={`group rounded-xl border p-3 text-left transition ${active ? "border-ink bg-ink text-paper" : "border-rule hover:border-ink"}`}
                 >
                   <div className="flex items-center justify-between">
@@ -436,11 +437,11 @@ function LineGroup({
                   <LowestPriceNote line={l} lang={lang} className="mt-0.5" />
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg border border-rule bg-paper">
-                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One less" : "Unul mai puțin"}: ${l.name}`}>
+                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One less" : "Unul mai puțin"}: ${l.name} (${l.qty})`}>
                         <IconMinus size={12} />
                       </button>
                       <span className="num w-7 text-center text-[12.5px] font-semibold">{l.qty}</span>
-                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One more" : "Încă unul"}: ${l.name}`}>
+                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One more" : "Încă unul"}: ${l.name} (${l.qty})`}>
                         <IconPlus size={12} />
                       </button>
                     </div>
@@ -448,6 +449,9 @@ function LineGroup({
                       <button
                         onClick={() => setOpen(isOpen ? null : group.role)}
                         data-coach="options"
+                        aria-expanded={Boolean(isOpen)}
+                        aria-controls={`options-${group.role}`}
+                        aria-label={`${group.options.length} ${lang === "en" ? "options for" : "opțiuni pentru"} ${group.label}`}
                         className={`flex items-center gap-1 rounded-lg px-2 py-1 font-mono text-[10.5px] uppercase tracking-wider transition ${
                           isOpen ? "bg-ink text-paper" : "bg-accent/10 text-ink hover:bg-accent/20"
                         }`}
@@ -467,7 +471,11 @@ function LineGroup({
                 </div>
               </div>
               <AnimatePresence>
-                {isOpen && group && onChoose && <OptionsStrip group={group} lines={allLines} lang={lang} onChoose={onChoose} />}
+                {isOpen && group && onChoose && (
+                  <div id={`options-${group.role}`}>
+                    <OptionsStrip group={group} lines={allLines} lang={lang} onChoose={onChoose} />
+                  </div>
+                )}
               </AnimatePresence>
             </motion.li>
           );

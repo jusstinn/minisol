@@ -52,6 +52,7 @@ export function NextStepChips({ chips, lang, onSend }: { chips: NextStep[]; lang
     <div
       ref={ref}
       role="group"
+      data-next-steps
       aria-label={lang === "en" ? "Suggested next steps" : "Pași următori sugerați"}
       onKeyDown={onKeyDown}
       // Phones: one scrolling row (keeps the conversation tall); desktop: all of them, wrapped.

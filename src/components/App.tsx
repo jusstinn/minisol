@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
@@ -57,6 +57,8 @@ export default function App({
   const style = { "--accent": tenant.accent, "--on-accent": tenant.onAccent } as React.CSSProperties;
 
   return (
+    // Respect the OS "reduce motion" setting in every motion animation (CSS ones: globals.css).
+    <MotionConfig reducedMotion="user">
     <div style={style} className="min-h-dvh" data-app-root>
       <AnimatePresence mode="wait">
         {!session || !member ? (
@@ -111,5 +113,6 @@ export default function App({
         />
       )}
     </div>
+    </MotionConfig>
   );
 }

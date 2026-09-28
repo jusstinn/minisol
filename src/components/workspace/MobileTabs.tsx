@@ -143,7 +143,20 @@ export function MobileTabBar({ tabs, board, lang, busy }: { tabs: MobileTabs; bo
 
   return (
     <nav className="relative z-30 shrink-0 border-t border-rule bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label={en ? "Project views" : "Secțiunile proiectului"}>
-      <div role="tablist" className="grid grid-cols-5">
+      <div
+        role="tablist"
+        className="grid grid-cols-5"
+        onKeyDown={(e) => {
+          // Tabs pattern: ←/→ (Home/End) move between the available tabs and open them.
+          const open = TABS.filter((t) => tabs.available[t]);
+          const i = open.indexOf(tabs.tab);
+          const to = e.key === "ArrowRight" ? open[(i + 1) % open.length] : e.key === "ArrowLeft" ? open[(i - 1 + open.length) % open.length] : e.key === "Home" ? open[0] : e.key === "End" ? open[open.length - 1] : undefined;
+          if (!to) return;
+          e.preventDefault();
+          tabs.select(to);
+          document.getElementById(`mtab-btn-${to}`)?.focus();
+        }}
+      >
         {TABS.map((t) => {
           const active = tabs.tab === t;
           const pulse = tabs.unread[t];
@@ -154,6 +167,7 @@ export function MobileTabBar({ tabs, board, lang, busy }: { tabs: MobileTabs; bo
               id={`mtab-btn-${t}`}
               aria-selected={active}
               aria-controls={`mtab-${t}`}
+              tabIndex={active ? 0 : -1}
               disabled={!tabs.available[t]}
               onClick={() => tabs.select(t)}
               className={`relative flex min-w-0 flex-col items-center gap-[3px] px-1 pb-1.5 pt-2 transition disabled:opacity-30 ${active ? "text-ink" : "text-ink-3 enabled:hover:text-ink-2"}`}

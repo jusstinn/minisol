@@ -154,15 +154,15 @@ export default function CartDrawer({
                               </ProductName>
                               <div className="mt-1.5 flex items-center gap-2">
                                 <div className="flex items-center rounded-lg border border-rule bg-paper">
-                                  <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
+                                  <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${en ? "One less" : "Unul mai puțin"}: ${l.name} (${l.qty})`}>
                                     <IconMinus size={12} />
                                   </button>
                                   <span className="num w-7 text-center text-[12.5px] font-semibold">{l.qty}</span>
-                                  <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
+                                  <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${en ? "One more" : "Încă unul"}: ${l.name} (${l.qty})`}>
                                     <IconPlus size={12} />
                                   </button>
                                 </div>
-                                <button onClick={() => onQty(l.sku, -l.qty)} className="grid h-6 w-6 place-items-center rounded-lg text-ink-3 hover:bg-bad/10 hover:text-bad" aria-label={en ? "Remove" : "Șterge"}>
+                                <button onClick={() => onQty(l.sku, -l.qty)} className="grid h-6 w-6 place-items-center rounded-lg text-ink-3 hover:bg-bad/10 hover:text-bad" aria-label={`${en ? "Remove" : "Șterge"}: ${l.name}`}>
                                   <IconTrash size={13} />
                                 </button>
                                 <span className="font-mono text-[9.5px] text-ink-3">
@@ -211,6 +211,7 @@ export default function CartDrawer({
                         <button
                           key={id}
                           onClick={() => setFulfilment(id)}
+                          aria-pressed={fulfilment === id}
                           className={`rounded-xl border p-2.5 text-left transition ${fulfilment === id ? "border-ink bg-ink text-paper" : "border-rule hover:border-ink"}`}
                         >
                           <div className="flex items-center gap-1.5 text-[13px] font-semibold">
@@ -242,7 +243,7 @@ export default function CartDrawer({
                     </dl>
 
                     {quote.points.redeemablePoints > 0 && (
-                      <button onClick={() => setRedeem((r) => !r)} className="mt-2 flex w-full items-center gap-2 text-left text-[12.5px] text-ink-2">
+                      <button onClick={() => setRedeem((r) => !r)} role="switch" aria-checked={redeem} className="mt-2 flex w-full items-center gap-2 text-left text-[12.5px] text-ink-2">
                         <span className={`relative h-5 w-9 shrink-0 rounded-full transition ${redeem ? "bg-accent" : "bg-ink/15"}`}>
                           <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-card shadow transition-all ${redeem ? "left-[18px]" : "left-0.5"}`} />
                         </span>
