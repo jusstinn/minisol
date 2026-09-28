@@ -1,5 +1,5 @@
 import { getDataSources } from "@/adapters";
-import { priceBasket } from "@/agent/tools";
+import { basketLook, priceBasket } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
 import type { BasketItem } from "@/domain/quote";
 
@@ -22,10 +22,10 @@ export async function POST(req: Request) {
     .filter((i) => i.qty > 0);
   const stores = await sources.stores.list();
   const storeId = stores.some((s) => s.id === body.storeId) ? body.storeId! : customer.homeStoreId;
-  const quote = await priceBasket(
-    { sources, customer, state: { basket: items, storeId }, lang: body.lang ?? customer.language, now: new Date() },
-    items,
-    storeId,
-  );
-  return Response.json({ quote });
+  const [quote, look] = await Promise.all([
+    priceBasket({ sources, customer, state: { basket: items, storeId }, lang: body.lang ?? customer.language, now: new Date() }, items, storeId),
+    // So swapping an option re-draws the sketch with the new product.
+    basketLook({ sources }, items),
+  ]);
+  return Response.json({ quote, look });
 }

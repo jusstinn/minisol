@@ -76,6 +76,7 @@ export default function Board(props: Props) {
             sketch={current ? sketch : undefined}
             change={current ? board.change : undefined}
             ui={current ? ui : undefined}
+            look={current ? board.quote?.look : undefined}
           />
         );
       }

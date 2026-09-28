@@ -7,6 +7,7 @@ import type { Card, ProjectSnapshot } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
 import { exposedEdges, fenceSegments } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
+import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
 import { tr } from "@/lib/i18n";
@@ -52,6 +53,7 @@ export default function BlueprintPanel({
   sketch,
   change,
   ui,
+  look,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -63,6 +65,8 @@ export default function BlueprintPanel({
   change?: Extract<Card, { kind: "change" }>;
   /** Screen commands from the assistant (view, highlight, editor, replay). */
   ui?: UiSignal | null;
+  /** The chosen products' look (colour, board width, tile format…). */
+  look?: Look;
 }) {
   const sketchMode = useSketchMode(tenant);
   const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
@@ -76,7 +80,7 @@ export default function BlueprintPanel({
   if (sketchMode === "on_demand" && !project.sketched && sketch) {
     return <SketchCta project={project} lang={lang} inline={inline} onOpen={sketch.open} />;
   }
-  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} />;
+  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} look={look} />;
 }
 
 function SketchView({
@@ -89,6 +93,7 @@ function SketchView({
   sketch,
   change,
   ui,
+  look,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -99,6 +104,7 @@ function SketchView({
   sketch?: SketchControls;
   change?: Extract<Card, { kind: "change" }>;
   ui?: UiSignal | null;
+  look?: Look;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -127,7 +133,7 @@ function SketchView({
     setPreview(null);
   }
   const layout = preview ?? project.layout;
-  const build = useMemo(() => buildScene(project.type, project.inputs, lang, layout), [project.type, project.inputs, lang, layout]);
+  const build = useMemo(() => buildScene(project.type, project.inputs, lang, layout, look), [project.type, project.inputs, lang, layout, look]);
   const dark = mode !== "real";
   const canEdit = Boolean(sketch && project.layout);
 

@@ -10,6 +10,8 @@ import { eligibleOffers } from "@/domain/offers";
 import { bestPercentOff, buildQuote } from "@/domain/quote";
 import type { BasketItem, Quote } from "@/domain/quote";
 import { artOf } from "@/domain/art";
+import { lookForBasket } from "@/domain/look";
+import type { Look } from "@/domain/look";
 import { specHighlights } from "@/domain/specs";
 import { lineOptions, productLineKey, resolveRequirements } from "@/domain/resolve";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
@@ -333,6 +335,12 @@ async function priceBasket(ctx: ToolContext, items: BasketItem[], storeId: strin
   );
 }
 
+/** How the basket's products look in the 3D sketch. */
+export async function basketLook(ctx: Pick<ToolContext, "sources">, items: BasketItem[]): Promise<Look> {
+  const products = await ctx.sources.catalog.getMany(items.map((i) => i.sku));
+  return lookForBasket(items, new Map(products.map((p) => [p.sku, p])));
+}
+
 /** What the model needs from a quote — the UI renders the full card. */
 function quoteForModel(q: Quote, lang: Lang) {
   const best = q.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
@@ -582,6 +590,7 @@ async function priceProject(ctx: ToolContext, calc: CalculationResult, o: Projec
   );
   const bySku = new Map(catalog.map((p) => [p.sku, p]));
   const choices = await projectChoices(ctx, calc.requirements, basket, catalog, offers, o.storeId);
+  const look = lookForBasket(basket, new Map(catalog.map((p) => [p.sku, p])));
   const suggested = resolved.suggestions.filter((sg) => !o.suggestRole || o.suggestRole(sg.role));
   const suggestions: SuggestionView[] = suggested.map((sg) => {
     const p = bySku.get(sg.sku)!;
@@ -619,6 +628,7 @@ async function priceProject(ctx: ToolContext, calc: CalculationResult, o: Projec
     state,
     project,
     basket,
+    look,
     quote,
     tiers,
     choices,
@@ -757,7 +767,7 @@ export async function applySketchEdit(ctx: ToolContext, edits: EditOp[], source:
     state: r.state,
     cards: [
       { kind: "project", id: cardId("project"), project: r.project },
-      { kind: "quote", id: cardId("quote"), quote: r.quote, suggestions: r.suggestions, owned: r.owned, tiers: r.tiers, quality, choices: r.choices },
+      { kind: "quote", id: cardId("quote"), quote: r.quote, suggestions: r.suggestions, owned: r.owned, tiers: r.tiers, quality, choices: r.choices, look: r.look },
       { kind: "change", id: cardId("change"), change },
     ],
     forModel: {
@@ -842,7 +852,7 @@ const handlers: Record<string, Handler> = {
       state: r.state,
       cards: [
         { kind: "project", id: cardId("project"), project: r.project },
-        { kind: "quote", id: cardId("quote"), quote: r.quote, suggestions: r.suggestions, owned: r.owned, tiers: r.tiers, quality, choices: r.choices },
+        { kind: "quote", id: cardId("quote"), quote: r.quote, suggestions: r.suggestions, owned: r.owned, tiers: r.tiers, quality, choices: r.choices, look: r.look },
       ],
       forModel: {
         storeWarning: store.error,
@@ -970,11 +980,11 @@ const handlers: Record<string, Handler> = {
     basket = mergeBasket(basket);
     const store = await storeIdOrDefault(ctx, args.storeId);
     if (store.error) errors.push(store.error);
-    const [quote, views] = await Promise.all([priceBasket(ctx, basket, store.id), suggestionViews(ctx, suggestions)]);
+    const [quote, views, look] = await Promise.all([priceBasket(ctx, basket, store.id), suggestionViews(ctx, suggestions), basketLook(ctx, basket)]);
     const state: SessionState = { ...ctx.state, basket, storeId: store.id, suggestions };
     return {
       state,
-      cards: [{ kind: "quote", id: cardId("quote"), quote, suggestions: views, owned: [] }],
+      cards: [{ kind: "quote", id: cardId("quote"), quote, suggestions: views, owned: [], look }],
       forModel: {
         changes,
         errors: errors.length ? errors : undefined,

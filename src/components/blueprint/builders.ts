@@ -1,6 +1,8 @@
 import type { ProjectType } from "@/domain/calculators";
 import { defaultLayout, exposedEdges, fenceSegments, SIDES } from "@/domain/layout";
 import type { Layout, Opening, Side, Zone } from "@/domain/layout";
+import { shades } from "@/domain/look";
+import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 
 /**
@@ -159,11 +161,18 @@ function roomShell(L: number, W: number, H: number, lowH: number, parts: Part[])
 const drawnHeight = (side: Side, H: number, low: number) => (side === "n" || side === "w" ? H : low);
 
 // ───────────────────────────── deck ──────────────────────────────
-function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang): Build {
+function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Build {
   const parts: Part[] = [];
   const top = Math.max(0.12, l.heightM);
-  const boardT = 0.028;
-  const joistH = 0.07;
+  // The boards/joists actually in the basket: width, thickness, section and colour.
+  const bw = look.deck_board?.w ?? 0.145;
+  const boardT = look.deck_board?.t ?? 0.028;
+  const pitch = bw + 0.005;
+  const boardColors = shades(look.deck_board?.color ?? C.wood);
+  const joistH = look.deck_joist?.t ?? 0.07;
+  const joistW = look.deck_joist?.w ?? 0.045;
+  const joistColor = look.deck_joist?.color ?? C.woodDark;
+  const supColor = look.deck_support?.color ?? C.support;
   const supH = Math.max(0.03, top - boardT - joistH);
   const alongX = l.direction === "x";
 
@@ -176,7 +185,7 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang): Build {
     const across = alongX ? z.d : z.w;
     const J = Math.ceil(run / 0.4) + 1;
     const S = Math.ceil(across / 0.6) + 1;
-    const R = Math.ceil(across / 0.15);
+    const R = Math.ceil(across / pitch);
     const stepS = Math.max(1, Math.ceil((J * S) / 160));
     let k = 0;
     for (let i = 0; i < J; i++) {
@@ -185,15 +194,15 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang): Build {
         if ((i * S + j) % stepS !== 0) continue;
         const v = (j * across) / (S - 1);
         const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
-        parts.push({ id: `${z.id}-sup-${i}-${j}`, layer: "deck_support", pos: [px, supH / 2, pz], size: [0.1, supH, 0.1], color: C.support, delay: zd + 0.3 + (k++ * 0.8) / ((J * S) / stepS), grow: "rise" });
+        parts.push({ id: `${z.id}-sup-${i}-${j}`, layer: "deck_support", pos: [px, supH / 2, pz], size: [0.1, supH, 0.1], color: supColor, delay: zd + 0.3 + (k++ * 0.8) / ((J * S) / stepS), grow: "rise" });
       }
       const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
-      parts.push({ id: `${z.id}-joist-${i}`, layer: "deck_joist", pos: jp, size: alongX ? [0.045, joistH, across] : [across, joistH, 0.045], color: C.woodDark, delay: zd + 1.2 + i * (1 / J), grow: "drop" });
+      parts.push({ id: `${z.id}-joist-${i}`, layer: "deck_joist", pos: jp, size: alongX ? [joistW, joistH, across] : [across, joistH, joistW], color: joistColor, delay: zd + 1.2 + i * (1 / J), grow: "drop" });
     }
     for (let r = 0; r < R; r++) {
-      const v = Math.min(0.0725 + r * 0.15, across - 0.0725);
+      const v = Math.min(bw / 2 + r * pitch, across - bw / 2);
       const bp: Vec3 = alongX ? [z.x + run / 2, top - boardT / 2, z.z + v] : [z.x + v, top - boardT / 2, z.z + run / 2];
-      parts.push({ id: `${z.id}-board-${r}`, layer: "deck_board", pos: bp, size: alongX ? [run, boardT, 0.145] : [0.145, boardT, run], color: r % 2 ? C.wood : "#c28c55", delay: zd + 2.4 + r * (2 / R), grow: "slide" });
+      parts.push({ id: `${z.id}-board-${r}`, layer: "deck_board", pos: bp, size: alongX ? [run, boardT, bw] : [bw, boardT, run], color: boardColors[r % boardColors.length], delay: zd + 2.4 + r * (2 / R), grow: "slide" });
     }
   });
 
@@ -214,13 +223,13 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang): Build {
         cx = st.side === "e" ? z.x + z.w + out : z.x - out;
         size = [0.29, boardT, st.width];
       }
-      parts.push({ id: `${st.id}-tread-${k}`, layer: "deck_board", pos: [cx, y - boardT / 2, cz], size, color: C.wood, delay: 0.3 + k * 0.25, grow: "drop" });
+      parts.push({ id: `${st.id}-tread-${k}`, layer: "deck_board", pos: [cx, y - boardT / 2, cz], size, color: boardColors[k % boardColors.length], delay: 0.3 + k * 0.25, grow: "drop" });
       const riserH = Math.max(0.02, y - boardT);
       const stringers = 2 + Math.floor(st.width / 0.6);
       for (let s = 0; s < stringers; s++) {
         const off = -st.width / 2 + (s * st.width) / (stringers - 1);
         const p: Vec3 = st.side === "s" || st.side === "n" ? [cx + off, riserH / 2, cz] : [cx, riserH / 2, cz + off];
-        parts.push({ id: `${st.id}-str-${k}-${s}`, layer: "deck_joist", pos: p, size: [0.045, riserH, 0.045], color: C.woodDark, delay: 0.15 + k * 0.25, grow: "rise" });
+        parts.push({ id: `${st.id}-str-${k}-${s}`, layer: "deck_joist", pos: p, size: [0.045, riserH, 0.045], color: joistColor, delay: 0.15 + k * 0.25, grow: "rise" });
       }
     }
   }
@@ -232,18 +241,21 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang): Build {
     center: centerOf(l.zones),
     layers: [
       { id: "weed_membrane", label: lang === "en" ? "Weed membrane" : "Geotextil", color: C.membrane },
-      { id: "deck_support", label: lang === "en" ? "Adjustable supports" : "Suporturi reglabile", color: C.support },
-      { id: "deck_joist", label: lang === "en" ? "Joists" : "Grinzi", color: C.woodDark },
-      { id: "deck_board", label: lang === "en" ? "Deck boards" : "Deck", color: C.wood },
+      { id: "deck_support", label: lang === "en" ? "Adjustable supports" : "Suporturi reglabile", color: supColor },
+      { id: "deck_joist", label: lang === "en" ? "Joists" : "Grinzi", color: joistColor },
+      { id: "deck_board", label: lang === "en" ? "Deck boards" : "Deck", color: boardColors[0] },
     ],
     duration: 5,
   };
 }
 
 // ───────────────────────────── fence ─────────────────────────────
-function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang): Build {
+function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): Build {
   const H = l.heightM;
   const parts: Part[] = [];
+  const panelColors = shades(look.fence_panel?.color ?? C.fence, 2, 0.05);
+  const postColor = look.fence_post?.color ? shades(look.fence_post.color, 1, 0)[0] : C.post;
+  const gateColor = look.fence_gate?.color ?? C.gate;
   const segs = fenceSegments(l.points);
   const section = 1.89;
   let postIdx = 0;
@@ -251,7 +263,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang): Build {
   const placePost = (x: number, z: number, id: string, gatePost = false) => {
     const i = postIdx++;
     parts.push({ id: `foot-${id}`, layer: "post_concrete", pos: [x, -0.3, z], size: [0.28, 0.6, 0.28], color: C.concrete, delay: i * 0.05, grow: "pop" });
-    parts.push({ id: `post-${id}`, layer: "fence_post", pos: [x, (H + 0.1) / 2, z], size: [gatePost ? 0.11 : 0.09, H + 0.1, gatePost ? 0.11 : 0.09], color: C.post, delay: 0.5 + i * 0.07, grow: "rise" });
+    parts.push({ id: `post-${id}`, layer: "fence_post", pos: [x, (H + 0.1) / 2, z], size: [gatePost ? 0.11 : 0.09, H + 0.1, gatePost ? 0.11 : 0.09], color: postColor, delay: 0.5 + i * 0.07, grow: "rise" });
     parts.push({ id: `cap-${id}`, layer: "post_cap", pos: [x, H + 0.12, z], size: [0.12, 0.03, 0.12], color: "#3b3b3b", delay: 3.2 + i * 0.03, grow: "drop" });
   };
 
@@ -276,7 +288,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang): Build {
         layer: "fence_gate",
         pos: [mid.x, (H * 0.95) / 2 + 0.05, mid.z],
         size: alongX ? [g.width - 0.04, H * 0.95, 0.05] : [0.05, H * 0.95, g.width - 0.04],
-        color: C.gate,
+        color: gateColor,
         delay: 2.2,
         grow: "slide",
       });
@@ -303,7 +315,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang): Build {
             layer: "fence_panel",
             pos: [mid.x, H / 2 + 0.05, mid.z],
             size: alongX ? [w, H * 0.97, 0.035] : [0.035, H * 0.97, w],
-            color: idx % 2 ? C.fence : "#b17c46",
+            color: panelColors[idx % panelColors.length],
             delay: 1.4 + idx * 0.08,
             grow: "slide",
           });
@@ -335,9 +347,9 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang): Build {
     center: [(Math.max(...xs) + Math.min(...xs)) / 2, (Math.max(...zs) + Math.min(...zs)) / 2],
     layers: [
       { id: "post_concrete", label: lang === "en" ? "Concrete footings" : "Fundații beton", color: C.concrete },
-      { id: "fence_post", label: lang === "en" ? "Posts" : "Stâlpi", color: C.post },
-      { id: "fence_panel", label: lang === "en" ? "Panels" : "Panouri", color: C.fence },
-      ...(l.gates.length ? [{ id: "fence_gate", label: lang === "en" ? "Gates" : "Porți", color: C.gate }] : []),
+      { id: "fence_post", label: lang === "en" ? "Posts" : "Stâlpi", color: postColor },
+      { id: "fence_panel", label: lang === "en" ? "Panels" : "Panouri", color: panelColors[0] },
+      ...(l.gates.length ? [{ id: "fence_gate", label: lang === "en" ? "Gates" : "Porți", color: gateColor }] : []),
       { id: "post_cap", label: lang === "en" ? "Post caps" : "Capace", color: "#3b3b3b" },
     ],
     duration: 4.5,
@@ -345,18 +357,19 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang): Build {
 }
 
 // ───────────────────────────── paint ─────────────────────────────
-function paintRoom(l: Extract<Layout, { type: "paint_room" }>, lang: Lang): Build {
+function paintRoom(l: Extract<Layout, { type: "paint_room" }>, lang: Lang, look: Look): Build {
   const { w: L, d: W, h: H } = l;
+  const paint = look.interior_paint?.color ?? C.paint;
   const low = 0.4;
   const parts: Part[] = [];
   roomShell(L, W, H, low, parts);
   parts.push({ id: "foil", layer: "protective_foil", pos: [0, 0.004, 0], size: [L - 0.1, 0.006, W - 0.1], color: C.foil, delay: 0.4, grow: "fade", opacity: 0.7 });
   parts.push({ id: "tape-back", layer: "painters_tape", pos: [0, H - 0.015, -W / 2 + 0.006], size: [L, 0.03, 0.01], color: C.tape, delay: 0.8, grow: "slide" });
   parts.push({ id: "tape-left", layer: "painters_tape", pos: [-L / 2 + 0.006, H - 0.015, 0], size: [0.01, 0.03, W], color: C.tape, delay: 0.9, grow: "slide" });
-  parts.push({ id: "paint-back", layer: "interior_paint", pos: [0, H / 2, -W / 2 + 0.004], size: [L, H - 0.04, 0.008], color: C.paint, delay: 1.3, grow: "rise" });
-  parts.push({ id: "paint-left", layer: "interior_paint", pos: [-L / 2 + 0.004, H / 2, 0], size: [0.008, H - 0.04, W], color: C.paint, delay: 2.0, grow: "rise" });
+  parts.push({ id: "paint-back", layer: "interior_paint", pos: [0, H / 2, -W / 2 + 0.004], size: [L, H - 0.04, 0.008], color: paint, delay: 1.3, grow: "rise" });
+  parts.push({ id: "paint-left", layer: "interior_paint", pos: [-L / 2 + 0.004, H / 2, 0], size: [0.008, H - 0.04, W], color: paint, delay: 2.0, grow: "rise" });
   l.openings.forEach((o, i) => parts.push(openingPart(o, L, W, drawnHeight(o.wall as Side, H, low), 0.3 + i * 0.05)));
-  if (l.ceiling) parts.push({ id: "ceiling", layer: "interior_paint", pos: [0, H + 0.01, 0], size: [L, 0.01, W], color: C.paint, delay: 2.8, grow: "fade", opacity: 0.22 });
+  if (l.ceiling) parts.push({ id: "ceiling", layer: "interior_paint", pos: [0, H + 0.01, 0], size: [L, 0.01, W], color: paint, delay: 2.8, grow: "fade", opacity: 0.22 });
   return {
     parts,
     dims: [
@@ -368,17 +381,19 @@ function paintRoom(l: Extract<Layout, { type: "paint_room" }>, lang: Lang): Buil
     layers: [
       { id: "protective_foil", label: lang === "en" ? "Protective sheeting" : "Folie protecție", color: C.foil },
       { id: "painters_tape", label: lang === "en" ? "Masking tape" : "Bandă mascare", color: C.tape },
-      { id: "interior_paint", label: lang === "en" ? "Paint" : "Vopsea", color: C.paint },
+      { id: "interior_paint", label: lang === "en" ? "Paint" : "Vopsea", color: paint },
     ],
     duration: 4,
   };
 }
 
 // ─────────────────────────── laminate ────────────────────────────
-function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang): Build {
+function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, look: Look): Build {
   const parts: Part[] = [];
-  const pw = 0.193;
-  const pl = 1.285;
+  const pw = (look.laminate?.w ?? 0.19) + 0.003;
+  const pl = look.laminate?.l ?? 1.285;
+  const plankColors = look.laminate ? shades(look.laminate.color, 4, 0.06) : C.laminate;
+  const skirtColor = look.skirting_board?.color ?? "#f4f1ea";
   const totalArea = l.zones.reduce((s, z) => s + z.w * z.d, 0);
   const scale = totalArea / (pw * pl) > 420 ? Math.ceil(totalArea / (pw * pl) / 420) : 1;
   const plankL = pl * scale;
@@ -404,7 +419,7 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang): B
             layer: "laminate",
             pos: [(a + b) / 2, 0.013, zc],
             size: [b - a - 0.004, 0.009, pw - 0.003],
-            color: C.laminate[(r * 3 + k) % C.laminate.length],
+            color: plankColors[(r * 3 + k) % plankColors.length],
             delay: zd + 1.2 + r * (2.4 / rows) + k * 0.04,
             grow: "drop",
           });
@@ -424,7 +439,7 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang): B
       layer: "skirting_board",
       pos: horizontal ? [(e.x1 + e.x2) / 2, 0.048, e.z1 + inset] : [e.x1 + inset, 0.048, (e.z1 + e.z2) / 2],
       size: horizontal ? [len, 0.06, 0.015] : [0.015, 0.06, len],
-      color: "#f4f1ea",
+      color: skirtColor,
       delay: 3.8 + i * 0.05,
       grow: "slide",
     });
@@ -445,19 +460,18 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang): B
     layers: [
       ...(l.subfloor !== "wood" ? [{ id: "vapor_barrier", label: lang === "en" ? "Vapour barrier" : "Barieră vapori", color: C.vapor }] : []),
       { id: "underlay", label: lang === "en" ? "Underlay" : "Folie parchet", color: C.underlay },
-      { id: "laminate", label: lang === "en" ? "Laminate" : "Parchet", color: C.laminate[0] },
-      { id: "skirting_board", label: lang === "en" ? "Skirting" : "Plintă", color: "#f4f1ea" },
+      { id: "laminate", label: lang === "en" ? "Laminate" : "Parchet", color: plankColors[0] },
+      { id: "skirting_board", label: lang === "en" ? "Skirting" : "Plintă", color: skirtColor },
     ],
     duration: 4.8,
   };
 }
 
 // ──────────────────────────── tiling ─────────────────────────────
-function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang): Build {
+function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look): Build {
   const { w: L, d: W } = l;
   const H = 2.6;
   const low = 0.45;
-  const s = l.largeFormat ? 0.6 : 0.3;
   const parts: Part[] = [];
   roomShell(L, W, H, low, parts);
   l.openings.forEach((o, i) => parts.push(openingPart(o, L, W, drawnHeight(o.wall as Side, H, low), 0.3 + i * 0.05)));
@@ -465,20 +479,46 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang): Build {
     parts.push({ id: "wp", layer: "waterproofing", pos: [0, 0.003, 0], size: [L, 0.005, W], color: C.waterproof, delay: 0.3, grow: "fade" });
     parts.push({ id: "wp-back", layer: "waterproofing", pos: [0, 0.1, -W / 2 + 0.003], size: [L, 0.2, 0.005], color: C.waterproof, delay: 0.4, grow: "rise" });
   }
+  // The tiles actually chosen: 33 × 33, 60 × 60, 20 × 120 wood-look planks… (long side along the room).
+  const ft = look.floor_tiles;
+  let [sx, sz] = ft?.w && ft.l ? [Math.max(ft.w, ft.l), Math.min(ft.w, ft.l)] : l.largeFormat ? [0.6, 0.6] : [0.3, 0.3];
+  const floorColors = ft ? shades(ft.color, 2, 0.04) : C.tileFloor;
+  // Very small formats would mean thousands of parts: draw them larger, same proportions.
+  const fScale = Math.max(1, Math.sqrt((L * W) / (sx * sz) / 500));
+  sx *= fScale;
+  sz *= fScale;
   if (l.floor) {
-    const nx = Math.ceil(L / s);
-    const nz = Math.ceil(W / s);
-    for (let i = 0; i < nx; i++)
-      for (let j = 0; j < nz; j++) {
-        const a = -L / 2 + i * s;
-        const b = Math.min(a + s, L / 2);
-        const c = -W / 2 + j * s;
-        const d = Math.min(c + s, W / 2);
-        parts.push({ id: `ft-${i}-${j}`, layer: "floor_tiles", pos: [(a + b) / 2, 0.011, (c + d) / 2], size: [b - a - 0.004, 0.01, d - c - 0.004], color: C.tileFloor[(i + j) % 2], delay: 0.9 + (i + j) * (1.6 / (nx + nz)), grow: "drop" });
+    const nx = Math.ceil(L / sx - 1e-9);
+    const nz = Math.ceil(W / sz - 1e-9);
+    for (let j = 0; j < nz; j++) {
+      // Plank formats are laid in a running bond.
+      const shift = sx > 1.9 * sz && j % 2 ? sx / 2 : 0;
+      for (let i = 0; i <= nx; i++) {
+        const a = Math.max(-L / 2, -L / 2 + i * sx - shift);
+        const b = Math.min(-L / 2 + (i + 1) * sx - shift, L / 2);
+        if (b - a < 0.02) continue;
+        const c = -W / 2 + j * sz;
+        const d = Math.min(c + sz, W / 2);
+        parts.push({
+          id: `ft-${i}-${j}`,
+          layer: "floor_tiles",
+          pos: [(a + b) / 2, 0.011, (c + d) / 2],
+          size: [b - a - 0.004, 0.01, d - c - 0.004],
+          color: floorColors[(i + j) % floorColors.length],
+          delay: 0.9 + (i + j) * (1.6 / (nx + nz)),
+          grow: "drop",
+        });
       }
+    }
   }
-  const th = 0.3;
-  const tw = 0.6;
+  const wt = look.wall_tiles;
+  // Elongated wall tiles (metro 10 × 20, 30 × 60) are laid horizontally, others as listed (w × h).
+  let [tw, th] = wt?.w && wt.l ? (wt.l >= 1.9 * wt.w ? [wt.l, wt.w] : [wt.w, wt.l]) : [0.6, 0.3];
+  const wallColors = wt ? shades(wt.color, 2, 0.03) : C.tileWall;
+  const perimeter = 2 * (L + W);
+  const wScale = Math.max(1, Math.sqrt((perimeter * 2.1) / (tw * th) / 700));
+  tw *= wScale;
+  th *= wScale;
   for (const side of SIDES) {
     const wallH = Math.min(l.wallHeights[side], drawnHeight(side, H, low));
     if (wallH <= 0) continue;
@@ -497,7 +537,7 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang): Build {
           layer: "wall_tiles",
           pos: horizontal ? [(a + b) / 2, y0 + h / 2, off] : [off, y0 + h / 2, (a + b) / 2],
           size: horizontal ? [b - a - 0.004, h - 0.004, 0.008] : [0.008, h - 0.004, b - a - 0.004],
-          color: C.tileWall[(r + c) % 2],
+          color: wallColors[(r + c) % wallColors.length],
           delay: 2.4 + r * 0.16 + c * 0.02,
           grow: "pop",
         });
@@ -515,18 +555,20 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang): Build {
     extent: [L, H, W],
     layers: [
       ...(l.roomType === "bathroom" ? [{ id: "waterproofing", label: lang === "en" ? "Waterproofing" : "Hidroizolație", color: C.waterproof }] : []),
-      ...(l.floor ? [{ id: "floor_tiles", label: lang === "en" ? "Floor tiles" : "Gresie", color: C.tileFloor[0] }] : []),
-      ...(maxH > 0 ? [{ id: "wall_tiles", label: lang === "en" ? "Wall tiles" : "Faianță", color: C.tileWall[0] }] : []),
+      ...(l.floor ? [{ id: "floor_tiles", label: lang === "en" ? "Floor tiles" : "Gresie", color: floorColors[0] }] : []),
+      ...(maxH > 0 ? [{ id: "wall_tiles", label: lang === "en" ? "Wall tiles" : "Faianță", color: wallColors[0] }] : []),
     ],
     duration: 4.5,
   };
 }
 
 // ────────────────────────── drywall wall ─────────────────────────
-function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang): Build {
+function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang, look: Look): Build {
   const L = l.length;
   const H = l.heightM;
   const parts: Part[] = [];
+  const boardColor = look.drywall_board?.color ?? C.board;
+  const woolColor = look.mineral_wool?.color ?? C.wool;
   parts.push({ id: "floor", layer: "structure", pos: [0, -0.03, 0], size: [L + 1.2, 0.06, 2.4], color: C.slab, delay: 0, grow: "fade", context: true });
   parts.push({ id: "uw-bottom", layer: "uw_profile", pos: [0, 0.02, 0], size: [L, 0.04, 0.075], color: C.stud, delay: 0.2, grow: "slide" });
   parts.push({ id: "uw-top", layer: "uw_profile", pos: [0, H - 0.02, 0], size: [L, 0.04, 0.075], color: C.stud, delay: 0.4, grow: "slide" });
@@ -547,7 +589,7 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang):
       const b = xs[i + 1] - 0.03;
       const mid = (a + b) / 2;
       if (b - a < 0.1 || inDoor(mid)) continue;
-      parts.push({ id: `wool-${Math.round(mid * 100)}`, layer: "mineral_wool", pos: [mid, H / 2, 0], size: [b - a, H - 0.1, 0.05], color: C.wool, delay: 2.0 + i * 0.07, grow: "fade" });
+      parts.push({ id: `wool-${Math.round(mid * 100)}`, layer: "mineral_wool", pos: [mid, H / 2, 0], size: [b - a, H - 0.1, 0.05], color: woolColor, delay: 2.0 + i * 0.07, grow: "fade" });
     }
   }
   const sheets = Math.ceil(L / 1.2);
@@ -560,7 +602,7 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang):
       const overDoor = doors.find((d) => mid > d.x - 0.6 && mid < d.x + 0.6);
       const boardH = overDoor ? H - 2.1 : H;
       const y = overDoor ? H - boardH / 2 : H / 2;
-      parts.push({ id: `gk-${side}-${i}`, layer: "drywall_board", pos: [mid, y, z], size: [b - a - 0.004, boardH, 0.0125], color: C.board, delay: 3.0 + side * 0.9 + i * 0.12, grow: "slide", opacity: side === 0 ? 0.92 : 1 });
+      parts.push({ id: `gk-${side}-${i}`, layer: "drywall_board", pos: [mid, y, z], size: [b - a - 0.004, boardH, 0.0125], color: boardColor, delay: 3.0 + side * 0.9 + i * 0.12, grow: "slide", opacity: side === 0 ? 0.92 : 1 });
     }
   }
   return {
@@ -573,8 +615,8 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang):
     layers: [
       { id: "uw_profile", label: lang === "en" ? "UW tracks" : "Profile UW", color: C.stud },
       { id: "cw_profile", label: lang === "en" ? "CW studs" : "Montanți CW", color: C.stud },
-      ...(l.insulation ? [{ id: "mineral_wool", label: lang === "en" ? "Mineral wool" : "Vată minerală", color: C.wool }] : []),
-      { id: "drywall_board", label: lang === "en" ? "Plasterboard" : "Gips-carton", color: C.board },
+      ...(l.insulation ? [{ id: "mineral_wool", label: lang === "en" ? "Mineral wool" : "Vată minerală", color: woolColor }] : []),
+      { id: "drywall_board", label: lang === "en" ? "Plasterboard" : "Gips-carton", color: boardColor },
     ],
     duration: 5,
   };
@@ -603,27 +645,27 @@ function lawn(l: Extract<Layout, { type: "lawn" }>, lang: Lang): Build {
   };
 }
 
-/** Draw a layout. */
-export function buildLayout(l: Layout, lang: Lang): Build {
+/** Draw a layout, with the look of the products in the basket when known. */
+export function buildLayout(l: Layout, lang: Lang, look: Look = {}): Build {
   switch (l.type) {
     case "deck":
-      return deck(l, lang);
+      return deck(l, lang, look);
     case "fence":
-      return fence(l, lang);
+      return fence(l, lang, look);
     case "paint_room":
-      return paintRoom(l, lang);
+      return paintRoom(l, lang, look);
     case "laminate_floor":
-      return laminate(l, lang);
+      return laminate(l, lang, look);
     case "tiling":
-      return tiling(l, lang);
+      return tiling(l, lang, look);
     case "drywall_partition":
-      return drywall(l, lang);
+      return drywall(l, lang, look);
     case "lawn":
       return lawn(l, lang);
   }
 }
 
 /** Draw a project from plain calculator inputs (landing hero, projects without a stored layout). */
-export function buildScene(type: ProjectType, inputs: Record<string, unknown>, lang: Lang, layout?: Layout): Build {
-  return buildLayout(layout ?? defaultLayout(type, inputs ?? {}), lang);
+export function buildScene(type: ProjectType, inputs: Record<string, unknown>, lang: Lang, layout?: Layout, look?: Look): Build {
+  return buildLayout(layout ?? defaultLayout(type, inputs ?? {}), lang, look);
 }

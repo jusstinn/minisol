@@ -186,3 +186,34 @@ describe("3D sketch follows the layout", () => {
     expect(posts.length).toBe(req(r, "fence_post")!.quantity);
   });
 });
+
+describe("the sketch shows the products actually chosen", () => {
+  it("derives colour and dimensions from catalogue specs", async () => {
+    const { lookOf, parseSizeCm } = await import("../look");
+    const catalog = (await import("../../data/catalog.json")).default as unknown as import("../types").Product[];
+    const larch = catalog.find((p) => p.sku === "11432893")!;
+    const wpc = catalog.find((p) => p.sku === "11018655")!;
+    const pine120 = catalog.find((p) => p.sku === "11427417")!;
+    expect(lookOf(larch).color).not.toBe(lookOf(wpc).color);
+    expect(lookOf(pine120).w).toBeCloseTo(0.12);
+    expect(parseSizeCm("20x120")).toEqual([0.2, 1.2]);
+    const joist = catalog.find((p) => p.roles.includes("deck_joist") && p.specs.sectionMm === "45x70")!;
+    expect(lookOf(joist).w).toBeCloseTo(0.045);
+    expect(lookOf(joist).t).toBeCloseTo(0.07);
+  });
+
+  it("narrower boards → more rows; bigger tiles → fewer tiles; colours follow the product", () => {
+    const deck = defaultLayout("deck", { lengthM: 4, widthM: 3 });
+    const rows = (w: number) => buildLayout(deck, "ro", { deck_board: { color: "#8a8c8f", name: "x", w } }).parts.filter((p) => p.layer === "deck_board");
+    expect(rows(0.12).length).toBeGreaterThan(rows(0.145).length);
+    expect(rows(0.12)[0].color).not.toBe(buildLayout(deck, "ro").parts.find((p) => p.layer === "deck_board")!.color);
+
+    const bath = defaultLayout("tiling", { lengthM: 2.5, widthM: 2, roomType: "bathroom" });
+    const floor = (w: number, l: number) => buildLayout(bath, "ro", { floor_tiles: { color: "#9c9fa3", name: "t", w, l } }).parts.filter((p) => p.layer === "floor_tiles").length;
+    expect(floor(0.6, 0.6)).toBeLessThan(floor(0.33, 0.33));
+    // same ids for the parts that stay → swapping a product morphs instead of rebuilding
+    const a = buildLayout(deck, "ro", { deck_board: { color: "#b9774a", name: "larch", w: 0.143 } }).parts.map((p) => p.id);
+    const b = buildLayout(deck, "ro", { deck_board: { color: "#8a8c8f", name: "wpc", w: 0.14 } }).parts.map((p) => p.id);
+    expect(b.filter((id) => a.includes(id)).length / b.length).toBeGreaterThan(0.9);
+  });
+});

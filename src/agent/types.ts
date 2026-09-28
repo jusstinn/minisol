@@ -2,6 +2,7 @@ import type { CalculationResult, ProjectType } from "@/domain/calculators";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { ArtSpec } from "@/domain/art";
 import type { Layout } from "@/domain/layout";
+import type { Look } from "@/domain/look";
 import type { MaterialRole, Offer, QualityTier } from "@/domain/types";
 
 /** Conversation state the client round-trips with every request (server stays stateless). */
@@ -188,6 +189,8 @@ export type Card =
       quality?: QualityTier;
       /** Alternatives per basket role — stay valid while the project is the same. */
       choices?: ChoiceGroup[];
+      /** How the chosen products look in the 3D sketch (colour, board width, tile format…). */
+      look?: Look;
     }
   | { kind: "stock"; id: string; stores: StockStoreView[] }
   | { kind: "offers"; id: string; offers: OfferView[] }

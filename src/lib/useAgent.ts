@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { AgentEvent, Card, ChoiceGroup, ProductOptionView, QualityOption, SessionState, UiCommand } from "@/agent/types";
 import type { SketchOp } from "@/domain/layout";
+import type { Look } from "@/domain/look";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 
@@ -214,7 +215,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
           body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, items: merged, storeId: sid, lang: opts.lang }),
         });
         if (!res.ok) throw new Error(`quote ${res.status}`);
-        const { quote } = (await res.json()) as { quote: Quote };
+        const { quote, look } = (await res.json()) as { quote: Quote; look?: Look };
         if (seq !== repriceSeq.current) return;
         pendingRef.current = null;
         stateRef.current = { ...stateRef.current, basket: merged, storeId: quote.storeId, quality: opts2.quality ?? stateRef.current.quality };
@@ -227,8 +228,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 tiers: opts2.keepTiers ? b.quote.tiers : undefined,
                 quality: opts2.quality ?? b.quote.quality,
                 suggestions: opts2.quality ? [] : b.quote.suggestions,
+                look: look ?? b.quote.look,
               }
-            : { kind: "quote", id: uid(), quote, suggestions: [], owned: [] },
+            : { kind: "quote", id: uid(), quote, suggestions: [], owned: [], look },
           last: "quote",
           version: b.version + 1,
         }));
