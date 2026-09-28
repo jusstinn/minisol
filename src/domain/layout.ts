@@ -374,6 +374,12 @@ export interface SketchOp {
 
 export class SketchEditError extends Error {}
 
+/** Language of the edit being applied, so refusals read naturally in the customer's language. */
+let MSG_LANG: Lang = "ro";
+function fail(ro: string, en: string): never {
+  throw new SketchEditError(MSG_LANG === "en" ? en : ro);
+}
+
 const SIDE_NAMES: Record<Side, { ro: string; en: string }> = {
   n: { ro: "nord", en: "north" },
   e: { ro: "est", en: "east" },
@@ -383,19 +389,19 @@ const SIDE_NAMES: Record<Side, { ro: string; en: string }> = {
 const fmt = (n: number, lang: Lang) => n.toLocaleString(lang === "en" ? "en-GB" : "ro-RO", { maximumFractionDigits: 2 });
 
 function need<T>(v: T | null | undefined, name: string): T {
-  if (v === null || v === undefined) throw new SketchEditError(`"${name}" is required for this edit`);
+  if (v === null || v === undefined) fail(`Lipsește „${name}” pentru această modificare`, `"${name}" is required for this edit`);
   return v;
 }
 
 function dim(v: number | null | undefined, name: string, lo: number, hi: number): number {
   const n = Number(need(v, name));
-  if (!Number.isFinite(n) || n < lo || n > hi) throw new SketchEditError(`"${name}" must be between ${lo} and ${hi} m`);
+  if (!Number.isFinite(n) || n < lo || n > hi) fail(`„${name}” trebuie să fie între ${lo} și ${hi} m`, `"${name}" must be between ${lo} and ${hi} m`);
   return r2(n);
 }
 
 function findZone(zones: Zone[], id: string | null | undefined): Zone {
   const z = id ? zones.find((x) => x.id === id) : zones[0];
-  if (!z) throw new SketchEditError(`Unknown zone "${id}". Zones: ${zones.map((x) => x.id).join(", ")}`);
+  if (!z) fail(`Zona „${id}” nu există. Zone: ${zones.map((x) => x.id).join(", ")}`, `Unknown zone "${id}". Zones: ${zones.map((x) => x.id).join(", ")}`);
   return z;
 }
 
@@ -427,6 +433,7 @@ function overlaps(a: Zone, b: Zone): boolean {
  */
 export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { layout: Layout; changes: string[] } {
   const en = lang === "en";
+  MSG_LANG = lang;
   const l: Layout = structuredClone(layout);
   const changes: string[] = [];
   const say = (ro: string, e: string) => changes.push(en ? e : ro);
@@ -438,7 +445,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
           const z = findZone(l.zones, o.zone);
           if (o.w != null) z.w = dim(o.w, "w", 0.5, 30);
           if (o.d != null) z.d = dim(o.d, "d", 0.5, 30);
-          if (l.zones.some((x) => x !== z && overlaps(x, z))) throw new SketchEditError("Resized zone would overlap another zone");
+          if (l.zones.some((x) => x !== z && overlaps(x, z))) fail("Zona redimensionată s-ar suprapune peste alta", "Resized zone would overlap another zone");
           say(`Zona ${z.id} are acum ${fmt(z.w, lang)} × ${fmt(z.d, lang)} m`, `Zone ${z.id} is now ${fmt(z.w, lang)} × ${fmt(z.d, lang)} m`);
         } else if (l.type === "paint_room" || l.type === "tiling") {
           if (o.w != null) l.w = dim(o.w, "w", 0.8, 20);
@@ -461,12 +468,12 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "add_zone": {
-        if (l.type !== "deck" && l.type !== "laminate_floor" && l.type !== "lawn") throw new SketchEditError("This project has no zones");
-        if (l.zones.length >= 6) throw new SketchEditError("Maximum 6 zones");
+        if (l.type !== "deck" && l.type !== "laminate_floor" && l.type !== "lawn") fail("Proiectul nu are zone", "This project has no zones");
+        if (l.zones.length >= 6) fail("Maximum 6 zone", "Maximum 6 zones");
         const to = findZone(l.zones, o.zone);
         const side = need(o.side, "side");
         const nz = attachZone(l.zones, to, side, dim(o.w, "w", 0.5, 30), dim(o.d, "d", 0.5, 30), o.align ?? "start");
-        if (l.zones.some((x) => overlaps(x, nz))) throw new SketchEditError("The new zone would overlap an existing one — try another side or alignment");
+        if (l.zones.some((x) => overlaps(x, nz))) fail("Zona nouă s-ar suprapune peste una existentă — încearcă altă latură sau aliniere", "The new zone would overlap an existing one — try another side or alignment");
         l.zones.push(nz);
         say(
           `Adăugată zona ${nz.id} de ${fmt(nz.w, lang)} × ${fmt(nz.d, lang)} m pe latura de ${SIDE_NAMES[side].ro} a zonei ${to.id}`,
@@ -475,8 +482,8 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "remove_zone": {
-        if (l.type !== "deck" && l.type !== "laminate_floor" && l.type !== "lawn") throw new SketchEditError("This project has no zones");
-        if (l.zones.length <= 1) throw new SketchEditError("Can't remove the only zone");
+        if (l.type !== "deck" && l.type !== "laminate_floor" && l.type !== "lawn") fail("Proiectul nu are zone", "This project has no zones");
+        if (l.zones.length <= 1) fail("Nu poți elimina singura zonă", "Can't remove the only zone");
         const z = findZone(l.zones, need(o.zone, "zone"));
         l.zones = l.zones.filter((x) => x !== z);
         if (l.type === "deck") l.steps = l.steps.filter((s) => s.zone !== z.id);
@@ -485,8 +492,8 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "add_steps": {
-        if (l.type !== "deck") throw new SketchEditError("Steps are only for decks");
-        if (l.steps.length >= 4) throw new SketchEditError("Maximum 4 flights of steps");
+        if (l.type !== "deck") fail("Treptele sunt doar pentru terase", "Steps are only for decks");
+        if (l.steps.length >= 4) fail("Maximum 4 seturi de trepte", "Maximum 4 flights of steps");
         const z = findZone(l.zones, o.zone);
         const side = o.side ?? "s";
         const width = dim(o.width ?? Math.min(1.5, wallLength(z.w, z.d, side)), "width", 0.6, wallLength(z.w, z.d, side));
@@ -499,7 +506,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "remove_steps": {
-        if (l.type !== "deck") throw new SketchEditError("Steps are only for decks");
+        if (l.type !== "deck") fail("Treptele sunt doar pentru terase", "Steps are only for decks");
         l.steps = [];
         say("Treptele au fost eliminate", "Removed the steps");
         break;
@@ -519,28 +526,28 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         } else if (l.type === "drywall_partition") {
           l.heightM = dim(v, "value", 2, 5);
           say(`Înălțime perete: ${fmt(l.heightM, lang)} m`, `Wall height: ${fmt(l.heightM, lang)} m`);
-        } else throw new SketchEditError("This project has no height to set");
+        } else fail("Proiectul nu are o înălțime de setat", "This project has no height to set");
         break;
       }
       case "add_opening": {
         const kind = need(o.kind, "kind");
         if (l.type === "fence") {
-          if (kind !== "gate") throw new SketchEditError("Fences take gates");
-          if (l.gates.length >= 4) throw new SketchEditError("Maximum 4 gates");
+          if (kind !== "gate") fail("La gard se pun porți", "Fences take gates");
+          if (l.gates.length >= 4) fail("Maximum 4 porți", "Maximum 4 gates");
           const segs = fenceSegments(l.points);
           const segment = clamp(Math.round(Number(o.segment ?? 0)), 0, segs.length - 1);
           const width = Number(o.width ?? 1) >= 2 ? 3 : 1;
-          if (segs[segment].length < width + 0.5) throw new SketchEditError("That fence segment is too short for this gate");
+          if (segs[segment].length < width + 0.5) fail("Segmentul de gard e prea scurt pentru poarta asta", "That fence segment is too short for this gate");
           l.gates.push({ id: nid("g"), kind: "gate", wall: String(segment), pos: clamp(Number(o.pos ?? 0.5), 0.1, 0.9), width, height: l.heightM });
           say(
             width === 3 ? `Poartă dublă de 3 m pe segmentul ${segment + 1}` : `Poartă pietonală de 1 m pe segmentul ${segment + 1}`,
             width === 3 ? `3 m double gate on segment ${segment + 1}` : `1 m pedestrian gate on segment ${segment + 1}`,
           );
         } else if (l.type === "paint_room" || l.type === "tiling" || l.type === "drywall_partition" || l.type === "laminate_floor") {
-          if (kind === "gate") throw new SketchEditError("Gates are only for fences");
-          if (kind === "window" && l.type !== "paint_room") throw new SketchEditError("Windows only affect painting projects here");
+          if (kind === "gate") fail("Porțile sunt doar pentru garduri", "Gates are only for fences");
+          if (kind === "window" && l.type !== "paint_room") fail("Ferestrele contează doar la zugrăvit", "Windows only affect painting projects here");
           const list = l.openings;
-          if (list.length >= 8) throw new SketchEditError("Maximum 8 openings");
+          if (list.length >= 8) fail("Maximum 8 goluri", "Maximum 8 openings");
           const wall = (o.wall ?? o.side ?? (kind === "window" ? "n" : "s")) as Side;
           const width = dim(o.width ?? (kind === "window" ? 1.2 : 0.9), "width", 0.5, 3);
           list.push({
@@ -554,15 +561,15 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
           });
           const label = kind === "door" ? (en ? "door" : "ușă") : en ? "window" : "fereastră";
           say(`Adăugată ${label} (${fmt(width, lang)} m) pe peretele de ${SIDE_NAMES[wall]?.ro ?? wall}`, `Added a ${label} (${fmt(width, lang)} m) on the ${SIDE_NAMES[wall]?.en ?? wall} wall`);
-        } else throw new SketchEditError("This project has no openings");
+        } else fail("Proiectul nu are uși sau ferestre", "This project has no openings");
         break;
       }
       case "remove_opening":
       case "move_opening": {
         const list = l.type === "fence" ? l.gates : "openings" in l ? l.openings : null;
-        if (!list) throw new SketchEditError("This project has no openings");
+        if (!list) fail("Proiectul nu are uși sau ferestre", "This project has no openings");
         const target = o.id ? list.find((x) => x.id === o.id) : [...list].reverse().find((x) => !o.kind || x.kind === o.kind);
-        if (!target) throw new SketchEditError("No such opening");
+        if (!target) fail("Nu există acest gol", "No such opening");
         if (o.op === "remove_opening") {
           list.splice(list.indexOf(target), 1);
           say("Deschidere eliminată", "Removed the opening");
@@ -574,7 +581,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "set_wall_tiles": {
-        if (l.type !== "tiling") throw new SketchEditError("Wall tiles are only for tiling projects");
+        if (l.type !== "tiling") fail("Faianța e doar pentru proiectele de placare", "Wall tiles are only for tiling projects");
         const h = dim(Number(o.value ?? o.h ?? 0), "value", 0, 3);
         const walls = o.wall === "all" || !o.wall ? SIDES : [o.wall as Side];
         for (const s of walls) l.wallHeights[s] = h;
@@ -585,8 +592,8 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "add_fence_segment": {
-        if (l.type !== "fence") throw new SketchEditError("Segments are only for fences");
-        if (l.points.length >= 7) throw new SketchEditError("Maximum 6 segments");
+        if (l.type !== "fence") fail("Segmentele sunt doar pentru garduri", "Segments are only for fences");
+        if (l.points.length >= 7) fail("Maximum 6 segmente", "Maximum 6 segments");
         const len = dim(o.length ?? o.w, "length", 1, 100);
         const n = l.points.length;
         const a = l.points[n - 2];
@@ -600,7 +607,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "set_segment_length": {
-        if (l.type !== "fence") throw new SketchEditError("Segments are only for fences");
+        if (l.type !== "fence") fail("Segmentele sunt doar pentru garduri", "Segments are only for fences");
         const i = clamp(Math.round(Number(o.segment ?? 0)), 0, l.points.length - 2);
         const len = dim(o.length ?? o.w, "length", 1, 100);
         const a = l.points[i];
@@ -613,8 +620,8 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "remove_fence_segment": {
-        if (l.type !== "fence") throw new SketchEditError("Segments are only for fences");
-        if (l.points.length <= 2) throw new SketchEditError("Can't remove the only segment");
+        if (l.type !== "fence") fail("Segmentele sunt doar pentru garduri", "Segments are only for fences");
+        if (l.points.length <= 2) fail("Nu poți elimina singurul segment", "Can't remove the only segment");
         l.points.pop();
         const segCount = l.points.length - 1;
         l.gates = l.gates.filter((g) => Number(g.wall) < segCount);
@@ -637,14 +644,14 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         else if (l.type === "drywall_partition" && key === "insulation") l.insulation = bool;
         else if (l.type === "drywall_partition" && key === "doubleLayer") l.doubleLayer = bool;
         else if (l.type === "lawn" && key === "mode" && ["new", "overseed"].includes(String(v))) l.mode = v as "new";
-        else throw new SketchEditError(`Option "${key}" = ${JSON.stringify(v)} is not valid for this project`);
+        else fail(`Opțiunea „${key}” = ${JSON.stringify(v)} nu e validă pentru acest proiect`, `Option "${key}" = ${JSON.stringify(v)} is not valid for this project`);
         say(`Setare actualizată: ${key}`, `Updated setting: ${key}`);
         break;
       }
       case "add_item": {
         const kind = asKind(need(o.item, "item"));
         const items = (l.items ??= []);
-        if (items.length >= 24) throw new SketchEditError("Maximum 24 items in one sketch");
+        if (items.length >= 24) fail("Maximum 24 de obiecte într-o schiță", "Maximum 24 items in one sketch");
         const placed = placeItem(l, kind, o, items);
         const it: Item = { id: nid("it"), kind, ...placed };
         items.push(it);
@@ -657,7 +664,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
       case "remove_item": {
         const items = l.items ?? [];
         const target = o.id ? items.find((x) => x.id === o.id) : [...items].reverse().find((x) => !o.item || x.kind === asKind(o.item));
-        if (!target) throw new SketchEditError(o.item ? `There is no ${String(o.item)} in the sketch` : "No such item");
+        if (!target) fail(o.item ? `Nu există ${String(o.item)} în schiță` : "Nu există acest obiect", o.item ? `There is no ${String(o.item)} in the sketch` : "No such item");
         const name = { ro: lowerFirst(ITEMS[target.kind].label), en: lowerFirst(ITEMS[target.kind].labelEn) };
         if (o.op === "remove_item") {
           l.items = items.filter((x) => x !== target);
@@ -677,7 +684,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       default:
-        throw new SketchEditError(`Unknown edit "${(o as SketchOp).op}"`);
+        fail(`Modificare necunoscută „${(o as SketchOp).op}”`, `Unknown edit "${(o as SketchOp).op}"`);
     }
   }
 
@@ -735,7 +742,7 @@ function asKind(v: unknown): ItemKind {
   if (ITEM_KINDS.includes(k)) return k;
   const hit = ITEM_WORDS.find(([, re]) => re.test(String(v).toLowerCase()))?.[0];
   if (hit) return hit;
-  throw new SketchEditError(`Unknown item "${String(v)}". Items: ${ITEM_KINDS.join(", ")}`);
+  fail(`Obiect necunoscut „${String(v)}”`, `Unknown item "${String(v)}". Items: ${ITEM_KINDS.join(", ")}`);
 }
 
 interface Container {
@@ -793,11 +800,11 @@ export function placeItem(
 ): { x: number; z: number; rot: Item["rot"]; zone?: string; where: Where } {
   const spec = ITEMS[kind];
   const outdoorProject = l.type === "deck" || l.type === "lawn" || l.type === "fence";
-  if (spec.indoor && outdoorProject) throw new SketchEditError(`${spec.labelEn} is for indoors — this is an outdoor project`);
-  if (spec.outdoor && !outdoorProject) throw new SketchEditError(`${spec.labelEn} is for outdoors — this is an indoor project`);
+  if (spec.indoor && outdoorProject) fail(`${spec.label} e pentru interior — proiectul e în exterior`, `${spec.labelEn} is for indoors — this is an outdoor project`);
+  if (spec.outdoor && !outdoorProject) fail(`${spec.label} e pentru exterior — proiectul e în interior`, `${spec.labelEn} is for outdoors — this is an indoor project`);
   const c = itemContainer(l, o.zone, o.x != null && o.z != null ? { x: o.x, z: o.z } : undefined);
-  if (spec.mount === "ceiling" && c.ceilingY == null) throw new SketchEditError(`${spec.labelEn} needs a ceiling — try a garden light`);
-  if (spec.mount === "wall" && !c.walls) throw new SketchEditError(`${spec.labelEn} mounts on a wall — this project has none`);
+  if (spec.mount === "ceiling" && c.ceilingY == null) fail(`${spec.label} are nevoie de tavan — încearcă o lampă de grădină`, `${spec.labelEn} needs a ceiling — try a garden light`);
+  if (spec.mount === "wall" && !c.walls) fail(`${spec.label} se montează pe perete — proiectul nu are pereți`, `${spec.labelEn} mounts on a wall — this project has none`);
 
   const r = c.rect;
   let rot: Item["rot"] = o.rot ?? 0;
@@ -838,7 +845,7 @@ export function placeItem(
     }
   } else if (near) {
     const anchor = findAnchor(l, near, others, c);
-    if (!anchor) throw new SketchEditError(`There is no ${near} to place it next to`);
+    if (!anchor) fail(`Nu există „${near}” lângă care să-l pun`, `There is no ${near} to place it next to`);
     where = anchor.where;
     const f0 = footprint(kind, anchor.side ? ROT_FOR_WALL[anchor.side] : 0);
     if (anchor.side && spec.mount !== "ceiling") {
@@ -872,8 +879,8 @@ export function placeItem(
     slide = cn[0] === "n" || cn[0] === "s" ? "x" : "z";
   } else if (o.wall || o.side) {
     const side = String(o.wall ?? o.side) as Side;
-    if (!SIDES.includes(side)) throw new SketchEditError(`Unknown wall "${String(o.wall ?? o.side)}" — use n, e, s or w`);
-    if (!c.walls && spec.mount !== "floor") throw new SketchEditError(`${spec.labelEn} can't go on an edge without a wall`);
+    if (!SIDES.includes(side)) fail(`Perete necunoscut „${String(o.wall ?? o.side)}”`, `Unknown wall "${String(o.wall ?? o.side)}" — use n, e, s or w`);
+    if (!c.walls && spec.mount !== "floor") fail(`${spec.label} nu se poate pune pe o margine fără perete`, `${spec.labelEn} can't go on an edge without a wall`);
     againstWall(side, clamp(Number(o.pos ?? 0.5), 0, 1));
     where = c.walls ? SIDE_WHERE[side] : { ro: `pe latura de ${{ n: "spate", s: "față", w: "stânga", e: "dreapta" }[side]}`, en: `along the ${{ n: "back", s: "front", w: "left", e: "right" }[side]} edge` };
   } else if (spec.mount === "wall") {
@@ -905,7 +912,7 @@ export function placeItem(
     }
     if (slide === "both") for (let k = 1; k <= 20; k++) for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) tries.push([p.x + dx * k * 0.1, p.z + dz * k * 0.1]);
     const free = tries.map(([a, b]) => inside(a, b)).find((q) => !blocked(q.x, q.z));
-    if (!free) throw new SketchEditError(`There's no free space for the ${spec.labelEn.toLowerCase()} there — move or remove something first`);
+    if (!free) fail(`Nu mai e loc pentru ${lowerFirst(spec.label)} acolo — mută sau scoate ceva întâi`, `There's no free space for the ${spec.labelEn.toLowerCase()} there — move or remove something first`);
     p = free;
   }
   return { x: r2(p.x), z: r2(p.z), rot, zone: c.zone, where };
