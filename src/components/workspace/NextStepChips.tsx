@@ -9,7 +9,7 @@ import type { NextStep } from "@/lib/nextSteps";
 import type { Board, ChatMessage } from "@/lib/useAgent";
 
 /** The tenant's sketch policy, with the same `?sketch=` override as the sketch panel. */
-function useSketchMode(tenant: Tenant): Tenant["sketch"] {
+export function useSketchMode(tenant: Tenant): Tenant["sketch"] {
   const [mode] = useState<Tenant["sketch"]>(() => {
     if (typeof window === "undefined") return tenant.sketch;
     const q = new URLSearchParams(window.location.search).get("sketch");

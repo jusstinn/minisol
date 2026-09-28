@@ -447,6 +447,7 @@ function LineGroup({
                     {group && (
                       <button
                         onClick={() => setOpen(isOpen ? null : group.role)}
+                        data-coach="options"
                         className={`flex items-center gap-1 rounded-lg px-2 py-1 font-mono text-[10.5px] uppercase tracking-wider transition ${
                           isOpen ? "bg-ink text-paper" : "bg-accent/10 text-ink hover:bg-accent/20"
                         }`}

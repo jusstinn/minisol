@@ -21,7 +21,8 @@ import { IconArrowUp, IconBag, IconCheck, Logo } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
 import CardChips from "./CardChips";
-import { NextStepChips, useNextSteps } from "./NextStepChips";
+import { NextStepChips, useNextSteps, useSketchMode } from "./NextStepChips";
+import CoachMarks from "./CoachMarks";
 import { ShareButton } from "./ShareSheet";
 import type { NextStep } from "@/lib/nextSteps";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
@@ -83,6 +84,7 @@ export default function Workspace({
   const quote = agent.board.quote?.quote;
   const project = agent.board.project?.project;
   const chips = useNextSteps(agent.board, agent.messages, lang, tenant);
+  const sketchMode = useSketchMode(tenant);
 
   /** The assistant asked to show a panel: scroll to it on desktop, open its tab on phones. */
   const showPanel = (target: PanelTarget | null, c: UiCommand) => {
@@ -240,6 +242,8 @@ export default function Workspace({
       </div>
 
       {!isDesktop && <MobileTabBar tabs={tabs} board={agent.board} lang={lang} busy={agent.busy} />}
+      {/* First-run hints on the sketch, the list and the chat (once each, never blocking). */}
+      <CoachMarks enabled={Boolean(quote) && !agent.busy && !cartOpen} lang={lang} projectType={project?.type} sketchDrawn={Boolean(project && (sketchMode === "auto" || project.sketched))} />
       {quote && (
         <CartDrawer
           open={cartOpen}
@@ -364,7 +368,7 @@ function Rail({
 
       <div className="border-t border-rule bg-paper px-3 pb-3 pt-2.5 sm:px-5 lg:pb-[max(12px,env(safe-area-inset-bottom))]">
         {chips.length > 0 && !busy && last?.role === "assistant" && <NextStepChips chips={chips} lang={lang} onSend={send} />}
-        <div className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink/40">
+        <div data-coach="composer" className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink/40">
           <textarea
             rows={1}
             value={text}
