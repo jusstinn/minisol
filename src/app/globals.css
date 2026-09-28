@@ -257,6 +257,212 @@ body {
   animation: shimmer 1.6s linear infinite;
 }
 
+/* HORNBACH-inspired retail skin. This remains visibly labelled as a concept demo. */
+.theme-hornbach {
+  --paper: #f4f4f2;
+  --paper-2: #e7e7e4;
+  --paper-3: #d8d8d4;
+  --card: #ffffff;
+  --ink: #2c2c2a;
+  --ink-2: #4b4b47;
+  --ink-3: #74746f;
+  --rule: rgba(20, 20, 18, 0.2);
+  --rule-2: rgba(20, 20, 18, 0.36);
+  --bp: #343432;
+  --bp-deep: #222220;
+  --bp-line: rgba(255, 255, 255, 0.9);
+  --bp-grid: rgba(255, 255, 255, 0.055);
+  --bp-grid-strong: rgba(255, 255, 255, 0.12);
+  font-family: var(--font-archivo), Arial, sans-serif;
+}
+
+.theme-hornbach .paper-grid {
+  background-color: var(--paper);
+  background-image: linear-gradient(135deg, rgba(0, 0, 0, 0.018) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.018) 50%, rgba(0, 0, 0, 0.018) 75%, transparent 75%);
+  background-size: 9px 9px;
+}
+
+.theme-hornbach .retail-header,
+.theme-hornbach .retail-workspace-header {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(rgba(43, 43, 41, 0.97), rgba(43, 43, 41, 0.97)),
+    repeating-linear-gradient(115deg, transparent 0 6px, rgba(255, 255, 255, 0.05) 6px 7px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.22);
+}
+
+.hornbach-store-strip {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid #c8c8c4;
+  padding: 5px clamp(16px, 3vw, 32px);
+  background: #f5f5f3;
+  color: #343432;
+  font-size: 12.5px;
+}
+
+.hornbach-store-strip button {
+  border: 2px solid #2c2c2a;
+  padding: 3px 12px 2px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-stretch: 72%;
+  font-weight: 850;
+}
+
+.hornbach-store-strip--workspace {
+  min-height: 29px;
+  padding-block: 2px;
+  font-size: 11.5px;
+}
+
+.hornbach-nav-row {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: clamp(13px, 2vw, 28px);
+  border-bottom: 1px solid #aaa9a4;
+  padding: 6px clamp(16px, 3vw, 32px);
+  background: #dededb;
+  color: #31312f;
+  font-stretch: 70%;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+}
+
+.hornbach-nav-row--workspace {
+  min-height: 42px;
+  padding-block: 4px;
+}
+
+.hornbach-search {
+  display: flex;
+  min-width: 160px;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #aaa9a4;
+  padding: 9px 13px 8px;
+  background: #fff;
+  color: #73736f;
+  font-family: var(--font-archivo), Arial, sans-serif;
+  font-stretch: 90%;
+  font-weight: 500;
+  text-align: left;
+  text-transform: none;
+}
+
+.hornbach-nav-row--workspace .hornbach-search {
+  padding-block: 6px;
+}
+
+.theme-hornbach .retail-header .label,
+.theme-hornbach .retail-header a,
+.theme-hornbach .retail-workspace-header .text-ink-3 {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.hornbach-logo {
+  display: block;
+  width: 112px;
+  height: auto;
+}
+
+.hornbach-logo--small {
+  width: 80px;
+}
+
+.theme-hornbach .display,
+.theme-hornbach .display-cond,
+.theme-hornbach h1,
+.theme-hornbach h2,
+.theme-hornbach h3 {
+  font-stretch: 72%;
+  font-weight: 850;
+}
+
+.theme-hornbach .label,
+.theme-hornbach button,
+.theme-hornbach nav {
+  font-stretch: 78%;
+}
+
+/* Hornbach uses pragmatic retail typography. Remove the developer-console
+   appearance from metadata, status rows, prices and controls in this tenant. */
+.theme-hornbach .font-mono {
+  font-family: var(--font-archivo), Arial, sans-serif;
+  font-stretch: 82%;
+  font-weight: 560;
+  letter-spacing: 0.015em;
+}
+
+.theme-hornbach .label {
+  font-family: var(--font-archivo), Arial, sans-serif;
+  font-stretch: 74%;
+  font-weight: 760;
+  letter-spacing: 0.055em;
+}
+
+.theme-hornbach .language-switch,
+.theme-hornbach .journey-shell,
+.theme-hornbach .project-card,
+.theme-hornbach .project-input,
+.theme-hornbach .primary-action,
+.theme-hornbach .blueprint-hero,
+.theme-hornbach .chat-composer {
+  border-radius: 2px;
+}
+
+.theme-hornbach .project-card {
+  border-color: #b8b8b3;
+  border-width: 1px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  text-transform: uppercase;
+  font-stretch: 76%;
+  font-weight: 750;
+  letter-spacing: 0.015em;
+}
+
+.theme-hornbach .project-card:hover {
+  border-color: #2c2c2a;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
+}
+
+.theme-hornbach .project-input {
+  border: 2px solid #777772;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.theme-hornbach .primary-action {
+  background: var(--accent);
+  color: var(--on-accent);
+  text-transform: uppercase;
+  font-stretch: 72%;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+}
+
+.theme-hornbach .primary-action:hover:not(:disabled) {
+  background: #ff9518;
+}
+
+.theme-hornbach .blueprint-hero {
+  border: 4px solid #fff;
+  outline: 1px solid #777772;
+  box-shadow: 7px 7px 0 rgba(0, 0, 0, 0.22);
+}
+
 /* Scrollbars */
 .thin-scroll {
   scrollbar-width: thin;

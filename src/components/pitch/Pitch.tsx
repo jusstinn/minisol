@@ -96,7 +96,7 @@ export default function Pitch({ tenant, lang, examples }: { tenant: Tenant; lang
           </motion.div>
         </div>
         <motion.div {...reveal} transition={{ ...reveal.transition, delay: 0.2 }} className="bp-sheet relative h-[420px] overflow-hidden rounded-[28px] shadow-[0_50px_90px_-50px_rgba(10,31,71,0.9)] lg:h-[560px]">
-          <Scene build={heroes[heroIdx]} mode="blueprint" autoRotate compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
+          <Scene build={heroes[heroIdx]} mode="blueprint" autoRotate={false} compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
           <div className="pointer-events-none absolute bottom-5 left-6 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#c7d9fa]">
             {L("Model generat din dimensiunile clientului", "Generated from the customer's dimensions")}
           </div>

@@ -39,7 +39,10 @@ export default function Board(props: Props) {
     return (
       <div className="space-y-4">
         {onlyCards.map((c) => (
-          <div key={c.id}>{renderCard(c.kind === "quote" && board.quote?.id === c.id ? board.quote : c)}</div>
+          <div key={c.id} className="space-y-4">
+            {renderCard(c.kind === "quote" && board.quote?.id === c.id ? board.quote : c)}
+            {c.kind === "project" && <PlanningNotice lang={lang} />}
+          </div>
         ))}
         {onlyCards.some((c) => c.kind === "plan") && board.project && board.quote && ["deck", "fence", "lawn"].includes(board.project.project.type) && (
           <WeatherPanel
@@ -97,9 +100,12 @@ export default function Board(props: Props) {
     <div className="mx-auto max-w-[1280px] space-y-5 p-4 sm:p-6 xl:p-8">
       {empty && <EmptyBoard lang={lang} />}
       {board.project && (
-        <Flash on={board.last === "project"} v={board.version}>
-          {renderCard(board.project)}
-        </Flash>
+        <>
+          <Flash on={board.last === "project"} v={board.version}>
+            {renderCard(board.project)}
+          </Flash>
+          <PlanningNotice lang={lang} />
+        </>
       )}
       {(quote || board.offers) && (
         <div className="grid items-start gap-5 2xl:grid-cols-[1.4fr_1fr]">
@@ -144,6 +150,21 @@ export default function Board(props: Props) {
         {tenant.id !== "demo" && (lang === "en" ? ` · Concept by WalletLoop, not an official ${tenant.name} service` : ` · Concept WalletLoop, nu un serviciu oficial ${tenant.name}`)}
       </div>
     </div>
+  );
+}
+
+function PlanningNotice({ lang }: { lang: Lang }) {
+  return (
+    <aside className="border border-accent/50 bg-accent/10 px-4 py-3" aria-label={lang === "en" ? "Planning estimate notice" : "Notă despre estimare"}>
+      <div className="text-[13px] font-bold text-ink">
+        {lang === "en" ? "A starting point for your project" : "Un punct de plecare pentru proiectul tău"}
+      </div>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
+        {lang === "en"
+          ? "The 3D view and material list are indicative design suggestions. Recheck measurements, waste allowances, product compatibility, current prices and stock before committing funds. Structural, electrical, gas and plumbing work should be verified by a qualified professional."
+          : "Vizualizarea 3D și lista de materiale sunt sugestii orientative de design. Verifică din nou măsurătorile, pierderile de material, compatibilitatea produselor, prețurile și stocul înainte să aloci bugetul. Lucrările structurale, electrice, de gaz și instalații trebuie validate de un profesionist autorizat."}
+      </p>
+    </aside>
   );
 }
 

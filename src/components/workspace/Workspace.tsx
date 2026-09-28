@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
@@ -47,26 +48,45 @@ export default function Workspace({
 
   const quote = agent.board.quote?.quote;
   const project = agent.board.project?.project;
+  const journeyStep = quote ? 3 : project || agent.busy ? 2 : 1;
 
   return (
     <div className="flex h-dvh flex-col bg-paper">
+      {tenant.id === "hornbach" && (
+        <div className="hornbach-store-strip hornbach-store-strip--workspace">
+          <span>{lang === "en" ? "Your store: HORNBACH Bucharest Militari" : "Magazinul tău: HORNBACH București Militari"}</span>
+          <span className="underline">{lang === "en" ? "Change store" : "Schimbă magazinul"}</span>
+          <span className="ml-auto hidden font-semibold md:inline">{lang === "en" ? "Concept demo — fictional catalogue and stock" : "Demo conceptual — catalog și stoc fictive"}</span>
+        </div>
+      )}
       {/* header */}
-      <header className="flex items-center gap-3 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:px-6">
+      <header className="retail-workspace-header flex items-center gap-3 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:px-6">
         <button onClick={onExit} className="flex items-center gap-2" title={tr("newProject", lang)}>
-          <Logo className="text-ink" />
+          {tenant.id === "hornbach" ? (
+            <Image
+              className="hornbach-logo hornbach-logo--small"
+              src="https://media.hornbach.ro/webshop-commons/649/images/logo.ro-RO.v1.svg"
+              width={283}
+              height={72}
+              alt="HORNBACH"
+              unoptimized
+            />
+          ) : <Logo className="text-ink" />}
           <span className="display text-[17px] leading-none">Blueprint</span>
         </button>
         <span className="hidden font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 md:inline">
           / {tenant.name} / {project ? project.title : "…"}
         </span>
-        <button
-          onClick={() => setOffline((o) => !o)}
-          title={agent.mode?.reason ?? ""}
-          className="ml-1 flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 transition hover:border-ink"
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${offline || agent.mode?.mode === "scripted" ? "bg-accent" : "bg-ok"} ${agent.busy ? "animate-pulse" : ""}`} />
-          <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
-        </button>
+        {tenant.id !== "hornbach" && (
+          <button
+            onClick={() => setOffline((o) => !o)}
+            title={agent.mode?.reason ?? ""}
+            className="ml-1 flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 transition hover:border-ink"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${offline || agent.mode?.mode === "scripted" ? "bg-accent" : "bg-ok"} ${agent.busy ? "animate-pulse" : ""}`} />
+            <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <AnimatePresence>
             {quote && (
@@ -113,6 +133,22 @@ export default function Workspace({
           </button>
         </div>
       </header>
+
+      {tenant.id === "hornbach" && (
+        <nav className="hornbach-nav-row hornbach-nav-row--workspace" aria-label={lang === "en" ? "Project navigation" : "Navigarea proiectului"}>
+          <button onClick={onExit}>{lang === "en" ? "PROJECTS" : "PROIECTE"}</button>
+          <span className="hidden sm:inline">{lang === "en" ? "MATERIALS" : "MATERIALE"}</span>
+          <span className="hidden md:inline">{lang === "en" ? "STORE STOCK" : "STOC MAGAZIN"}</span>
+          <div className="hornbach-search">
+            <span>{project?.title ?? (lang === "en" ? "Your current project" : "Proiectul tău curent")}</span>
+            <span aria-hidden>⌕</span>
+          </div>
+          <span className="hidden lg:inline">{lang === "en" ? "MY ACCOUNT" : "CONTUL MEU"}</span>
+          <button onClick={() => setCartOpen(true)}>▣ {lang === "en" ? "MY CART" : "COȘUL MEU"}</button>
+        </nav>
+      )}
+
+      <JourneyProgress lang={lang} current={journeyStep} />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(360px,440px)_1fr]">
         <Rail
@@ -232,6 +268,30 @@ export default function Workspace({
   );
 }
 
+function JourneyProgress({ lang, current }: { lang: Lang; current: number }) {
+  const steps = lang === "en" ? ["Project", "Measurements", "Your plan"] : ["Proiect", "Măsurători", "Planul tău"];
+  return (
+    <nav aria-label={lang === "en" ? "Project progress" : "Progresul proiectului"} className="border-b border-rule bg-card/70 px-4 py-2 sm:px-6">
+      <ol className="mx-auto flex max-w-3xl items-center">
+        {steps.map((step, i) => {
+          const number = i + 1;
+          const complete = number < current;
+          const active = number === current;
+          return (
+            <li key={step} aria-current={active ? "step" : undefined} className="flex min-w-0 flex-1 items-center last:flex-none">
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full font-mono text-[10px] font-bold ${complete ? "bg-ok text-white" : active ? "bg-accent text-on-accent" : "border border-rule bg-paper text-ink-3"}`}>
+                {complete ? <IconCheck size={13} /> : number}
+              </span>
+              <span className={`ml-2 hidden text-[11.5px] font-medium sm:block ${active ? "text-ink" : "text-ink-3"}`}>{step}</span>
+              {i < steps.length - 1 && <span className={`mx-2 h-px min-w-5 flex-1 ${complete ? "bg-ok" : "bg-rule"}`} />}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 function Rail({
   lang,
   messages,
@@ -317,7 +377,7 @@ function Rail({
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink/40">
+        <div className="chat-composer flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink/40">
           <textarea
             rows={1}
             value={text}
@@ -369,4 +429,3 @@ const fmtT = (ms: number) => {
   const s = ms / 1000;
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 };
-

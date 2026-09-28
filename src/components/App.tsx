@@ -33,20 +33,15 @@ export default function App({ tenant, initialMember }: { tenant: Tenant; initial
   const style = { "--accent": tenant.accent, "--on-accent": tenant.onAccent } as React.CSSProperties;
 
   return (
-    <div style={style} className="min-h-dvh">
+    <div style={style} className={`min-h-dvh ${tenant.id === "hornbach" ? "theme-hornbach" : ""}`}>
       <AnimatePresence mode="wait">
         {!session || !member ? (
           <motion.div key="entry" exit={{ opacity: 0, y: -24, filter: "blur(6px)" }} transition={{ duration: 0.45, ease: [0.7, 0, 0.84, 0] }}>
             <Entry
               tenant={tenant}
-              members={members}
               member={member}
               lang={lang}
               onLang={setLang}
-              onSelect={(m) => {
-                setMemberId(m.memberId);
-                setLang(m.language);
-              }}
               onStart={(prompt) => setSession({ prompt, key: Date.now() })}
             />
           </motion.div>

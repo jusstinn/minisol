@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { ProjectType } from "@/domain/calculators";
@@ -10,9 +11,8 @@ import { PROJECT_STARTERS, tr } from "@/lib/i18n";
 import { buildScene } from "../blueprint/builders";
 import { IconArrow, Logo, PROJECT_ICONS } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
-import { Scramble } from "../ui/primitives";
 import type { MemberSummary } from "./WalletPass";
-import { WalletPass } from "./WalletPass";
+import ModelImport from "./ModelImport";
 
 const Scene = dynamic(() => import("../blueprint/Scene"), { ssr: false });
 
@@ -27,31 +27,20 @@ const HERO_BUILDS: { type: ProjectType; inputs: Record<string, unknown>; ro: str
 
 export default function Entry({
   tenant,
-  members,
   member,
   lang,
   onLang,
-  onSelect,
   onStart,
 }: {
   tenant: Tenant;
-  members: MemberSummary[];
   member?: MemberSummary;
   lang: Lang;
   onLang: (l: Lang) => void;
-  onSelect: (m: MemberSummary) => void;
   onStart: (prompt: string) => void;
 }) {
-  const [wordIdx, setWordIdx] = useState(0);
   const [heroIdx, setHeroIdx] = useState(0);
   const [prompt, setPrompt] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const words = tr("projects", lang);
-
-  useEffect(() => {
-    const id = setInterval(() => setWordIdx((i) => (i + 1) % words.length), 2600);
-    return () => clearInterval(id);
-  }, [words.length]);
   useEffect(() => {
     const id = setInterval(() => setHeroIdx((i) => (i + 1) % HERO_BUILDS.length), 7800);
     return () => clearInterval(id);
@@ -59,8 +48,6 @@ export default function Entry({
 
   const hero = HERO_BUILDS[heroIdx];
   const heroBuild = useMemo(() => buildScene(hero.type, hero.inputs, lang), [hero, lang]);
-  const [head1, head2] = tr("headline", lang);
-
   const submit = (text: string) => {
     if (!text.trim() || !member) return;
     onStart(text.trim());
@@ -68,23 +55,42 @@ export default function Entry({
 
   return (
     <div className="paper-grid relative flex min-h-dvh flex-col overflow-hidden">
-      {/* top bar */}
-      <header className="relative z-20 flex items-center gap-3 px-4 pt-4 sm:px-8 sm:pt-6">
-        <Logo className="text-ink" />
-        <div className="flex items-baseline gap-2">
-          <span className="display text-[19px] leading-none">Blueprint</span>
-          <span className="label hidden sm:inline">by WalletLoop</span>
+      {tenant.id === "hornbach" && (
+        <div className="hornbach-store-strip">
+          <span>{lang === "en" ? "Is Domnești, Ilfov your preferred store?" : "Magazinul Domnești, jud. Ilfov este cel potrivit?"}</span>
+          <button>{lang === "en" ? "YES" : "DA"}</button>
+          <span className="underline">{lang === "en" ? "No, change store" : "Nu, schimbă magazinul"}</span>
+          <span className="ml-auto hidden font-semibold sm:inline">{lang === "en" ? "Concept demo — not an official HORNBACH service" : "Demo conceptual — nu este un serviciu oficial HORNBACH"}</span>
         </div>
-        <span className="ml-2 hidden rounded-full border border-rule px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 sm:inline-flex">
-          {lang === "en" ? "for" : "pentru"}&nbsp;<b className="font-semibold text-ink">{tenant.name}</b>
-        </span>
+      )}
+      {/* top bar */}
+      <header className="retail-header relative z-20 flex items-center gap-3 px-4 py-4 sm:px-8 sm:py-5">
+        {tenant.id === "hornbach" ? (
+          <Image
+            className="hornbach-logo"
+            src="https://media.hornbach.ro/webshop-commons/649/images/logo.ro-RO.v1.svg"
+            width={283}
+            height={72}
+            alt="HORNBACH"
+            unoptimized
+          />
+        ) : <Logo className="text-ink" />}
+        <div className="flex flex-col gap-0.5">
+          <span className="display text-[19px] leading-none">Blueprint</span>
+          <span className="label hidden sm:inline">{lang === "en" ? "Project assistant · concept demo" : "Asistent de proiect · demo conceptual"}</span>
+        </div>
+        {tenant.id !== "hornbach" && (
+          <span className="ml-2 hidden rounded-full border border-rule px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 sm:inline-flex">
+            {lang === "en" ? "for" : "pentru"}&nbsp;<b className="font-semibold text-ink">{tenant.name}</b>
+          </span>
+        )}
         <a
           href={`/pitch?retailer=${tenant.id}&lang=${lang}`}
           className="ml-auto hidden rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:text-ink sm:inline"
         >
           {lang === "en" ? "For retailers →" : "Pentru retaileri →"}
         </a>
-        <div className="flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur sm:ml-0 max-sm:ml-auto">
+        <div className="language-switch flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur sm:ml-0 max-sm:ml-auto">
           {(["ro", "en"] as const).map((l) => (
             <button
               key={l}
@@ -96,28 +102,72 @@ export default function Entry({
           ))}
         </div>
       </header>
+      {tenant.id === "hornbach" && (
+        <nav className="hornbach-nav-row" aria-label={lang === "en" ? "Main navigation" : "Navigare principală"}>
+          <span>{lang === "en" ? "RANGE" : "SORTIMENT"}</span>
+          <span>{lang === "en" ? "PROJECTS" : "PROIECTE"}</span>
+          <span className="hidden sm:inline">{lang === "en" ? "MY STORE" : "MAGAZINUL MEU"}</span>
+          <button className="hornbach-search" onClick={() => inputRef.current?.focus()}>
+            <span>{lang === "en" ? "What project do you want to build?" : "Ce proiect vrei să realizezi?"}</span>
+            <span aria-hidden>⌕</span>
+          </button>
+          <span className="hidden lg:inline">{lang === "en" ? "MY ACCOUNT" : "CONTUL MEU"}</span>
+          <span className="hidden xl:inline">♡ {lang === "en" ? "FAVORITES" : "LISTELE MELE"}</span>
+        </nav>
+      )}
 
-      <main className="relative z-10 mx-auto grid w-full max-w-[1480px] flex-1 grid-cols-1 gap-10 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pt-14">
+      <main className="relative z-10 mx-auto grid w-full max-w-[1280px] flex-1 grid-cols-1 gap-10 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pt-10">
         {/* left: message + prompt */}
         <section className="flex flex-col">
-          <div className="label mb-5 flex items-center gap-2">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-            {tr("fromWallet", lang)} · {tenant.programName}
-          </div>
-          <h1 className="display text-[clamp(44px,7.2vw,108px)] text-ink">
-            <span className="block">{head1}</span>
-            <span className="block min-h-[1em] text-accent">
-              <Scramble key={words[wordIdx]} text={words[wordIdx]} />
-            </span>
-            <span className="mt-3 block text-[0.4em] font-bold tracking-[-0.02em] text-ink-2">{head2}</span>
+          <h1 className="display max-w-[720px] text-[clamp(42px,6.2vw,88px)] text-ink">
+            {lang === "en" ? "What would you like to build?" : "Ce vrei să construiești?"}
           </h1>
-          <p className="mt-6 max-w-[560px] text-[16.5px] leading-relaxed text-ink-2 sm:text-[18px]">{tr("subhead", lang)}</p>
+          <p className="mt-5 max-w-[610px] text-[16.5px] leading-relaxed text-ink-2 sm:text-[18px]">
+            {lang === "en"
+              ? "Choose a common project or describe your own. We’ll use your measurements to suggest a design direction and an indicative shopping list."
+              : "Alege un proiect obișnuit sau descrie-l pe al tău. Folosim măsurătorile tale pentru a propune o direcție de design și o listă orientativă de cumpărături."}
+          </p>
+
+          <JourneyPreview lang={lang} />
+
+          <div className="mt-7 max-w-[680px]">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+                {lang === "en" ? "Choose a project" : "Alege un proiect"}
+              </span>
+              <span className="text-[12.5px] text-ink-3">{lang === "en" ? "or write your own below" : "sau descrie-l mai jos"}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {PROJECT_STARTERS.map((s, i) => {
+                const Icon = PROJECT_ICONS[s.icon];
+                return (
+                  <motion.button
+                    key={s.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 + i * 0.04, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                    onClick={() => submit(lang === "en" ? s.promptEn : s.promptRo)}
+                    className="project-card group/chip flex min-h-16 items-center gap-3 rounded-2xl border border-ink/15 bg-card/85 p-3 text-left text-[13.5px] font-medium text-ink transition hover:-translate-y-0.5 hover:border-ink hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-paper-2 text-ink transition group-hover/chip:bg-accent group-hover/chip:text-on-accent">
+                      {Icon && <Icon size={19} />}
+                    </span>
+                    {lang === "en" ? s.en : s.ro}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* prompt */}
-          <div className="group relative mt-8 max-w-[640px]">
+          <div className="group relative mt-6 max-w-[680px]">
+            <label htmlFor="project-description" className="mb-2 block font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+              {lang === "en" ? "Describe your project" : "Descrie proiectul tău"}
+            </label>
             <div className="absolute -inset-px rounded-[20px] bg-gradient-to-r from-accent/60 via-accent/10 to-transparent opacity-0 blur transition group-focus-within:opacity-100" />
-            <div className="relative flex items-end gap-2 rounded-[18px] border border-ink/15 bg-card p-2 shadow-[0_18px_40px_-24px_rgba(20,19,17,0.5)]">
+            <div className="project-input relative flex items-end gap-2 rounded-[18px] border border-ink/15 bg-card p-2 shadow-[0_18px_40px_-24px_rgba(20,19,17,0.5)]">
               <textarea
+                id="project-description"
                 ref={inputRef}
                 rows={2}
                 value={prompt}
@@ -135,34 +185,17 @@ export default function Entry({
               <button
                 onClick={() => submit(prompt)}
                 disabled={!prompt.trim() || !member}
-                className="flex h-12 items-center gap-2 rounded-[14px] bg-ink px-4 text-[14px] font-semibold text-paper transition enabled:hover:bg-accent enabled:hover:text-on-accent disabled:opacity-30"
+                className="primary-action flex h-12 items-center gap-2 rounded-[14px] bg-ink px-4 text-[14px] font-semibold text-paper transition enabled:hover:bg-accent enabled:hover:text-on-accent disabled:opacity-30"
               >
                 {tr("start", lang)} <IconArrow size={18} />
               </button>
             </div>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">
+              {lang === "en" ? "Include measurements if you know them. If not, we’ll guide you." : "Adaugă dimensiunile dacă le știi. Dacă nu, te ghidăm noi."}
+            </p>
           </div>
 
-          {/* starters */}
-          <div className="mt-5 flex max-w-[680px] flex-wrap gap-2">
-            {PROJECT_STARTERS.map((s, i) => {
-              const Icon = PROJECT_ICONS[s.icon];
-              return (
-                <motion.button
-                  key={s.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 + i * 0.05, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  onClick={() => submit(lang === "en" ? s.promptEn : s.promptRo)}
-                  className="group/chip flex items-center gap-2 rounded-full border border-ink/15 bg-card/80 py-1.5 pl-2 pr-3.5 text-[13.5px] text-ink-2 backdrop-blur transition hover:-translate-y-0.5 hover:border-ink hover:bg-ink hover:text-paper"
-                >
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-paper-2 text-ink transition group-hover/chip:bg-accent group-hover/chip:text-on-accent">
-                    {Icon && <Icon size={16} />}
-                  </span>
-                  {lang === "en" ? s.en : s.ro}
-                </motion.button>
-              );
-            })}
-          </div>
+          <ModelImport lang={lang} onStart={submit} />
 
           <p className="mt-8 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">{tr("privacy", lang)}</p>
           {tenant.id !== "demo" && (
@@ -174,11 +207,11 @@ export default function Entry({
           )}
         </section>
 
-        {/* right: blueprint sheet + wallet passes */}
+        {/* right: project visual */}
         <section className="flex flex-col gap-8 lg:relative lg:block lg:min-h-[640px]">
-          <div className="bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:left-10 lg:h-auto">
+          <div className="blueprint-hero bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:left-10 lg:h-auto">
             <div className="absolute inset-0">
-              <Scene build={heroBuild} mode="blueprint" autoRotate compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
+              <Scene build={heroBuild} mode="blueprint" autoRotate={false} compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
             </div>
             <div className="pointer-events-none absolute left-5 top-5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#b9d0f7] sm:left-7 sm:top-6">
               <AnimatePresence mode="wait">
@@ -191,13 +224,6 @@ export default function Entry({
             <TitleBlock lang={lang} />
           </div>
 
-          {/* pass stack */}
-          <div className="order-first mx-auto w-[min(92%,340px)] lg:absolute lg:-bottom-4 lg:-left-8 lg:order-none lg:mx-0 lg:w-[330px]">
-            <div className="mb-[104px]">
-              <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">{tr("pickPass", lang)} ↓</span>
-            </div>
-            <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
-          </div>
         </section>
       </main>
 
@@ -206,69 +232,27 @@ export default function Entry({
   );
 }
 
-function PassStack({
-  members,
-  selected,
-  tenant,
-  lang,
-  onSelect,
-}: {
-  members: MemberSummary[];
-  selected?: MemberSummary;
-  tenant: Tenant;
-  lang: Lang;
-  onSelect: (m: MemberSummary) => void;
-}) {
-  if (!members.length || !selected) return <div className="aspect-[1.58/1] w-full animate-pulse rounded-[18px] bg-paper-3" />;
-  const order = [selected, ...members.filter((m) => m.memberId !== selected.memberId)];
+function JourneyPreview({ lang }: { lang: Lang }) {
+  const steps = lang === "en" ? ["Your idea", "Measurements", "Design estimate"] : ["Ideea ta", "Măsurători", "Estimare de design"];
   return (
-    <div>
-      <div className="relative aspect-[1.58/1] w-full">
-        {order
-          .map((m, pos) => ({ m, pos }))
-          .reverse()
-          .map(({ m, pos }) => (
-            <motion.div
-              key={m.memberId}
-              className="absolute inset-0 cursor-pointer"
-              style={{ zIndex: 10 - pos }}
-              initial={false}
-              animate={{ x: 0, y: -pos * 30, rotate: 0, scale: 1 - pos * 0.035, opacity: pos > 3 ? 0 : 1 }}
-              transition={{ type: "spring", stiffness: 260, damping: 26 }}
-              onClick={() => pos > 0 && onSelect(m)}
-              whileHover={pos > 0 ? { y: -pos * 30 - 14 } : undefined}
-            >
-              <WalletPass member={m} tenant={tenant} lang={lang} tilt={pos === 0} />
-            </motion.div>
-          ))}
-      </div>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={selected.memberId}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          className="mt-4 rounded-xl border border-rule bg-card/85 px-3.5 py-2.5 backdrop-blur"
-        >
-          <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">
-            {selected.firstName} · {selected.tier} · {selected.city}
-          </div>
-          <div className="mt-0.5 text-[13.5px] leading-snug text-ink-2">{lang === "en" ? selected.personaEn : selected.persona}</div>
-          {!selected.personalization && (
-            <div className="mt-1.5 inline-flex rounded-full bg-ink px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-paper">
-              {tr("noPersonalization", lang)}
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
-    </div>
+    <ol aria-label={lang === "en" ? "How it works" : "Cum funcționează"} className="journey-shell mt-6 flex max-w-[680px] items-center rounded-2xl border border-rule bg-card/65 p-3">
+      {steps.map((step, i) => (
+        <li key={step} className="flex min-w-0 flex-1 items-center">
+          <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full font-mono text-[11px] font-bold ${i === 0 ? "bg-accent text-on-accent" : "bg-paper-2 text-ink-2"}`}>
+            {i + 1}
+          </span>
+          <span className="ml-2 hidden text-[12px] font-medium text-ink-2 sm:block">{step}</span>
+          {i < steps.length - 1 && <span className="mx-2 h-px flex-1 bg-rule" />}
+        </li>
+      ))}
+    </ol>
   );
 }
 
 function TitleBlock({ lang }: { lang: Lang }) {
   const date = new Date().toLocaleDateString(lang === "en" ? "en-GB" : "ro-RO");
   const rows: [string, string][] = [
-    [lang === "en" ? "Drawn by" : "Desenat", "Blueprint AI"],
+    [lang === "en" ? "Document" : "Document", lang === "en" ? "Concept sketch" : "Schiță conceptuală"],
     [lang === "en" ? "Scale" : "Scara", "1:50"],
     [lang === "en" ? "Date" : "Data", date],
   ];

@@ -312,7 +312,7 @@ export interface SceneProps {
   interactive?: boolean;
 }
 
-export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true }: SceneProps) {
+export default function Scene({ build, mode, highlightLayer, autoRotate = false, replayKey, accent = "#ff5b1f", compact = false, interactive = true }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
   const shared = useMemo(() => ({ clock, explode }), []);

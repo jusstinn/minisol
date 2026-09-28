@@ -33,7 +33,7 @@ export default function BlueprintPanel({
   inline?: boolean;
 }) {
   const [mode, setMode] = useState<ViewMode>("blueprint");
-  const [rotate, setRotate] = useState(true);
+  const [rotate, setRotate] = useState(false);
   const [replay, setReplay] = useState(0);
   const build = useMemo(() => buildScene(project.type, project.inputs, lang), [project, lang]);
   const dark = mode !== "real";
@@ -106,9 +106,18 @@ export default function BlueprintPanel({
           <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title="Replay">
             <IconReplay size={15} />
           </RoundBtn>
-          <RoundBtn dark={dark} active={rotate} onClick={() => setRotate((r) => !r)} title="Rotate">
+          <button
+            type="button"
+            aria-pressed={rotate}
+            onClick={() => setRotate((r) => !r)}
+            title={lang === "en" ? "Automatically orbit around the model" : "Rotește automat în jurul modelului"}
+            className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 font-mono text-[10px] font-semibold uppercase tracking-wide backdrop-blur transition ${
+              rotate ? "bg-accent text-on-accent" : dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
+            }`}
+          >
             <IconRotate size={15} />
-          </RoundBtn>
+            <span>{lang === "en" ? "Orbit" : "Orbită"}</span>
+          </button>
         </div>
       </div>
 
