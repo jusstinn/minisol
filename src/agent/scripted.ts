@@ -175,8 +175,8 @@ export function parseView(t: string): UiCommand | null {
 /** The project type mentioned in the latest earlier user message, if any. */
 function projectTypeFromHistory(history: unknown[] | undefined): ProjectType | undefined {
   for (const it of [...(history ?? [])].reverse()) {
-    const m = it as { role?: string; content?: unknown };
-    if (m.role !== "user" || typeof m.content !== "string") continue;
+    const m = it as { role?: string; content?: unknown } | null;
+    if (!m || typeof m !== "object" || m.role !== "user" || typeof m.content !== "string") continue;
     const t = fold(m.content);
     const found = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
     if (found) return found;
