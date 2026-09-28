@@ -89,12 +89,17 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   /** Latest basket the user asked for (optimistic) — rapid taps build on it, failures revert it. */
   const pendingRef = useRef<BasketItem[] | null>(null);
 
+  /** Kinds of card delivered in the current turn (so a new project keeps the sketch in view). */
+  const turnKinds = useRef(new Set<Card["kind"]>());
   const putCard = useCallback((card: Card) => {
     // A basket changed by modify_basket no longer matches the tier comparison (that card has none),
     // but the per-job options still belong to the same project, so they carry over.
+    const heroShown = turnKinds.current.has("project") && (card.kind === "plan" || card.kind === "offers" || card.kind === "stock" || card.kind === "products");
+    turnKinds.current.add(card.kind);
     setBoard((b) => {
       const next = card.kind === "quote" && !card.choices && b.quote?.choices ? { ...card, choices: b.quote.choices } : card;
-      return { ...b, [card.kind]: next, last: card.kind, version: b.version + 1 };
+      // A turn that brings a new sketch keeps it on screen; the plan below doesn't steal the scroll.
+      return { ...b, [card.kind]: next, last: heroShown ? b.last : card.kind, version: b.version + 1 };
     });
     if (card.kind === "quote") setPointsDelta(card.quote.points.earned);
   }, []);
@@ -108,6 +113,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       // Undo covers hand edits since the last message; the conversation owns anything older.
       undoRef.current = [];
       setUndoDepth(0);
+      turnKinds.current = new Set();
       const aId = uid();
       setMessages((ms) => [
         ...ms,
@@ -235,7 +241,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
             ? {
                 ...b.quote,
                 quote,
-                tiers: opts2.keepTiers ? b.quote.tiers : undefined,
+                // After a hand change the tier totals describe the original list: keep them, marked as such.
+                tiers: b.quote.tiers,
+                tiersStale: opts2.keepTiers ? b.quote.tiersStale : Boolean(b.quote.tiers),
                 quality: opts2.quality ?? b.quote.quality,
                 suggestions: opts2.quality ? [] : b.quote.suggestions,
                 look: look ?? b.quote.look,

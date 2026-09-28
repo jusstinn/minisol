@@ -235,12 +235,23 @@ export default function CartDrawer({
 
                     <dl className="mt-3 space-y-1 text-[13px]">
                       <Row k={en ? "Subtotal" : "Subtotal"} v={lei(quote.subtotal, lang)} />
+                      {quote.discounts.length > 0 && (
+                        <div className="pt-1 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">{en ? "Discounts on today's prices" : "Reduceri față de prețul de azi"}</div>
+                      )}
                       {quote.discounts.map((d) => (
                         <Row key={d.offerId} k={d.title} v={`−${lei(d.amount, lang)}`} accent tag={d.personalised ? (en ? "personalised" : "personalizat") : undefined} />
                       ))}
                       {fulfilment === "delivery" && <Row k={en ? "Delivery" : "Livrare"} v={deliveryFee === 0 ? (en ? "free" : "gratuită") : lei(deliveryFee, lang)} />}
                       {redeem && <Row k={en ? "Paid with points" : "Plătit cu puncte"} v={`−${lei(redeemValue, lang)}`} accent />}
                     </dl>
+                    {quote.saving > 0 && Math.abs(quote.saving - quote.discountTotal) > 0.009 && (
+                      // The list's "you save" is measured against 30-day lowest prices (price-display law); say why it differs.
+                      <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                        {en
+                          ? `Against the lowest prices of the last 30 days you save ${lei(quote.saving, lang)} — the figure shown on the list.`
+                          : `Față de cele mai mici prețuri din ultimele 30 de zile economisești ${lei(quote.saving, lang)} — cifra din listă.`}
+                      </p>
+                    )}
 
                     {quote.points.redeemablePoints > 0 && (
                       <button onClick={() => setRedeem((r) => !r)} role="switch" aria-checked={redeem} className="mt-2 flex w-full items-center gap-2 text-left text-[12.5px] text-ink-2">

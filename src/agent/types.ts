@@ -193,6 +193,8 @@ export type Card =
       owned: OwnedToolView[];
       /** Same project priced at every quality tier (from calculate_project). */
       tiers?: QualityOption[];
+      /** The list was changed by hand since the tiers were priced (they describe the original list). */
+      tiersStale?: boolean;
       quality?: QualityTier;
       /** Alternatives per basket role — stay valid while the project is the same. */
       choices?: ChoiceGroup[];

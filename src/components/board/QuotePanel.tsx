@@ -50,6 +50,7 @@ export default function QuotePanel({
   tenant,
   projectTitle,
   tiers,
+  tiersStale,
   quality,
   onTier,
   choices,
@@ -68,6 +69,7 @@ export default function QuotePanel({
   tenant: Tenant;
   projectTitle: string;
   tiers?: QualityOption[];
+  tiersStale?: boolean;
   quality?: QualityTier;
   onTier?: (o: QualityOption) => void;
   choices?: ChoiceGroup[];
@@ -165,7 +167,10 @@ export default function QuotePanel({
       {/* quality tiers */}
       {tiers && tiers.length > 1 && (
         <div className="mt-6">
-          <div className="label mb-2">{lang === "en" ? "Same project, three quality levels" : "Același proiect, trei niveluri de calitate"}</div>
+          <div className="label mb-2">
+            {lang === "en" ? "Same project, three quality levels" : "Același proiect, trei niveluri de calitate"}
+            {tiersStale && <span className="ml-2 normal-case tracking-normal text-ink-3">· {lang === "en" ? "priced for the original list" : "calculat pentru lista inițială"}</span>}
+          </div>
           <div className="grid gap-2 sm:grid-cols-3">
             {tiers.map((t, i) => {
               const max = Math.max(...tiers.map((x) => x.total));

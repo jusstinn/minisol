@@ -318,6 +318,7 @@ export function MobilePanels(props: MobilePanelsProps) {
                   tenant={tenant}
                   projectTitle={board.project?.project.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
                   tiers={board.quote.tiers}
+                  tiersStale={board.quote.tiersStale}
                   quality={board.quote.quality}
                   onTier={onTier}
                   choices={board.quote.choices}

@@ -108,6 +108,7 @@ export default function Board(props: Props) {
             tenant={tenant}
             projectTitle={board.project?.project.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
             tiers={c.tiers}
+            tiersStale={c.tiersStale}
             quality={c.quality}
             onTier={onTier}
             choices={c.choices}
