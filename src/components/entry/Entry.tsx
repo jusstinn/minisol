@@ -8,6 +8,7 @@ import type { ProjectType } from "@/domain/calculators";
 import type { Lang } from "@/domain/types";
 import { lei } from "@/lib/format";
 import { PROJECT_STARTERS, tr } from "@/lib/i18n";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ago } from "@/lib/savedSession";
 import type { SavedSummary } from "@/lib/savedSession";
 import { buildScene } from "../blueprint/builders";
@@ -59,6 +60,7 @@ export default function Entry({
   const [heroIdx, setHeroIdx] = useState(0);
   const [prompt, setPrompt] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const wide = useMediaQuery("(min-width: 640px)", true);
   const words = tr("projects", lang);
 
   useEffect(() => {
@@ -181,8 +183,8 @@ export default function Entry({
                     submit(prompt);
                   }
                 }}
-                placeholder={tr("placeholder", lang)}
-                className="min-h-[56px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[16px] leading-snug text-ink placeholder:text-ink-3"
+                placeholder={tr(wide ? "placeholder" : "placeholderShort", lang)}
+                className="min-h-[88px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[16px] leading-snug text-ink placeholder:text-ink-3 sm:min-h-[56px]"
               />
               <MicButton lang={lang} value={prompt} onChange={setPrompt} className="h-12 w-12" />
               <button

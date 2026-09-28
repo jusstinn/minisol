@@ -13,6 +13,8 @@ const STRINGS = {
   pickPass: { ro: "Alege un card de fidelitate demo", en: "Pick a demo loyalty card" },
   fromWallet: { ro: "Deschis din Wallet", en: "Opened from Wallet" },
   placeholder: { ro: "Descrie proiectul… ex. „vreau o terasă de 4 × 3 m în curte”", en: "Describe your project… e.g. “I want a 4 × 3 m deck in the garden”" },
+  /** Phones: the landing box is ~150 px wide next to the mic and start buttons. */
+  placeholderShort: { ro: "Descrie proiectul… ex. „terasă 4 × 3 m”", en: "Describe your project… e.g. “a 4 × 3 m deck”" },
   placeholderFollow: { ro: "Întreabă orice, sau cere modificări…", en: "Ask anything, or ask for changes…" },
   start: { ro: "Începe", en: "Start" },
   send: { ro: "Trimite", en: "Send" },
