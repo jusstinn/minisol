@@ -69,6 +69,18 @@ body {
   font-feature-settings: "ss01", "tnum" 0;
 }
 
+html {
+  scroll-behavior: smooth;
+  overscroll-behavior-y: auto;
+}
+
+body {
+  min-height: 100%;
+  overflow-x: clip;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 ::selection {
   background: var(--accent);
   color: var(--on-accent);
@@ -277,9 +289,8 @@ body {
 }
 
 .theme-hornbach .paper-grid {
-  background-color: var(--paper);
-  background-image: linear-gradient(135deg, rgba(0, 0, 0, 0.018) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.018) 50%, rgba(0, 0, 0, 0.018) 75%, transparent 75%);
-  background-size: 9px 9px;
+  background-color: #fff;
+  background-image: none;
 }
 
 .theme-hornbach .retail-header,
@@ -374,12 +385,12 @@ body {
 
 .hornbach-logo {
   display: block;
-  width: 112px;
+  width: 142px;
   height: auto;
 }
 
 .hornbach-logo--small {
-  width: 80px;
+  width: 94px;
 }
 
 .theme-hornbach .display,
@@ -467,6 +478,9 @@ body {
 .thin-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--rule-2) transparent;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Inputs */

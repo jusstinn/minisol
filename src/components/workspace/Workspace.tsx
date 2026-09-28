@@ -72,7 +72,7 @@ export default function Workspace({
               unoptimized
             />
           ) : <Logo className="text-ink" />}
-          <span className="display text-[17px] leading-none">Blueprint</span>
+          <span className="display text-[17px] leading-none">{tenant.id === "hornbach" ? (lang === "en" ? "Project Guide" : "Ghidul de proiect") : "Blueprint"}</span>
         </button>
         <span className="hidden font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 md:inline">
           / {tenant.name} / {project ? project.title : "…"}

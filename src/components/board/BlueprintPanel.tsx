@@ -45,65 +45,38 @@ export default function BlueprintPanel({
   ];
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-[22px] transition-colors duration-700 ${
-        dark ? "bp-sheet" : "bg-[radial-gradient(120%_100%_at_30%_0%,#fbf8f1,#e7e1d3)] text-ink"
-      } ${inline ? "h-[380px]" : "h-[clamp(420px,58vh,620px)]"}`}
-    >
-      <div className="absolute inset-0">
-        <Scene build={build} mode={mode} highlightLayer={highlight} autoRotate={rotate} replayKey={replay} accent={tenant.accent} compact={inline} />
-      </div>
-
-      {/* title block */}
-      <div className="pointer-events-none absolute left-4 top-4 max-w-[70%] sm:left-6 sm:top-5">
-        <div className={`font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
+    <div className="overflow-hidden rounded-[16px] border border-rule bg-card">
+      <div className="flex flex-col gap-4 border-b border-rule px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
           FIG. 01 · {project.type.replace("_", " ")}
-        </div>
-        <motion.h2
-          key={project.title}
-          initial={{ opacity: 0, y: 10, filter: "blur(6px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className={`display mt-1 text-[clamp(26px,3.4vw,46px)] ${dark ? "text-white" : "text-ink"}`}
-        >
-          {project.title}
-        </motion.h2>
-        <div className={`mt-3 space-y-0.5 font-mono text-[11px] ${dark ? "text-[#dce9ff]" : "text-ink-2"}`}>
-          {project.measurements.slice(0, inline ? 2 : 4).map((m, i) => (
-            <motion.div
-              key={m.label}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 + i * 0.12 }}
-              className="flex gap-2"
-            >
-              <span className={dark ? "text-[#8fb0e8]" : "text-ink-3"}>{m.label}</span>
-              <span className="font-medium">
-                {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} {m.unit}
+          </div>
+          <motion.h2 key={project.title} initial={{ opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} className="display mt-1 max-w-[520px] text-[clamp(21px,2vw,30px)] leading-[1.05] text-ink">
+            {project.title}
+          </motion.h2>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-ink-2">
+            {project.measurements.slice(0, inline ? 2 : 4).map((m) => (
+              <span key={m.label}>
+                <span className="text-ink-3">{m.label}: </span>
+                <b>{dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} {m.unit}</b>
               </span>
-            </motion.div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* controls */}
-      <div className="absolute right-3 top-3 flex flex-col items-end gap-2 sm:right-5 sm:top-5">
-        <div className={`flex rounded-full p-0.5 backdrop-blur ${dark ? "bg-[#0a1f47]/70 ring-1 ring-[#dce9ff]/25" : "bg-white/70 ring-1 ring-ink/10"}`}>
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
           {modes.map((m) => (
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-wider transition ${
-                mode === m.id ? "bg-accent text-on-accent" : dark ? "text-[#dce9ff] hover:text-white" : "text-ink-2 hover:text-ink"
+              className={`flex h-9 items-center gap-1.5 border px-2.5 text-[10.5px] font-bold uppercase transition ${
+                mode === m.id ? "border-accent bg-accent text-on-accent" : "border-ink/20 bg-white text-ink-2 hover:border-ink"
               }`}
             >
               {m.icon}
               <span className="hidden sm:inline">{m.label}</span>
             </button>
           ))}
-        </div>
-        <div className="flex gap-1.5">
-          <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title="Replay">
+          <RoundBtn dark={false} onClick={() => setReplay((r) => r + 1)} title="Replay">
             <IconReplay size={15} />
           </RoundBtn>
           <button
@@ -111,8 +84,8 @@ export default function BlueprintPanel({
             aria-pressed={rotate}
             onClick={() => setRotate((r) => !r)}
             title={lang === "en" ? "Automatically orbit around the model" : "Rotește automat în jurul modelului"}
-            className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 font-mono text-[10px] font-semibold uppercase tracking-wide backdrop-blur transition ${
-              rotate ? "bg-accent text-on-accent" : dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
+            className={`flex h-9 items-center gap-1.5 border px-2.5 text-[10px] font-bold uppercase transition ${
+              rotate ? "border-accent bg-accent text-on-accent" : "border-ink/20 bg-white text-ink-2 hover:border-ink"
             }`}
           >
             <IconRotate size={15} />
@@ -121,49 +94,26 @@ export default function BlueprintPanel({
         </div>
       </div>
 
-      {/* legend */}
-      <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-end gap-1.5 sm:bottom-5 sm:left-6 sm:right-auto sm:max-w-[60%]">
-        {build.layers.map((l, i) => (
-          <button
-            key={l.id}
-            onMouseEnter={() => onHighlight(l.id)}
-            onMouseLeave={() => onHighlight(null)}
-            onClick={() => onHighlight(highlight === l.id ? null : l.id)}
-            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider backdrop-blur transition ${
-              highlight === l.id
-                ? "bg-accent text-on-accent"
-                : dark
-                  ? "bg-[#0a1f47]/60 text-[#dce9ff] ring-1 ring-[#dce9ff]/20 hover:ring-[#dce9ff]/60"
-                  : "bg-white/70 text-ink-2 ring-1 ring-ink/10 hover:ring-ink/40"
-            }`}
-          >
-            <span className="text-[9px] opacity-60">{String(i + 1).padStart(2, "0")}</span>
-            <span className="h-2 w-2 rounded-[2px]" style={{ background: l.color }} />
-            {l.label}
-          </button>
-        ))}
+      <div className={`relative ${inline ? "h-[270px]" : "h-[clamp(330px,48vh,500px)]"} ${dark ? "bp-sheet" : "bg-[radial-gradient(120%_100%_at_30%_0%,#fbf8f1,#e7e1d3)]"}`}>
+        <div className="absolute inset-0">
+          <Scene build={build} mode={mode} highlightLayer={highlight} autoRotate={rotate} replayKey={replay} accent={tenant.accent} compact={inline} />
+        </div>
       </div>
 
-      {/* estimate */}
-      <div
-        className={`absolute bottom-3 right-3 hidden border font-mono text-[10px] uppercase tracking-[0.12em] sm:bottom-5 sm:right-5 sm:block ${
-          dark ? "border-[#dce9ff]/35 text-[#dce9ff]" : "border-ink/20 text-ink-2"
-        }`}
-      >
-        <EstRow dark={dark} icon={<IconClock size={12} />} k={lang === "en" ? "Time" : "Timp"} v={`${project.estimate.hoursMin}–${project.estimate.hoursMax} ${tr("hours", lang)}`} />
-        <EstRow dark={dark} icon={<IconUsers size={12} />} k={lang === "en" ? "Crew" : "Echipă"} v={`${project.estimate.people} ${tr("people", lang)}`} />
-        <EstRow
-          dark={dark}
-          icon={<IconWarn size={12} />}
-          k={tr("difficulty", lang)}
-          v={
-            <span className="flex gap-0.5">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <span key={i} className={`h-2.5 w-1.5 ${i <= project.estimate.difficulty ? "bg-accent" : dark ? "bg-[#dce9ff]/20" : "bg-ink/15"}`} />
-              ))}
-            </span>
-          }
-        />
+      <div className="flex flex-col gap-3 border-t border-rule bg-[#f5f5f3] p-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-wrap gap-1">
+          {build.layers.map((l, i) => (
+            <button key={l.id} onMouseEnter={() => onHighlight(l.id)} onMouseLeave={() => onHighlight(null)} onClick={() => onHighlight(highlight === l.id ? null : l.id)} className={`flex min-h-8 items-center gap-2 border px-3 py-1.5 text-[10.5px] font-bold uppercase transition ${highlight === l.id ? "border-accent bg-accent" : "border-ink/20 bg-white hover:border-accent"}`}>
+              <span className="border-r border-ink/20 pr-2 font-mono text-[10px]">{i + 1}</span>
+              {l.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex shrink-0 flex-wrap border border-ink/15 bg-white text-[10px] uppercase text-ink-2">
+          <EstRow dark={false} icon={<IconClock size={12} />} k={lang === "en" ? "Time" : "Timp"} v={`${project.estimate.hoursMin}–${project.estimate.hoursMax} ${tr("hours", lang)}`} />
+          <EstRow dark={false} icon={<IconUsers size={12} />} k={lang === "en" ? "Crew" : "Echipă"} v={`${project.estimate.people} ${tr("people", lang)}`} />
+          <EstRow dark={false} icon={<IconWarn size={12} />} k={tr("difficulty", lang)} v={<span className="flex gap-0.5">{[1, 2, 3, 4, 5].map((i) => <span key={i} className={`h-2.5 w-1.5 ${i <= project.estimate.difficulty ? "bg-accent" : "bg-ink/15"}`} />)}</span>} />
+        </div>
       </div>
     </div>
   );
@@ -171,12 +121,12 @@ export default function BlueprintPanel({
 
 function EstRow({ icon, k, v, dark }: { icon: React.ReactNode; k: string; v: React.ReactNode; dark: boolean }) {
   return (
-    <div className={`flex items-center border-b last:border-b-0 ${dark ? "border-[#dce9ff]/20" : "border-ink/10"}`}>
-      <span className={`flex w-28 items-center gap-1.5 border-r px-2 py-1.5 ${dark ? "border-[#dce9ff]/20 text-[#8fb0e8]" : "border-ink/10 text-ink-3"}`}>
+    <div className={`flex items-center border-r last:border-r-0 ${dark ? "border-[#dce9ff]/20" : "border-ink/10"}`}>
+      <span className={`flex items-center gap-1.5 px-2 py-2 ${dark ? "text-[#8fb0e8]" : "text-ink-3"}`}>
         {icon}
         {k}
       </span>
-      <span className="px-2 py-1.5">{v}</span>
+      <span className="px-2 py-2 font-semibold text-ink">{v}</span>
     </div>
   );
 }

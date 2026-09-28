@@ -54,13 +54,12 @@ export default function Entry({
   };
 
   return (
-    <div className="paper-grid relative flex min-h-dvh flex-col overflow-hidden">
+    <div className="paper-grid relative flex min-h-dvh flex-col overflow-x-clip">
       {tenant.id === "hornbach" && (
         <div className="hornbach-store-strip">
           <span>{lang === "en" ? "Is Domnești, Ilfov your preferred store?" : "Magazinul Domnești, jud. Ilfov este cel potrivit?"}</span>
           <button>{lang === "en" ? "YES" : "DA"}</button>
           <span className="underline">{lang === "en" ? "No, change store" : "Nu, schimbă magazinul"}</span>
-          <span className="ml-auto hidden font-semibold sm:inline">{lang === "en" ? "Concept demo — not an official HORNBACH service" : "Demo conceptual — nu este un serviciu oficial HORNBACH"}</span>
         </div>
       )}
       {/* top bar */}
@@ -76,21 +75,15 @@ export default function Entry({
           />
         ) : <Logo className="text-ink" />}
         <div className="flex flex-col gap-0.5">
-          <span className="display text-[19px] leading-none">Blueprint</span>
-          <span className="label hidden sm:inline">{lang === "en" ? "Project assistant · concept demo" : "Asistent de proiect · demo conceptual"}</span>
+          <span className="display text-[20px] leading-none">{tenant.id === "hornbach" ? (lang === "en" ? "Project Guide" : "Ghidul de proiect") : "Blueprint"}</span>
+          <span className="label hidden sm:inline">{lang === "en" ? "Simple planning, step by step" : "Planificare simplă, pas cu pas"}</span>
         </div>
         {tenant.id !== "hornbach" && (
           <span className="ml-2 hidden rounded-full border border-rule px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 sm:inline-flex">
             {lang === "en" ? "for" : "pentru"}&nbsp;<b className="font-semibold text-ink">{tenant.name}</b>
           </span>
         )}
-        <a
-          href={`/pitch?retailer=${tenant.id}&lang=${lang}`}
-          className="ml-auto hidden rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:text-ink sm:inline"
-        >
-          {lang === "en" ? "For retailers →" : "Pentru retaileri →"}
-        </a>
-        <div className="language-switch flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur sm:ml-0 max-sm:ml-auto">
+        <div className="language-switch ml-auto flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur">
           {(["ro", "en"] as const).map((l) => (
             <button
               key={l}
@@ -226,8 +219,6 @@ export default function Entry({
 
         </section>
       </main>
-
-      <Ticker lang={lang} />
     </div>
   );
 }
@@ -264,26 +255,6 @@ function TitleBlock({ lang }: { lang: Lang }) {
           <span className="px-2 py-1 text-[#e6efff]">{v}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-function Ticker({ lang }: { lang: Lang }) {
-  const items =
-    lang === "en"
-      ? ["Quantity calculation", "Live store stock", "WalletLoop personal offers", "Step-by-step plan", "3D project blueprint", "7 project types", "Romanian / English", "Tools you own are skipped"]
-      : ["Calcul cantități", "Stoc live în magazine", "Oferte personale WalletLoop", "Plan pas cu pas", "Model 3D al proiectului", "7 tipuri de proiecte", "Română / Engleză", "Sculele pe care le ai nu se mai cumpără"];
-  const row = [...items, ...items];
-  return (
-    <div className="relative z-10 overflow-hidden border-y border-ink/10 bg-ink py-2.5 text-paper">
-      <div className="marquee flex w-max gap-10 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em]">
-        {row.map((t, i) => (
-          <span key={i} className="flex items-center gap-10">
-            {t}
-            <span className="text-accent">✕</span>
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
