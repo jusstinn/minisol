@@ -1,4 +1,5 @@
 import type { SessionState } from "@/agent/types";
+import { PROJECT_TYPES } from "@/domain/calculators";
 import type { ProjectType } from "@/domain/calculators";
 import type { Layout } from "@/domain/layout";
 import type { Lang, QualityTier } from "@/domain/types";
@@ -122,8 +123,9 @@ export async function decodeSnapshot(token: string): Promise<ShareSnapshot | nul
       bytes = await pipe(bytes, new DecompressionStream("deflate-raw"), MAX_JSON_BYTES);
     } else if (bytes.length > MAX_JSON_BYTES) return null;
     const s = JSON.parse(new TextDecoder().decode(bytes)) as ShareSnapshot;
-    if (!s || s.v !== 1 || typeof s.type !== "string" || !Array.isArray(s.basket) || typeof s.inputs !== "object" || s.inputs === null) return null;
-    return { ...s, lang: s.lang === "en" ? "en" : "ro" };
+    if (!s || s.v !== 1 || !(PROJECT_TYPES as readonly string[]).includes(s.type) || !Array.isArray(s.basket) || typeof s.inputs !== "object" || s.inputs === null) return null;
+    // The title is the sender's text: never shown or passed on (the project is recalculated on open).
+    return { ...s, title: undefined, lang: s.lang === "en" ? "en" : "ro" };
   } catch {
     return null;
   }

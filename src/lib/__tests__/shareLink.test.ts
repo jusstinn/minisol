@@ -43,8 +43,9 @@ describe("share snapshot", () => {
     expect(z[0]).toBe("z");
     expect(j[0]).toBe("j");
     expect(z).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(await decodeSnapshot(z)).toEqual(snap);
-    expect(await decodeSnapshot(j)).toEqual(snap);
+    // The sender's title never comes through (it's their text); everything else does.
+    expect(await decodeSnapshot(z)).toEqual({ ...snap, title: undefined });
+    expect(await decodeSnapshot(j)).toEqual({ ...snap, title: undefined });
     expect(z.length).toBeLessThan(j.length);
   });
 

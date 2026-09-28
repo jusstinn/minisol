@@ -222,6 +222,7 @@ export type AgentEvent =
   | { type: "card"; card: Card }
   | { type: "ui"; command: UiCommand }
   | { type: "state"; state: SessionState }
-  | { type: "history"; items: unknown[] }
+  /** `sig`: the server's signature over `items` (historySeal.ts); send both back unchanged. */
+  | { type: "history"; items: unknown[]; sig?: string }
   | { type: "error"; message: string }
   | { type: "done"; usage?: { inputTokens: number; outputTokens: number }; ms: number };

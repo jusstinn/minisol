@@ -7,6 +7,7 @@ import { decodeSnapshot } from "@/lib/shareLink";
 import type { ShareSnapshot } from "@/lib/shareLink";
 import { IconArrow, IconClose } from "../ui/icons";
 import { IconPhone } from "../workspace/ShareSheet";
+import { PROJECT_NAMES } from "@/lib/i18n";
 
 /**
  * A project arrived through a "send to phone" link. It opens only once the member is known
@@ -54,7 +55,7 @@ export default function IncomingShare({
         <div className="min-w-0 flex-1 basis-[calc(100%-110px)] sm:basis-auto">
           <div className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{en ? "Sent from another device" : "Trimis de pe alt dispozitiv"}</div>
           <div className="truncate text-[15px] font-semibold text-ink">
-            {invalid ? (en ? "This link has no project in it" : "Linkul nu conține un proiect") : snap?.title ?? (en ? "Your project" : "Proiectul tău")}
+            {invalid ? (en ? "This link has no project in it" : "Linkul nu conține un proiect") : snap ? PROJECT_NAMES[snap.type][en ? 1 : 0] : en ? "Your project" : "Proiectul tău"}
           </div>
           {snap && (
             <div className="truncate font-mono text-[11.5px] text-ink-2">

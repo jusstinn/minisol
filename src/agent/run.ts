@@ -7,7 +7,7 @@ import { PARAM_FIELDS, TOOL_DEFINITIONS, TOOL_STATUS, executeTool } from "./tool
 import { parseIntent, projectReply } from "./scripted";
 import { scriptedPlan } from "./scripted-plans";
 import type { AgentEvent, Card, SessionState } from "./types";
-import { verifyReply } from "./verify";
+import { percentsIn, verifyReply } from "./verify";
 import { LOYALTY } from "@/domain/loyalty";
 
 export interface RunOptions {
@@ -24,6 +24,10 @@ export interface RunOptions {
   signal?: AbortSignal;
   /** Do the obvious deterministic steps before the model starts (default true). */
   prefill?: boolean;
+  /** Anonymous customer id for the provider's abuse detection (see LlmRequest.safetyId). */
+  safetyId?: string;
+  /** Called with the tokens each model call used (the daily token budgets). */
+  onUsage?: (tokens: number) => void;
 }
 
 /**
@@ -38,7 +42,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let state: SessionState = { ...opts.state, basket: opts.state.basket ?? [] };
   const input: unknown[] = [...opts.llm.sanitizeHistory(opts.history), opts.llm.userMessage(opts.message)];
   const usage = { inputTokens: 0, outputTokens: 0 };
-  const maxSteps = opts.maxSteps ?? 8;
+  const maxSteps = opts.maxSteps ?? 6;
 
   let turnText = "";
   let lastQuote: Extract<Card, { kind: "quote" }> | undefined;
@@ -86,7 +90,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       const instructions = systemPrompt({ today: now.toISOString().slice(0, 10), lang, state, tenant: opts.tenant, prefilled });
       let completed: Extract<LlmEvent, { type: "completed" }> | undefined;
 
-      for await (const ev of opts.llm.stream({ instructions, input, tools: TOOL_DEFINITIONS, signal: opts.signal })) {
+      for await (const ev of opts.llm.stream({ instructions, input, tools: TOOL_DEFINITIONS, signal: opts.signal, safetyId: opts.safetyId })) {
         if (ev.type === "text") {
           turnText += ev.delta;
           yield { type: "text", delta: ev.delta };
@@ -100,6 +104,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       if (completed.usage) {
         usage.inputTokens += completed.usage.inputTokens;
         usage.outputTokens += completed.usage.outputTokens;
+        opts.onUsage?.(completed.usage.inputTokens + completed.usage.outputTokens);
       }
       input.push(...completed.outputItems);
       if (completed.toolCalls.length === 0) break;
@@ -130,7 +135,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // turn deterministically instead of erroring — plan from the template, reply from the quote.
     if (!prefilled || turnText || opts.signal?.aborted || !lastQuote || !state.project) throw e;
     console.warn("[agent] model unavailable after prefill, finishing deterministically:", (e as Error).message);
-    yield { type: "mode", mode: "scripted", reason: (e as Error).message.slice(0, 160) };
+    yield { type: "mode", mode: "scripted", reason: "AI temporarily unavailable" };
     yield { type: "card", card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined } } };
     const text = projectReply(lastQuote.quote, lastQuote, state.project.title, lang, state.suggestions);
     turnText = text;
@@ -140,7 +145,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   // Guard: every amount in the reply must come from the quote engine.
   // Amounts the tools legitimately handed the model besides the quote itself.
-  const offerAmounts = (await opts.sources.loyalty.getOffers(opts.customer.memberId)).flatMap((o) => [o.minSpend ?? 0, o.amount ?? 0]);
+  const offers = await opts.sources.loyalty.getOffers(opts.customer.memberId);
+  const offerAmounts = offers.flatMap((o) => [o.minSpend ?? 0, o.amount ?? 0]);
   const extra = [
     ...offerAmounts,
     ...(lastQuote?.suggestions ?? []).flatMap((s) => [s.total, s.unitPrice]),
@@ -151,9 +157,21 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // A sketch edit: the total before it and the differences (whole and per line).
     ...(lastChange ? [lastChange.change.totalBefore, Math.abs(lastChange.change.delta), ...lastChange.change.lines.map((l) => Math.abs(l.deltaRon))] : []),
   ];
-  const check = verifyReply(turnText, lastQuote?.quote, extra);
+  // No list this turn but the customer has one: check against it (priced now, nothing shown).
+  let verifyQuote = lastQuote?.quote;
+  if (!verifyQuote && turnText && state.basket.length) {
+    const r = await executeTool("modify_basket", JSON.stringify({ operations: [], storeId: null }), toolCtx());
+    verifyQuote = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote")?.quote;
+  }
+  // Percentages must come from somewhere real: the member's offers or a tool result this conversation.
+  const toolText = input
+    .filter((i): i is { type: "function_call_output"; output: string } => (i as { type?: string }).type === "function_call_output")
+    .map((i) => String(i.output))
+    .join("\n");
+  const percents = [...offers.flatMap((o) => (o.percent ? [o.percent] : [])), ...percentsIn(toolText), ...percentsIn(verifyQuote?.discounts.map((d) => d.title).join(" ") ?? "")];
+  const check = verifyReply(turnText, verifyQuote, extra, { percents });
   if (!check.ok && turnText) {
-    console.warn("[agent] reply failed verification", { invented: check.invented, garbage: check.garbage });
+    console.warn("[agent] reply failed verification", { invented: check.invented, percents: check.inventedPercents, unsafe: check.unsafe, garbage: check.garbage });
     const safe =
       lastQuote && state.project
         ? projectReply(lastQuote.quote, lastQuote, state.project.title, lang, state.suggestions)

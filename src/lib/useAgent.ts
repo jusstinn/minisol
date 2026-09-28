@@ -73,6 +73,8 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   const [mode, setMode] = useState<{ mode: "live" | "scripted"; reason?: string } | null>(null);
   const stateRef = useRef<SessionState>(restored?.state ?? { basket: [] });
   const historyRef = useRef<unknown[]>(restored?.history ?? []);
+  /** The server's signature over historyRef (unchanged items only; see agent/historySeal.ts). */
+  const historySigRef = useRef<string | undefined>(restored?.historySig);
   const abortRef = useRef<AbortController | null>(null);
   const [pointsDelta, setPointsDelta] = useState<number | null>(null);
   const [ui, setUi] = useState<UiSignal | null>(null);
@@ -80,7 +82,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   // Save after every settled change (debounced; never mid-answer).
   useEffect(() => {
     if (busy || !messages.length) return;
-    const t = setTimeout(() => writeSaved(opts.tenant, opts.memberId, { messages, board, state: stateRef.current, history: historyRef.current }), 500);
+    const t = setTimeout(() => writeSaved(opts.tenant, opts.memberId, { messages, board, state: stateRef.current, history: historyRef.current, historySig: historySigRef.current }), 500);
     return () => clearTimeout(t);
   }, [messages, board, busy, opts.tenant, opts.memberId]);
 
@@ -138,6 +140,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
             tenant: opts.tenant,
             message,
             history: historyRef.current,
+            historySig: historySigRef.current,
             state: stateRef.current,
             lang: opts.lang,
             mode: opts.forceScripted ? "scripted" : undefined,
@@ -198,6 +201,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
                 break;
               case "history":
                 historyRef.current = ev.items;
+                historySigRef.current = ev.sig;
                 break;
               case "error":
                 turn.error = true;
@@ -427,7 +431,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
         repriceSeq.current++;
         for (const c of data.cards) putCard(c);
         if (data.state.project) track("project_started", { type: data.state.project.type, via: "share" });
+        // Not signed by the chat: the next turn keeps only the customer's messages from before this.
         historyRef.current = [...historyRef.current, { role: "assistant", content: data.message ?? "" }];
+        historySigRef.current = undefined;
         patchAssistant(aId, (m) => ({ ...m, text: data.message ?? "", cards: data.cards! }));
       } catch (e) {
         patchAssistant(aId, (m) => ({ ...m, error: (e as Error).message }));
@@ -444,6 +450,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     abortRef.current?.abort();
     stateRef.current = { basket: [] };
     historyRef.current = [];
+    historySigRef.current = undefined;
     undoRef.current = [];
     setUndoDepth(0);
     setMessages([]);

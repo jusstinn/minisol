@@ -1210,7 +1210,54 @@ export function checkLayout(raw: unknown, type: ProjectType): Layout | null {
         );
     }
   })();
-  return ok && okItems(l.items) ? (structuredClone(l) as unknown as Layout) : null;
+  return ok && okItems(l.items) ? rebuild(l as unknown as Layout) : null;
+}
+
+/**
+ * A copy with only the fields the layout type defines — anything extra a browser (or a crafted
+ * share link) added is dropped, so no free text can ride along into prompts or other people's screens.
+ */
+function rebuild(l: Layout): Layout {
+  const zones = (zs: Zone[]) => zs.map((z) => ({ id: z.id, x: z.x, z: z.z, w: z.w, d: z.d }));
+  const openings = (os: Opening[]) =>
+    os.map((o) => ({ id: o.id, kind: o.kind, wall: o.wall, ...(o.zone !== undefined ? { zone: o.zone } : {}), pos: o.pos, width: o.width, height: o.height }));
+  const items = l.items ? { items: l.items.map((it) => ({ id: it.id, kind: it.kind, x: it.x, z: it.z, rot: it.rot, ...(it.zone !== undefined ? { zone: it.zone } : {}) })) } : {};
+  switch (l.type) {
+    case "deck":
+      return {
+        type: l.type,
+        zones: zones(l.zones),
+        heightM: l.heightM,
+        steps: l.steps.map((st) => ({ id: st.id, zone: st.zone, side: st.side, width: st.width, count: st.count })),
+        direction: l.direction,
+        base: l.base,
+        ...items,
+      };
+    case "laminate_floor":
+      return { type: l.type, zones: zones(l.zones), openings: openings(l.openings), pattern: l.pattern, subfloor: l.subfloor, ...items };
+    case "lawn":
+      return { type: l.type, zones: zones(l.zones), mode: l.mode, ...items };
+    case "paving":
+      return { type: l.type, zones: zones(l.zones), use: l.use, edging: l.edging, ...items };
+    case "paint_room":
+      return { type: l.type, w: l.w, d: l.d, h: l.h, openings: openings(l.openings), ceiling: l.ceiling, coats: l.coats, surface: l.surface, ...items };
+    case "tiling":
+      return {
+        type: l.type,
+        w: l.w,
+        d: l.d,
+        roomType: l.roomType,
+        floor: l.floor,
+        wallHeights: { n: l.wallHeights.n, e: l.wallHeights.e, s: l.wallHeights.s, w: l.wallHeights.w },
+        openings: openings(l.openings),
+        largeFormat: l.largeFormat,
+        ...items,
+      };
+    case "fence":
+      return { type: l.type, points: l.points.map((pt) => ({ x: pt.x, z: pt.z })), heightM: l.heightM, gates: openings(l.gates), ...items };
+    case "drywall_partition":
+      return { type: l.type, length: l.length, heightM: l.heightM, openings: openings(l.openings), insulation: l.insulation, doubleLayer: l.doubleLayer, wetRoom: l.wetRoom, ...items };
+  }
 }
 
 function okItems(v: unknown): boolean {

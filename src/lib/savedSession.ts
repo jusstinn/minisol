@@ -17,6 +17,7 @@ export interface SavedSession {
   board: Board;
   state: SessionState;
   history: unknown[];
+  historySig?: string;
 }
 
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000;

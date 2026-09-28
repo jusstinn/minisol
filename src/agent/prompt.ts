@@ -5,7 +5,7 @@ import type { SessionState } from "./types";
 export function systemPrompt(opts: { today: string; lang: "ro" | "en"; state: SessionState; tenant: Tenant; prefilled?: boolean }): string {
   const { today, lang, state, tenant } = opts;
   const basket = state.basket.length
-    ? `A basket from earlier in the conversation exists (${state.basket.length} lines, store ${state.storeId}${state.project ? `, project "${state.project.title}"` : ""}). Use modify_basket to change it; calculate_project replaces it.`
+    ? `A basket from earlier in the conversation exists (${state.basket.length} lines, store ${state.storeId}${state.project ? `, a ${state.project.type} project` : ""}). Use modify_basket to change it; calculate_project replaces it.`
     : "The basket is empty.";
   // The customer may have changed things by hand since the last tool result: this is the truth.
   const lines = state.basket.length

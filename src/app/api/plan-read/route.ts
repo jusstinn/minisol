@@ -1,7 +1,8 @@
 import { planReadAvailable, PlanReadError, planReaderFromEnv } from "@/agent/planReader";
 import { getTenant } from "@/config/tenant";
 import { PLAN_READ_MAX_BODY, validatePlanReadBody } from "@/lib/planRead";
-import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { allowPlanRead } from "@/lib/budget";
+import { clientKey } from "@/lib/rateLimit";
 import { sessionFromRequest } from "@/lib/session";
 
 import { readCapped } from "@/lib/body";
@@ -54,9 +55,8 @@ export async function POST(req: Request) {
   const reader = planReaderFromEnv();
   if (!reader) return Response.json({ error: "AI plan reading is not configured" }, { status: 501 });
 
-  const ip = clientKey(req);
-  const limit = rateLimit(`plan-read:${ip}`, Number(process.env.PLAN_READS_PER_10_MIN ?? 6), 10 * 60_000);
-  if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfterS) } });
+  const allowed = await allowPlanRead({ ip: clientKey(req), tenant: tenant.id });
+  if (!allowed.ok) return Response.json({ error: "Too many requests", reason: allowed.reason }, { status: 429, headers: { "Retry-After": "600" } });
 
   try {
     const result = await reader.read(v.value, req.signal);

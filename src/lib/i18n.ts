@@ -1,3 +1,4 @@
+import type { ProjectType } from "@/domain/calculators";
 import type { Lang } from "@/domain/types";
 
 const STRINGS = {
@@ -136,3 +137,15 @@ export const PROJECT_STARTERS: { id: string; icon: string; ro: string; en: strin
     promptEn: "I want a 6 x 1.2 m paver path through the garden, with edging along the sides.",
   },
 ];
+
+/** What each project type is called — for places that must not show text from a link or the browser. */
+export const PROJECT_NAMES: Record<ProjectType, [string, string]> = {
+  deck: ["Terasă din deck", "Garden deck"],
+  paint_room: ["Vopsit cameră", "Room painting"],
+  laminate_floor: ["Parchet laminat", "Laminate flooring"],
+  tiling: ["Gresie și faianță", "Tiling"],
+  fence: ["Gard", "Fence"],
+  drywall_partition: ["Perete de gips-carton", "Drywall partition"],
+  lawn: ["Gazon", "Lawn"],
+  paving: ["Pavaj", "Paving"],
+};
