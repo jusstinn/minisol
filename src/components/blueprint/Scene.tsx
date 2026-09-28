@@ -79,6 +79,10 @@ interface Track {
   diff: { added: number; changed: number; removed: number } | null;
 }
 
+/** Edge overlays are one draw call each: lite drops them on the context, and on small parts when there are many. */
+type EdgeBudget = "all" | "products" | "major";
+const MANY_PARTS = 250;
+
 const sig = (p: Part) => `${p.pos.map((v) => v.toFixed(3)).join(",")}|${p.size.map((v) => v.toFixed(3)).join(",")}|${p.color}`;
 
 function fullTrack(build: Build, replayKey: Track["replayKey"], epoch: number): Track {
@@ -136,6 +140,7 @@ function PartMesh({
   layerIndex,
   shared,
   accent,
+  edges = "all",
 }: {
   part: Part;
   anim: Anim;
@@ -145,6 +150,8 @@ function PartMesh({
   layerIndex: number;
   shared: Shared;
   accent: string;
+  /** Which parts get an edge overlay (lite: not the context, and not the small ones in a big build). */
+  edges?: EdgeBudget;
 }) {
   const ref = useRef<THREE.Mesh>(null);
   const mat = useRef<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>(null);
@@ -156,6 +163,8 @@ function PartMesh({
   const baseColor = highlighted ? accent : blue ? (part.context ? "#4f82ea" : "#5b8cf0") : part.color;
   const baseOpacity = blue ? (highlighted ? 0.6 : part.context || dimmed ? 0.06 : 0.28) : dimmed ? 0.25 : (part.opacity ?? 1);
   const slideAxis = part.size[0] >= part.size[2] ? "x" : "z";
+  const minor = Math.max(...part.size) < 0.25 || Math.min(...part.size) < 0.03;
+  const outlined = highlighted || edges === "all" || (!part.context && (edges === "products" || !minor));
 
   useFrame(() => {
     const mesh = ref.current;
@@ -250,7 +259,7 @@ function PartMesh({
           opacity={baseOpacity}
         />
       )}
-      {(blue || highlighted) && (
+      {(blue || highlighted) && outlined && (
         <Edges
           threshold={20}
           color={leaving ? REMOVED : highlighted ? accent : part.context ? "#8fb3f2" : "#eef4ff"}
@@ -493,9 +502,14 @@ export interface SceneProps {
   onDiff?: (d: { added: number; changed: number; removed: number }) => void;
   /** Keep the model left of an overlay on the right (plan editor). */
   focusLeft?: boolean;
+  /**
+   * Phones / low-end devices: pixel ratio capped at 1.5 (1 for "low"), no antialiasing,
+   * no shadows, edge overlays only on the products (and only the larger ones in big builds).
+   */
+  lite?: boolean | "low";
 }
 
-export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false }: SceneProps) {
+export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false, lite = false }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -524,19 +538,23 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
   const labelEls = useRef<Map<string, HTMLDivElement>>(new Map());
   const shadowSize = Math.max(build.extent[0], build.extent[2]) * 1.6 + 2;
   const noAnim: Anim = { kind: "still", offset: 0, start: -Infinity };
+  const edges: EdgeBudget = !lite ? "all" : build.parts.length > MANY_PARTS ? "major" : "products";
+  const shadows = mode === "real" && !lite;
 
   return (
     <div className="relative h-full w-full">
     <Canvas
-      dpr={[1, 2]}
+      // Antialiasing is fixed when the context is created: a new quality level gets a new canvas.
+      key={String(lite)}
+      dpr={lite === "low" ? 1 : lite ? [1, 1.5] : [1, 2]}
       camera={{ fov: 32, position: [6, 5, 6] }}
-      gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-      shadows={mode === "real"}
+      gl={{ antialias: !lite, alpha: true, powerPreference: "high-performance" }}
+      shadows={shadows}
       style={{ touchAction: interactive ? "none" : "auto" }}
     >
       <Driver shared={shared} mode={mode} />
       <ambientLight intensity={mode === "real" ? 0.75 : 1} />
-      <directionalLight position={[6, 10, 4]} intensity={mode === "real" ? 1.6 : 0.4} castShadow shadow-mapSize={[2048, 2048]}>
+      <directionalLight position={[6, 10, 4]} intensity={mode === "real" ? 1.6 : 0.4} castShadow={!lite} shadow-mapSize={[2048, 2048]}>
         <orthographicCamera attach="shadow-camera" args={[-12, 12, 12, -12, 0.1, 50]} />
       </directionalLight>
       <hemisphereLight args={["#fff6e8", "#8a7a66", mode === "real" ? 0.5 : 0.2]} />
@@ -553,6 +571,7 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
           layerIndex={layerIndex.get(p.layer) ?? 0}
           shared={shared}
           accent={accent}
+          edges={edges}
         />
       ))}
       {ghosts.map((p) => (
@@ -566,6 +585,7 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
           layerIndex={layerIndex.get(p.layer) ?? 0}
           shared={shared}
           accent={accent}
+          edges={edges}
         />
       ))}
       {build.grass && <Grass grass={build.grass} shared={shared} mode={mode} epoch={current.epoch} />}
@@ -573,7 +593,7 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
       </World>
       <LabelProjector labels={labels} els={labelEls} shared={shared} />
 
-      {mode === "real" && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.35} blur={2.4} far={4} />}
+      {shadows && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.35} blur={2.4} far={4} />}
       <OrbitControls
         makeDefault
         enablePan={false}

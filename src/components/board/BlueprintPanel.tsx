@@ -12,6 +12,7 @@ import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { UiSignal } from "@/lib/useAgent";
+import type { LiteGraphics } from "@/lib/useLiteGraphics";
 import { buildScene } from "../blueprint/builders";
 import type { ViewMode } from "../blueprint/Scene";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
@@ -54,6 +55,7 @@ export default function BlueprintPanel({
   change,
   ui,
   look,
+  lite,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -67,6 +69,8 @@ export default function BlueprintPanel({
   ui?: UiSignal | null;
   /** The chosen products' look (colour, board width, tile format…). */
   look?: Look;
+  /** Lighter 3D for phones / low-end devices (see useLiteGraphics). */
+  lite?: LiteGraphics;
 }) {
   const sketchMode = useSketchMode(tenant);
   const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
@@ -80,7 +84,7 @@ export default function BlueprintPanel({
   if (sketchMode === "on_demand" && !project.sketched && sketch) {
     return <SketchCta project={project} lang={lang} inline={inline} onOpen={sketch.open} />;
   }
-  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} look={look} />;
+  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} look={look} lite={lite} />;
 }
 
 function SketchView({
@@ -94,6 +98,7 @@ function SketchView({
   change,
   ui,
   look,
+  lite,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -105,6 +110,7 @@ function SketchView({
   change?: Extract<Card, { kind: "change" }>;
   ui?: UiSignal | null;
   look?: Look;
+  lite?: LiteGraphics;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -234,6 +240,7 @@ function SketchView({
             compact={inline}
             onDiff={onDiff}
             focusLeft={(editing || Boolean(floatingChange)) && !inline}
+            lite={lite}
           />
         </div>
 
