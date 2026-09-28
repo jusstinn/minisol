@@ -164,7 +164,9 @@ export default function Entry({
             })}
           </div>
 
-          <p className="mt-8 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">{tr("privacy", lang)}</p>
+          <p className="mt-8 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">
+            <span className="text-ink-2">{tr("aiIntro", lang)}</span> {tr("privacy", lang)}
+          </p>
           {tenant.id !== "demo" && (
             <p className="mt-2 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">
               {lang === "en"

@@ -77,6 +77,15 @@ const STRINGS = {
     ro: "Asistentul vede doar nivelul, punctele, magazinul și interesele tale — niciodată numele sau datele de contact.",
     en: "The assistant only sees your tier, points, store and interests — never your name or contact details.",
   },
+  /** EU AI Act transparency: say plainly that the customer is dealing with an AI system. */
+  aiIntro: {
+    ro: "Blueprint este un asistent AI.",
+    en: "Blueprint is an AI assistant.",
+  },
+  aiNotice: {
+    ro: "Vorbești cu un asistent AI. Cifrele sunt verificate de motorul de prețuri; schițele și planul sunt orientative.",
+    en: "You're talking to an AI assistant. Figures are checked by the pricing engine; sketches and the plan are indicative.",
+  },
   noPersonalization: { ro: "Fără personalizare (fără consimțământ)", en: "No personalisation (no consent)" },
   demoNote: { ro: "Demo · date de catalog și stoc fictive", en: "Demo · fictional catalogue & stock data" },
 } as const;

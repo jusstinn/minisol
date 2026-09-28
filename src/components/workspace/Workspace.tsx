@@ -264,6 +264,11 @@ function Rail({
 
   return (
     <section className="flex min-h-0 flex-col bg-paper">
+      {/* AI disclosure (EU AI Act, art. 50): pinned above the conversation so it never scrolls away */}
+      <div role="note" className="flex items-start gap-2 border-b border-rule px-4 py-2 sm:px-6">
+        <span className="mt-px shrink-0 rounded-[5px] border border-ink/15 px-1 font-mono text-[9px] font-semibold leading-[14px] tracking-[0.12em] text-ink-2">AI</span>
+        <p className="font-mono text-[10.5px] leading-[1.45] text-ink-3">{tr("aiNotice", lang)}</p>
+      </div>
       <div ref={scrollRef} className="thin-scroll flex-1 space-y-6 overflow-y-auto px-4 pb-40 pt-6 sm:px-6 lg:pb-6">
         {messages.map((m) =>
           m.role === "user" ? (
