@@ -34,6 +34,7 @@ const LIMITS: Record<ProjectType, [string, string]> = {
   tiling: ["încăperi până la 20 × 20 m", "rooms up to 20 × 20 m"],
   fence: ["până la 500 m în total, cu colțuri și porți", "up to 500 m in total, with corners and gates"],
   drywall_partition: ["pereți până la 20 m lungime, 2–5 m înălțime", "walls up to 20 m long, 2–5 m high"],
+  paving: ["până la 30 m pe latură (și poți adăuga forme în L)", "up to 30 m a side (L-shapes can be added)"],
 };
 
 /** An average adult pace. */
@@ -77,6 +78,11 @@ const PRESETS: Record<ProjectType, Tpl[]> = {
     { label: ["80 m²", "80 m²"], detail: ["grădina unei case obișnuite", "a typical house garden"], msg: ["Gazon nou pe 80 mp", "New lawn 80 sqm"] },
     { label: ["150 m²", "150 m²"], detail: ["grădină mare", "a large garden"], msg: ["Gazon nou pe 150 mp", "New lawn 150 sqm"] },
   ],
+  paving: [
+    { label: ["Alee · 6 × 1,2 m", "Path · 6 × 1.2 m"], detail: ["de la poartă la ușă, doi oameni alături", "gate to front door, two people side by side"], msg: ["Alee din pavele 6 × 1,2 m", "Paver path 6 × 1.2 m"] },
+    { label: ["Terasă · 4 × 3 m", "Patio · 4 × 3 m"], detail: ["12 m² — masă pentru 6", "12 m² — dining for six"], msg: ["Terasă din pavele 4 × 3 m", "Paved patio 4 × 3 m"] },
+    { label: ["Intrare auto · 5 × 3 m", "Driveway · 5 × 3 m"], detail: ["un loc de parcare, pavele de 8 cm", "one parking space, 8 cm pavers"], msg: ["Intrare auto din pavele 5 × 3 m", "Paved driveway 5 × 3 m"] },
+  ],
 };
 
 const NOUN: Record<ProjectType, [string, string]> = {
@@ -87,6 +93,7 @@ const NOUN: Record<ProjectType, [string, string]> = {
   fence: ["Gard de", "Fence"],
   drywall_partition: ["Perete de gips-carton de", "Drywall partition"],
   lawn: ["Gazon nou pe", "New lawn"],
+  paving: ["Alee din pavele", "Paver path"],
 };
 
 const TIPS: Record<"rect" | "length" | "area", [string, string][]> = {

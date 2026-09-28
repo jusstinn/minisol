@@ -20,6 +20,7 @@ const RULES: Partial<Record<ProjectType, { minT: number; maxT: number; maxRain: 
   deck: { minT: 10, maxT: 30, maxRain: 30, why: { ro: "Uleiul de terasă are nevoie de 2 zile uscate, peste 10 °C.", en: "Decking oil needs two dry days above 10 °C." } },
   fence: { minT: 5, maxT: 32, maxRain: 45, why: { ro: "Betonul pentru stâlpi prinde bine peste 5 °C; lazura vrea vreme uscată.", en: "Post concrete sets well above 5 °C; stain wants a dry day." } },
   lawn: { minT: 8, maxT: 26, maxRain: 70, why: { ro: "Semințele pornesc la 8–25 °C, iar o ploaie ușoară după semănat ajută.", en: "Seed germinates at 8–25 °C, and light rain after sowing helps." } },
+  paving: { minT: 5, maxT: 30, maxRain: 35, why: { ro: "Nisipul de pozare și cel de rosturi se lucrează uscate, iar betonul de la borduri prinde bine peste 5 °C.", en: "Bedding and jointing sand must be dry, and kerb concrete sets well above 5 °C." } },
 };
 
 function score(d: Day, r: NonNullable<(typeof RULES)[ProjectType]>): number {

@@ -60,6 +60,14 @@ export const IconLawn = ({ size, ...p }: P) => (
   </svg>
 );
 
+export const IconPaving = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M3 13l9-4.5 9 4.5-9 4.5z" />
+    <path d="M6 14.5l9-4.5M9 16l9-4.5M7.5 10.75l3 1.5M8.25 13.38l3 1.5M12.75 11.13l3 1.5M13.5 13.75l3 1.5" />
+    <path d="M3 13v2l9 4.5 9-4.5v-2" />
+  </svg>
+);
+
 export const PROJECT_ICONS: Record<string, (p: P) => React.ReactElement> = {
   deck: IconDeck,
   paint: IconPaint,
@@ -72,6 +80,7 @@ export const PROJECT_ICONS: Record<string, (p: P) => React.ReactElement> = {
   drywall: IconDrywall,
   drywall_partition: IconDrywall,
   lawn: IconLawn,
+  paving: IconPaving,
 };
 
 /* UI glyphs */

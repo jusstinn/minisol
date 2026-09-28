@@ -122,14 +122,19 @@ const ITEM_CHIP: Record<Layout["type"], [ro: string, en: string]> = {
   lawn: ["Pune un grătar", "Add a BBQ grill"],
   fence: ["Pune o lampă de grădină", "Add a garden light"],
   drywall_partition: ["Pune o aplică pe perete", "Add a wall light"],
+  paving: ["Pune o lampă de grădină", "Add a garden light"],
 };
+
+/** A paved patio gets a table; a path or a driveway, a garden light. */
+const itemChip = (layout: Layout): [string, string] =>
+  layout.type === "paving" && layout.use === "patio" ? ["Pune o masă pe terasă", "Put a table on the patio"] : ITEM_CHIP[layout.type];
 
 function shapeSteps(layout: Layout | undefined, lang: Lang): NextStep[] {
   const en = lang === "en";
   const out: NextStep[] = shapeOnly(layout, lang);
   if (layout && !layout.items?.length) {
-    const [ro, e] = ITEM_CHIP[layout.type];
-    const prefix = { tiling: "tiling", deck: "deck", paint_room: "paint", laminate_floor: "laminate", lawn: "lawn", fence: "fence", drywall_partition: "drywall" }[layout.type];
+    const [ro, e] = itemChip(layout);
+    const prefix = { tiling: "tiling", deck: "deck", paint_room: "paint", laminate_floor: "laminate", lawn: "lawn", fence: "fence", drywall_partition: "drywall", paving: "paving" }[layout.type];
     out.splice(Math.min(1, out.length), 0, { id: `${prefix}.item`, kind: "shape", text: en ? e : ro });
   }
   return out;
@@ -190,6 +195,24 @@ function shapeOnly(layout: Layout | undefined, lang: Lang): NextStep[] {
       }
       break;
     }
+    case "paving": {
+      if (layout.zones.length === 1) {
+        const z = layout.zones[0];
+        // A path turns a corner (same width, running back); a patio gets a wing.
+        const { w, d } = z.d <= 1.5 ? { w: Math.round(z.d * 10) / 10, d: Math.max(2, Math.min(4, Math.round(z.w / 2))) } : wing(z);
+        out.push({
+          id: "paving.l",
+          kind: "shape",
+          text: en ? `Make it L-shaped: +${n(w, lang)} × ${n(d, lang)} m on the right` : `Fă-o în L: +${n(w, lang)} × ${n(d, lang)} m în dreapta`,
+        });
+      }
+      out.push(
+        layout.edging
+          ? { id: "paving.edging", kind: "shape", text: en ? "Without edging" : "Fără borduri" }
+          : { id: "paving.edging", kind: "shape", text: en ? "Add edging on the edges" : "Borduri pe margini" },
+      );
+      break;
+    }
   }
   return out;
 }
@@ -206,6 +229,10 @@ const LOOK: Partial<Record<ProjectSnapshot["type"], { role: MaterialRole; ro: st
   drywall_partition: [{ role: "cw_profile", ro: "Arată-mi montanții", en: "Show me the studs" }],
   paint_room: [{ role: "interior_paint", ro: "Arată-mi vopseaua", en: "Show me the paint" }],
   lawn: [{ role: "topsoil", ro: "Arată-mi pământul", en: "Show me the topsoil" }],
+  paving: [
+    { role: "paving_base", ro: "Arată-mi piatra spartă", en: "Show me the crushed stone" },
+    { role: "paving_edging", ro: "Arată-mi bordurile", en: "Show me the edging" },
+  ],
 };
 
 export function nextSteps({ board, lang, lastCards = [], asked = [], sketchMode = "auto", max = 5 }: NextStepsInput): NextStep[] {

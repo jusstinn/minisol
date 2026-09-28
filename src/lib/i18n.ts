@@ -3,8 +3,8 @@ import type { Lang } from "@/domain/types";
 const STRINGS = {
   headline: { ro: ["Construim", "în weekendul ăsta?"], en: ["Let's build", "this weekend."] },
   projects: {
-    ro: ["terasa", "baia", "gardul", "dormitorul", "peretele", "gazonul", "livingul"],
-    en: ["the deck", "the bathroom", "the fence", "the bedroom", "the wall", "the lawn", "the living room"],
+    ro: ["terasa", "baia", "gardul", "dormitorul", "peretele", "gazonul", "aleea", "livingul"],
+    en: ["the deck", "the bathroom", "the fence", "the bedroom", "the wall", "the lawn", "the path", "the living room"],
   },
   subhead: {
     ro: "Spune-i ce vrei să faci. Primești planul pas cu pas, lista completă de materiale, prețul tău cu oferte personale și unde e totul pe stoc.",
@@ -127,4 +127,12 @@ export const PROJECT_STARTERS: { id: string; icon: string; ro: string; en: strin
   { id: "fence", icon: "fence", ro: "Gard 20 m", en: "20 m fence", promptRo: "Am nevoie de un gard din panouri de 20 m lungime, 1,8 m înălțime.", promptEn: "I need a 20 m long panel fence, 1.8 m high." },
   { id: "drywall", icon: "drywall", ro: "Perete gips-carton", en: "Drywall partition", promptRo: "Vreau să împart o cameră cu un perete de gips-carton de 3,5 m lungime, 2,6 m înălțime, cu o ușă.", promptEn: "I want to split a room with a 3.5 m long, 2.6 m high drywall partition with one door." },
   { id: "lawn", icon: "lawn", ro: "Gazon nou", en: "New lawn", promptRo: "Vreau gazon nou pe 80 mp în spatele casei.", promptEn: "I want a new lawn on 80 m² behind the house." },
+  {
+    id: "paving",
+    icon: "paving",
+    ro: "Alee din pavele 6 × 1,2 m",
+    en: "Paver path 6 × 1.2 m",
+    promptRo: "Vreau o alee din pavele de 6 x 1,2 m prin grădină, cu borduri pe margini.",
+    promptEn: "I want a 6 x 1.2 m paver path through the garden, with edging along the sides.",
+  },
 ];

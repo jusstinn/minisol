@@ -1,4 +1,5 @@
 import type { ProjectType } from "@/domain/calculators";
+import { PAVING_BUILDUP, isPavingUse, pavingDepth } from "@/domain/paving";
 import type { Lang } from "@/domain/types";
 import type { PlanView } from "./types";
 
@@ -241,7 +242,71 @@ const PLANS: Record<ProjectType, Record<Lang, Template>> = {
       safety: ["Wear gloves with fertiliser and keep it away from children and pets."],
     }),
   },
+  paving: { ro: (i) => pavingPlanRo(i), en: (i) => pavingPlanEn(i) },
 };
+
+/** Build-up of a paved surface from the calculator inputs (cm). */
+function pavingCm(i: Inputs) {
+  const use = isPavingUse(i.use) ? i.use : "path";
+  const b = PAVING_BUILDUP[use];
+  return { use, base: Math.round(b.base * 100), sand: Math.round(b.sand * 100), paver: Math.round(b.paver * 100), depth: Math.round(pavingDepth(use) * 100) };
+}
+
+function pavingPlanRo(i: Inputs): Draft {
+  const c = pavingCm(i);
+  const what = c.use === "driveway" ? "Intrare auto din pavele" : c.use === "patio" ? "Terasă din pavele" : "Alee din pavele";
+  const edging = i.edging !== false;
+  return {
+    title: `${what} ${n(i.lengthM, "ro")} × ${n(i.widthM, "ro")} m`,
+    summary: `${n(i.areaM2, "ro")} m² de pavele de ${c.paver} cm pe ${c.base} cm de piatră spartă compactată și ${c.sand} cm de nisip${edging ? ", cu borduri pe margini" : ""}. Doi oameni, un weekend lung — săpatul e partea cea mai grea.`,
+    steps: [
+      { title: "Verifică rețelele și trasează", detail: "Află pe unde trec cablurile și țevile. Marchează conturul cu sfoară și țăruși și verifică diagonalele, ca să ai colțuri drepte.", duration: "1 h" },
+      { title: "Sapă", detail: `Scoate pământul pe ${c.depth} cm adâncime${edging ? " și cu 15 cm mai lat pe margini, pentru borduri" : ""}. Păstrează o pantă de 1–2% dinspre casă.`, duration: "4–8 h" },
+      { title: "Compactează și întinde geotextilul", detail: "Compactează fundul săpăturii, apoi întinde geotextilul cu 10 cm suprapunere, întors pe margini.", duration: "1 h" },
+      ...(edging
+        ? [{ title: "Montează bordurile", detail: "Așază bordurile pe un pat de beton uscat, la sfoară și la nivelă, cu sprijin de beton pe exterior. Lasă betonul să prindă o zi.", duration: "3–5 h + 1 zi" }]
+        : []),
+      { title: "Fundația de piatră spartă", detail: `Întinde piatra spartă în straturi de max. 10 cm și compactează fiecare strat, până la ${c.base} cm.`, duration: "3–5 h" },
+      { title: "Patul de nisip", detail: `Întinde ${c.sand} cm de nisip și trage-l drept cu un dreptar pe două țevi-ghidaj. Nu mai călca pe el după ce l-ai nivelat.`, duration: "1–2 h" },
+      { title: "Așază pavelele", detail: "Pornește dintr-un colț drept și lucrează de pe pavelele deja puse. Lasă rosturi de 2–3 mm, bate-le ușor cu ciocanul de cauciuc și taie marginile la final.", duration: "1 zi" },
+      { title: "Compactează și umple rosturile", detail: "Mătură nisipul de rosturi, trece cu compactorul (cu talpă de cauciuc), apoi mai mătură o dată, până se umplu rosturile.", duration: "2 h" },
+    ],
+    tips: [
+      "Amestecă pavele din 2–3 paleți diferiți, ca nuanța să fie uniformă.",
+      "Verifică des nivelul cu o sfoară întinsă la cota finală.",
+      "Nisipul de rosturi se pune doar pe pavele uscate.",
+      c.use === "driveway" ? "La intrarea auto nu scurta fundația: cei 25 cm compactați fac diferența în primul an." : "Pentru o alee mică ajunge un mai manual; pentru o terasă, închiriază o placă compactoare pentru o zi.",
+    ],
+    safety: ["Verifică rețelele subterane înainte să sapi.", "Ochelari și mască FFP2/FFP3 la tăierea pavelelor; antifoane la placa compactoare.", "Ridică sacii și pavelele din genunchi, în doi."],
+  };
+}
+
+function pavingPlanEn(i: Inputs): Draft {
+  const c = pavingCm(i);
+  const what = c.use === "driveway" ? "paved driveway" : c.use === "patio" ? "paved patio" : "paver path";
+  const edging = i.edging !== false;
+  return {
+    title: `${n(i.lengthM, "en")} × ${n(i.widthM, "en")} m ${what}`,
+    summary: `${n(i.areaM2, "en")} m² of ${c.paver} cm pavers on ${c.base} cm of compacted crushed stone and ${c.sand} cm of sand${edging ? ", with kerbs along the edges" : ""}. Two people, a long weekend — the digging is the hard part.`,
+    steps: [
+      { title: "Check services and set out", detail: "Find out where cables and pipes run. Mark the outline with string and pegs and check the diagonals so the corners are square.", duration: "1 h" },
+      { title: "Dig", detail: `Dig out ${c.depth} cm${edging ? ", 15 cm wider at the edges for the kerbs" : ""}. Keep a 1–2% fall away from the house.`, duration: "4–8 h" },
+      { title: "Compact and lay the geotextile", detail: "Compact the bottom of the dig, then lay the geotextile with 10 cm overlaps, turned up at the edges.", duration: "1 h" },
+      ...(edging ? [{ title: "Set the kerbs", detail: "Bed the kerbs on dry-mix concrete to a string line and level, haunched on the outside. Let the concrete set for a day.", duration: "3–5 h + 1 day" }] : []),
+      { title: "Crushed stone base", detail: `Spread the stone in layers of 10 cm max and compact each one, up to ${c.base} cm.`, duration: "3–5 h" },
+      { title: "Sand bed", detail: `Spread ${c.sand} cm of sand and screed it off a straight edge run on two guide rails. Don't step on it once it's level.`, duration: "1–2 h" },
+      { title: "Lay the pavers", detail: "Start from a square corner and work from the pavers already laid. Keep 2–3 mm joints, tap them down with the rubber mallet and cut the edges last.", duration: "1 day" },
+      { title: "Compact and fill the joints", detail: "Brush in the jointing sand, run the compactor over it (with a rubber mat), then brush again until the joints are full.", duration: "2 h" },
+    ],
+    tips: [
+      "Mix pavers from 2–3 pallets so the shade is even.",
+      "Check the level often against a string line at finished height.",
+      "Only brush jointing sand onto dry pavers.",
+      c.use === "driveway" ? "Don't skimp on a driveway's base: the 25 cm of compacted stone is what keeps it flat after the first winter." : "A hand tamper does for a small path; for a patio, hire a plate compactor for a day.",
+    ],
+    safety: ["Check for buried services before digging.", "Glasses and an FFP2/FFP3 mask when cutting pavers; ear defenders with a plate compactor.", "Lift bags and pavers with your legs, in pairs."],
+  };
+}
 
 export function scriptedPlan(type: ProjectType, inputs: Inputs, lang: Lang): PlanView {
   const { safety, ...plan } = PLANS[type][lang](inputs);

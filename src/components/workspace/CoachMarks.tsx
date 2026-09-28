@@ -18,6 +18,7 @@ const SAY: Record<ProjectType, { ro: string; en: string }> = {
   lawn: { ro: "extinde cu 2 × 2 m", en: "extend it by 2 × 2 m" },
   paint_room: { ro: "adaugă o fereastră", en: "add a window" },
   drywall_partition: { ro: "adaugă o ușă", en: "add a door" },
+  paving: { ro: "extinde cu 2 × 2 m", en: "extend it by 2 × 2 m" },
 };
 
 function text(id: HintId, lang: Lang, type: ProjectType | undefined, mic: boolean): string {

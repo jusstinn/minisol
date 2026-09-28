@@ -5,7 +5,7 @@ import type { Quote } from "@/domain/quote";
 import { fold } from "@/domain/search";
 import type { Customer, Lang, MaterialRole, QualityTier } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
-import { lowerFirst } from "@/domain/items";
+import { isOutdoor, lowerFirst } from "@/domain/items";
 import type { ItemKind } from "@/domain/items";
 import type { SketchOp, Side } from "@/domain/layout";
 import { explainEditError } from "@/lib/editErrors";
@@ -97,6 +97,12 @@ function metresIn(t: string): Found[] {
 const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
   ["tiling", /\b(baie|baia|bathroom|gresie|faianta|(re)?til(e|es|ed|ing)|placare)\b/],
   ["fence", /\b(gard|gardul|fence|fencing)\b/],
+  // Before the deck: "terasă din pavele" is paving. A "patio" is paved unless timber is named; a
+  // "driveway gate" is a fence gate.
+  [
+    "paving",
+    /\b(pavel\w*|pavea|pavaj\w*|pavat\w*|pavers?|paving|paved|dal[ae]|dalele|alee|aleea|alei|aleile|paths?|pathway|walkway|driveway(?!\s+gates?)|parcare)\b|^(?!.*\b(deck\w*|wood\w*|timber|lemn\w*|wpc|scandur\w*)\b).*\bpatio\b/,
+  ],
   ["deck", /\b(terasa|terasă|deck|decking|terrace|patio)\b/],
   ["laminate_floor", /\b(parchet|laminat|laminate|flooring|floors?|pardosea\w*)\b/],
   ["drywall_partition", /\b(gips|rigips|gipscarton|drywall|plasterboard|partition|despart\w*)\b/],
@@ -189,7 +195,7 @@ function kindsIn(t: string): ItemKind[] {
 
 /** "Pune o toaletă lângă ușă și un lavoar pe peretele din stânga", "mută lavoarul sub fereastră", "scoate cada". */
 function parseItems(t: string, type: ProjectType): Partial<SketchOp>[] | null {
-  const outdoor = type === "deck" || type === "lawn" || type === "fence";
+  const outdoor = isOutdoor(type);
   const remove = /\b(scoate\w*|elimina\w*|sterge\w*|remove|delete|fara|nu mai vreau)\b/.test(t);
   const rotate = /\b(roteste|intoarce|rotate|turn)\b/.test(t);
   const move = /\b(muta\w*|mut|move)\b/.test(t);
@@ -246,7 +252,21 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
     const base = /\b(pe|on)\s+(beton|placa|concrete|slab)\b/.test(t) ? "concrete_slab" : /\b(pe|on)\s+(pietris|gravel)\b/.test(t) ? "gravel" : /\b(pe|on)\s+(pamant|soil|earth)\b/.test(t) ? "soil" : undefined;
     if (base) edits.push({ op: "set_option", key: "base", value: base });
   }
-  if (type === "deck" || type === "laminate_floor" || type === "lawn") {
+  if (type === "paving") {
+    // "fă-o pentru mașini", "make it a driveway", "fără borduri", "borduri pe margini".
+    const use = /\b(driveway|masin\w*|auto|parcare|cars?|vehicul\w*)\b/.test(t)
+      ? "driveway"
+      : /\b(alee|aleea|path|footpath|walkway|pietonal\w*|pedestrian)\b/.test(t)
+        ? "path"
+        : /\b(patio|terasa|curte|curtea|yard)\b/.test(t)
+          ? "patio"
+          : undefined;
+    if (use && (RESIZE.test(t) || /\b(pentru|for|ca|as a|into a)\b/.test(t))) edits.push({ op: "set_option", key: "use", value: use });
+    if (/\b(bordur\w*|edging|edges?|kerbs?|curbs?)\b/.test(t)) {
+      edits.push({ op: "set_option", key: "edging", value: !(removing || /\b(no|nu)\s+(edging|kerbs?|curbs?|bordur\w*)\b/.test(t)) });
+    }
+  }
+  if (type === "deck" || type === "laminate_floor" || type === "lawn" || type === "paving") {
     const addZone =
       /\b(in l|forma de l|l[- ]shape\w*|extinde\w*|extensie|extension|extend|aripa|wing|another (area|section))\b/.test(t) ||
       (/\b(zon\w*|area|section)\b/.test(t) && /\b(adaug\w*|add|inca|noua|alta)\b/.test(t));
@@ -309,6 +329,7 @@ const MATERIAL_WORDS: [MaterialRole, RegExp][] = [
   ["fence_post", /\b(stalp\w*|posts?)\b/],
   ["fence_panel", /\b(panou\w*|panels?)\b/],
   ["fence_gate", /\b(poart\w*|gates?)\b/],
+  ["kerb_concrete", /\b(beton\w* (de|pentru|la|de la|sub) bordur\w*|kerb concrete)\b/],
   ["post_concrete", /\b(fundati\w*|beton\w*|footings?|concrete)\b/],
   ["wall_tiles", /\b(faiant\w*|wall tiles?)\b/],
   ["floor_tiles", /\b(gresi\w*|floor tiles?)\b/],
@@ -317,6 +338,11 @@ const MATERIAL_WORDS: [MaterialRole, RegExp][] = [
   ["laminate", /\b(parchet\w*|laminate)\b/],
   ["underlay", /\b(folie|underlay)\b/],
   ["skirting_board", /\b(plint\w*|skirting)\b/],
+  ["joint_sand", /\b(nisip\w* (de|pentru) rost\w*|rosturi\w*|joint(ing)? sand|polymeric sand)\b/],
+  ["paving_sand", /\b(nisip\w*|sand)\b/],
+  ["paving_base", /\b(piatr\w* spart\w*|piatra|split|balast\w*|crushed stone|stone base|sub-?base|hardcore)\b/],
+  ["paving_edging", /\b(bordur\w*|edging|kerbs?|curbs?)\b/],
+  ["pavers", /\b(pavel\w*|pavaj\w*|pavers?|paving|dal[ae]|dalele)\b/],
   ["cw_profile", /\b(montant\w*|profile\w*|studs?)\b/],
   ["drywall_board", /\b(gips\w*|placi|plasterboard)\b/],
   ["mineral_wool", /\b(vata|wool|izolati\w*)\b/],
@@ -383,7 +409,9 @@ export function parseIntent(raw: string, state: SessionState): Intent {
       : undefined;
   const unsafe = UNSAFE.find(([, re]) => re.test(t));
   if (unsafe) return { kind: "unsafe", topic: unsafe[0] };
-  const type = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
+  let type = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
+  // A paved patio is a "terasă" too: on a paving project the word means that project, unless timber is named.
+  if (type === "deck" && state.project?.type === "paving" && !/\b(deck\w*|lemn\w*|wood\w*|timber|wpc|scandur\w*|larice|larch)\b/.test(t)) type = "paving";
   // "I don't know the size" → typical sizes + pace estimator (type may come from an earlier message).
   if (/\b(nu stiu|nu cunosc|habar n-am|n-am masurat|nu am masurat|don'?t know|do not know|not sure|no idea)\b/.test(t) && !/\d/.test(t)) {
     return { kind: "sizes", type: type ?? state.project?.type };
@@ -492,6 +520,15 @@ export function parseIntent(raw: string, state: SessionState): Intent {
         if (cm) params.heightM = num(cm[1]) / 100;
       }
       break;
+    case "paving":
+      // What it carries decides the build-up: cars → driveway; "alee" → path; "terasă / curte" → patio.
+      if (/\b(driveway|masin\w*|auto|parcare|cars?|vehicul\w*|garaj\w*)\b/.test(t)) params.use = "driveway";
+      else if (/\b(alee|aleea|alei|path|pathway|footpath|walkway|trotuar\w*)\b/.test(t)) params.use = "path";
+      else if (/\b(terasa|patio|curte|curtea|terrace|yard|courtyard)\b/.test(t)) params.use = "patio";
+      if (/\b(fara borduri|without (the )?(edging|kerbs?)|no (edging|kerbs?))\b/.test(t)) params.edging = false;
+      if (!params.lengthM && area) params.lengthM = params.widthM = side(num(area[1]));
+      delete params.heightM;
+      break;
     case "paint_room":
       // "camera de 12 mp" (floor area, not the walls') → a square room of that area.
       if (!params.lengthM && area && !/\b(pereti|walls?)\b/.test(t)) params.lengthM = params.widthM = side(num(area[1]));
@@ -501,7 +538,7 @@ export function parseIntent(raw: string, state: SessionState): Intent {
       break;
   }
 
-  const needsLW = ["deck", "paint_room", "laminate_floor", "tiling"].includes(type);
+  const needsLW = ["deck", "paint_room", "laminate_floor", "tiling", "paving"].includes(type);
   const missing =
     type === "lawn"
       ? params.areaM2 ? undefined : "area"
@@ -617,6 +654,13 @@ const EDIT_EXAMPLES: Record<ProjectType, [string, string]> = {
   laminate_floor: ["„fă-o în L cu 2 × 2 m în dreapta”, „montaj diagonal”, „adaugă o ușă”", "“make it L-shaped with 2 × 2 m on the right”, “diagonal laying”, “add a door”"],
   drywall_partition: ["„fă-l de 4 m”, „adaugă o ușă”, „fă-l de 2,8 m înălțime”", "“make it 4 m long”, “add a door”, “make it 2.8 m high”"],
   lawn: ["„fă-o 10 × 8 m”, „adaugă o zonă de 3 × 3 m în spate”", "“make it 10 × 8 m”, “add another area of 3 × 3 m at the back”"],
+  paving: ["„fă-o în L cu 1,2 × 3 m în dreapta”, „fă-o 8 × 1,5 m”, „fă-o pentru mașini”, „fără borduri”", "“make it L-shaped with 1.2 × 3 m on the right”, “make it 8 × 1.5 m”, “make it a driveway”, “no edging”"],
+};
+
+/** How to ask for a line the chosen product made unnecessary (the offline parser understands these). */
+const DROP_PHRASE: Partial<Record<MaterialRole, [ro: string, en: string]>> = {
+  deck_oil: ["scoate uleiul", "remove the oil"],
+  kerb_concrete: ["scoate betonul uscat", "remove the dry concrete"],
 };
 
 /** The language to answer in: the message's own language when it's clear, else the session's. */
@@ -901,7 +945,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         const line = unneeded && q.quote.lines.find((l) => l.sku === unneeded.sku);
         if (unneeded && line) {
           const what = line.name.split(",")[0];
-          reply += en ? ` ${what} isn't needed with ${unneeded.because} — say "remove the oil" to drop it.` : ` ${what} nu e necesar la ${unneeded.because} — spune „scoate uleiul” și îl scot.`;
+          const [dropRo, dropEn] = (unneeded.role && DROP_PHRASE[unneeded.role]) || DROP_PHRASE.deck_oil!;
+          reply += en ? ` ${what} isn't needed with ${unneeded.because} — say "${dropEn}" to drop it.` : ` ${what} nu e necesar la ${unneeded.because} — spune „${dropRo}” și îl scot.`;
         }
       }
     }
@@ -970,8 +1015,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   } else {
     reply =
       lang === "en"
-        ? "I'm your DIY project assistant — I can plan a **deck, room painting, laminate floor, bathroom tiling, fence, drywall partition or new lawn**. Tell me what you'd like to do and the rough dimensions."
-        : "Sunt asistentul tău pentru proiecte DIY — pot planifica o **terasă, vopsirea unei camere, parchet, placarea băii, un gard, un perete de gips-carton sau gazon nou**. Spune-mi ce vrei să faci și dimensiunile aproximative.";
+        ? "I'm your DIY project assistant — I can plan a **deck, room painting, laminate floor, bathroom tiling, fence, drywall partition, new lawn or a paver path, patio or driveway**. Tell me what you'd like to do and the rough dimensions."
+        : "Sunt asistentul tău pentru proiecte DIY — pot planifica o **terasă, vopsirea unei camere, parchet, placarea băii, un gard, un perete de gips-carton, gazon nou sau o alee, curte ori intrare auto din pavele**. Spune-mi ce vrei să faci și dimensiunile aproximative.";
   }
 
   yield* streamText(reply);

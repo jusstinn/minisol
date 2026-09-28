@@ -25,6 +25,7 @@ const TYPE_HINT: Record<string, string> = {
   fence: "building a fence",
   drywall_partition: "building a drywall partition wall",
   lawn: "sowing a lawn",
+  paving: "laying a paved garden path, patio or driveway",
   unknown: "a home DIY project",
 };
 

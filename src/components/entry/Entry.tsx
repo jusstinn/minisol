@@ -27,6 +27,7 @@ const HERO_BUILDS: { type: ProjectType; inputs: Record<string, unknown>; ro: str
   { type: "tiling", inputs: { lengthM: 2.5, widthM: 2, roomType: "bathroom" }, ro: "Baie, placată", en: "Bathroom tiling", dims: "2,50 × 2,00 m" },
   { type: "drywall_partition", inputs: { lengthM: 3.5, heightM: 2.6, doors: 1 }, ro: "Perete gips-carton", en: "Drywall partition", dims: "3,50 × 2,60 m" },
   { type: "laminate_floor", inputs: { lengthM: 5, widthM: 4 }, ro: "Parchet în living", en: "Living-room laminate", dims: "5,00 × 4,00 m" },
+  { type: "paving", inputs: { lengthM: 6, widthM: 1.2, use: "path" }, ro: "Alee din pavele", en: "Paver path", dims: "6,00 × 1,20 m" },
 ];
 
 export default function Entry({
@@ -358,8 +359,8 @@ function TitleBlock({ lang }: { lang: Lang }) {
 function Ticker({ lang }: { lang: Lang }) {
   const items =
     lang === "en"
-      ? ["Quantity calculation", "Live store stock", "WalletLoop personal offers", "Step-by-step plan", "3D project blueprint", "7 project types", "Romanian / English", "Tools you own are skipped"]
-      : ["Calcul cantități", "Stoc live în magazine", "Oferte personale WalletLoop", "Plan pas cu pas", "Model 3D al proiectului", "7 tipuri de proiecte", "Română / Engleză", "Sculele pe care le ai nu se mai cumpără"];
+      ? ["Quantity calculation", "Live store stock", "WalletLoop personal offers", "Step-by-step plan", "3D project blueprint", "8 project types", "Romanian / English", "Tools you own are skipped"]
+      : ["Calcul cantități", "Stoc live în magazine", "Oferte personale WalletLoop", "Plan pas cu pas", "Model 3D al proiectului", "8 tipuri de proiecte", "Română / Engleză", "Sculele pe care le ai nu se mai cumpără"];
   const row = [...items, ...items];
   return (
     <div className="relative z-10 overflow-hidden border-y border-ink/10 bg-ink py-2.5 text-paper">

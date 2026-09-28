@@ -89,6 +89,8 @@ export const PARAM_FIELDS: Record<string, Record<string, unknown>> = {
   doubleLayer: { type: "boolean" },
   wetRoom: { type: "boolean" },
   mode: { type: "string", enum: ["new", "overseed"] },
+  use: { type: "string", enum: ["path", "patio", "driveway"], description: "Paving: what the surface carries (driveway = cars)" },
+  edging: { type: "boolean", description: "Paving: kerbs along the outline" },
 };
 
 export const TOOL_DEFINITIONS = [
@@ -139,7 +141,7 @@ export const TOOL_DEFINITIONS = [
       "Change the shape of the current project's sketch — the materials, quantities and price are recalculated from it, keeping the products the customer already chose. " +
       "Use for: resizing (resize), L/U shapes (add_zone attaches a rectangle to a side of an existing zone; remove_zone), deck height (set_height, metres) and steps (add_steps / remove_steps; count defaults to height ÷ 17 cm), " +
       "doors/windows/gates (add_opening / move_opening / remove_opening; fence gates: width 1 = pedestrian, 3 = driveway, on a segment index), fence corners (add_fence_segment with turn left/right/straight; set_segment_length; remove_fence_segment), " +
-      "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (set_option key/value: base, direction, pattern, subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode). " +
+      "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (set_option key/value: base, direction, pattern, subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode; paving: use path/patio/driveway, edging true/false). " +
       "Place fixtures, lights and furniture where the customer says with add_item (item + one of: wall n/e/s/w with pos 0..1, near door/window/gate/steps/<item>, corner, or nothing = middle); move_item, rotate_item, remove_item by id or item kind. Items the store sells (WC, washbasin, shower, bathtub, mirror, towel radiator, lights, garden set, BBQ, planter, lounger, parasol) are added to the list automatically; sofas, beds etc. are drawn for context only. " +
       "undo reverts the last sketch change (alone, nothing else in the same call). Sides/walls: n = back, s = front, e = right, w = left as seen in the sketch. Zone ids and segment indexes are in the state section of your instructions. Set unused fields to null. Several edits can be sent at once.",
     strict: true,
@@ -440,7 +442,10 @@ async function ownedTools(ctx: ToolContext): Promise<Map<MaterialRole, { sku: st
 }
 
 const packLabel = (p: Product, qty: number) =>
-  p.content.unit === "buc" && p.content.amount === 1 ? `${qty} ${p.salesUnit}` : `${qty} × ${p.content.amount.toLocaleString("ro-RO")} ${p.content.unit}`;
+  // Per piece ("3 buc") or per unit of measure ("8 m²" of pavers sold by the square metre).
+  (p.content.unit === "buc" || p.content.unit === p.salesUnit) && p.content.amount === 1
+    ? `${qty} ${p.salesUnit}`
+    : `${qty} × ${p.content.amount.toLocaleString("ro-RO")} ${p.content.unit}`;
 
 /**
  * Alternatives for every job in the basket, each sized for this project and priced

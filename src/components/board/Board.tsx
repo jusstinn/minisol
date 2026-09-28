@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import type { Card, ChoiceGroup, ProductOptionView, QualityOption } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
+import { isOutdoor } from "@/domain/items";
 import type { BasketItem } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
@@ -55,7 +56,7 @@ export default function Board(props: Props) {
         {onlyCards.map((c) => (
           <div key={c.id}>{renderCard(c.kind === "quote" && board.quote?.id === c.id ? board.quote : c)}</div>
         ))}
-        {onlyCards.some((c) => c.kind === "plan") && board.project && board.quote && ["deck", "fence", "lawn"].includes(board.project.project.type) && (
+        {onlyCards.some((c) => c.kind === "plan") && board.project && board.quote && isOutdoor(board.project.project.type) && (
           <WeatherPanel
             lat={board.quote.quote.availability.origin.lat}
             lng={board.quote.quote.availability.origin.lng}
@@ -172,7 +173,7 @@ export default function Board(props: Props) {
           </Flash>
         </div>
       )}
-      {board.project && quote && ["deck", "fence", "lawn"].includes(board.project.project.type) && (
+      {board.project && quote && isOutdoor(board.project.project.type) && (
         <WeatherPanel
           lat={quote.availability.origin.lat}
           lng={quote.availability.origin.lng}
