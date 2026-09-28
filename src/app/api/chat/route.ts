@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   if (body.mode === "scripted" || process.env.AGENT_MODE === "scripted") {
     offlineReason = "forced";
   } else if (!process.env.OPENAI_API_KEY) {
-    offlineReason = "OPENAI_API_KEY is not set";
+    offlineReason = "AI not configured";
   } else {
     // Protect the model budget (src/lib/budget.ts): over a limit, degrade to the offline agent, don't fail.
     const allowed = await allowAiTurn({ ip, tenant: tenant.id, memberId });
@@ -71,7 +71,8 @@ export async function POST(req: Request) {
       try {
         llm = createLlmFromEnv();
       } catch (e) {
-        offlineReason = (e as Error).message;
+        console.warn("[chat] model not available:", (e as Error).message);
+        offlineReason = "AI not configured";
       }
     }
   }
