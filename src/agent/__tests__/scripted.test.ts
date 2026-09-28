@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getDataSources } from "@/adapters";
 import { getTenant } from "@/config/tenant";
 import { productLineKey } from "@/domain/resolve";
-import { parseIntent, runScriptedAgent } from "../scripted";
+import { parseIntent, runScriptedAgent, sameReason } from "../scripted";
 import { PROJECT_STARTERS } from "@/lib/i18n";
 import type { AgentEvent } from "../types";
 
@@ -198,6 +198,11 @@ describe("edits that raise a new concern", () => {
     const c2 = wider.events.find((e) => e.type === "card" && e.card.kind === "change") as Extract<AgentEvent, { type: "card" }> | undefined;
     expect(c2?.card.kind === "change" && c2.card.change.warnings).toBeFalsy();
   }, 20000);
+
+  it("says why an edit left the price alone", () => {
+    expect(sameReason({ lines: [{ before: 12.4, after: 13.1 }] }, "ro")).toMatch(/pachetele de pe listă/);
+    expect(sameReason({ lines: [] }, "en")).toMatch(/doesn't need any more material/);
+  });
 
   it("switching to WPC offers to drop the oil it no longer needs", async () => {
     const s0 = (await run("Terasă 5 × 4 m", { basket: [] })).state;

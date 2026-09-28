@@ -368,6 +368,22 @@ npx tsx --env-file=.env.local scripts/make-pass-link.ts WL-RO-204518 hornbach 24
 Tokens are bearer credentials: they are never logged (only the rejection reason is). The nonce `n`
 lets the pass backend track or revoke individual links; the app does not keep server-side state.
 
+### Two deployments: demo and pilot
+
+Both Vercel projects build `main` on every push:
+
+| Project | URL | Mode |
+| --- | --- | --- |
+| `blueprint-walletloop` | blueprint-walletloop.vercel.app | Open demo (member picker, "Atelier" brand) |
+| `blueprint-pilot` | blueprint-pilot-walletloop.vercel.app | Product mode for HORNBACH: `REQUIRE_PASS_LINK=1`, `TENANT=hornbach` |
+
+The pilot needs two secrets. Add them in *Project → Settings → Environment Variables*, then redeploy:
+
+- `PASS_LINK_SECRET`: generate it with `openssl rand -base64 48`. Share the same value with
+  WalletLoop's pass backend, and put it in your `.env.local` to mint links by hand. Until it is set,
+  the pilot deliberately fails with a configuration error rather than open up.
+- `OPENAI_API_KEY`: optional. Without it the pilot runs the offline agent.
+
 ## Privacy & safety
 
 - **Data minimisation**: the model sees tier, points, home store, city, interests and
@@ -378,6 +394,32 @@ lets the pass backend track or revoke individual links; the app does not keep se
   Frankfurt / Google Vertex EU) — the `LlmClient` interface is the only thing to swap.
 - Safety rules in the prompt and calculators: electrics, gas, structural walls, work at height
   → licensed professional; hazard notes per project.
+
+### Usage events for a pilot (anonymous)
+
+To measure a pilot without tracking people, the app sends a few anonymous events to
+`/api/events` (`src/lib/usage.ts`, client `src/lib/track.ts`):
+
+- **What's recorded:** visits (entry: landing, pass or share; phone or desktop), projects
+  started, sketch edits (by chat, the plan editor or a chip, plus the op kinds), hand changes to
+  the list, each chat answer (live or offline, time taken, tools and cards, error), cart opened,
+  reservations (pickup or delivery, number of lines, points used), wallet, share links, uploads,
+  and size presets used.
+- **What's not recorded:** member ids, names, messages, dimensions, SKUs, prices, IPs or user
+  agents.
+  - Every event and value is on an allowlist (enums and counts only); anything else is dropped on
+    the server.
+  - Times are cut to the minute.
+  - The "visit" is a random id per page load, kept only in memory: no cookie and nothing in
+    storage.
+- **Off switches:** no events are sent when the browser signals Global Privacy Control or Do Not
+  Track, when `NEXT_PUBLIC_USAGE=off` is set, or on the server when `USAGE_SINK=off` is set.
+- **Where the events go:** one `[usage] {json}` line per event in the server log. Set
+  `USAGE_WEBHOOK_URL` to also forward each batch, for example to WalletLoop's analytics.
+- **Reading them:** run `npx tsx scripts/usage-report.ts exported-logs.txt` to print the funnel
+  (visited → started a project → changed the sketch → opened the cart → reserved), projects by
+  type, how people edit, reply latency (median and p90) and reservations. `--json` gives the
+  same numbers as JSON.
 
 ### Price display (EU / Romanian consumer law)
 
@@ -399,14 +441,24 @@ The quote engine (`src/domain/quote.ts`) does the maths; the list and cart only 
 ## Scripts
 
 ```bash
-npm test                     # 67 unit tests: calculators, pack optimiser, quote engine, offers, scripted agent
+npm test                     # unit tests: calculators, pack optimiser, quote engine, offers, layout, agents, routes
 npm run typecheck
+npm run eval -- --scripted   # agent scenarios against the offline agent (no API calls)
 npm run validate:catalog     # catalogue integrity (roles, units, tiers, fictional brands)
 npx tsx scripts/inspect-project.ts deck '{"lengthM":4,"widthM":3}' WL-RO-100231 premium
 npx tsx --env-file=.env.local scripts/try-agent.ts "Vreau o terasă de 4x3 m" WL-RO-100231
 npx tsx --env-file=.env.local scripts/make-pass-link.ts WL-RO-100231 hornbach 24   # signed pass link
 npm run eval                 # live-model scenarios with automatic accuracy checks
+npx tsx scripts/usage-report.ts logs.txt     # pilot funnel from exported [usage] log lines
 ```
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every pull request:
+- types, lint and unit tests
+- the offline agent eval
+- the catalogue rules
+- a production build
+
+None of these steps calls OpenAI.
 
 ## Configuration
 

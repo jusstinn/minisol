@@ -8,7 +8,7 @@ import { lei } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { useAgent } from "@/lib/useAgent";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import type { ChatMessage } from "@/lib/useAgent";
+import type { ChatMessage, Via } from "@/lib/useAgent";
 import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
@@ -119,7 +119,7 @@ export default function Workspace({
       busy={agent.busy}
       offline={offline}
       onSend={(t) => {
-        void agent.send(t);
+        void agent.send(t, "upload");
         if (!isDesktop) tabs.select("chat");
       }}
     >
@@ -300,7 +300,7 @@ function Rail({
   lang: Lang;
   messages: ChatMessage[];
   busy: boolean;
-  onSend: (t: string) => void;
+  onSend: (t: string, via?: Via) => void;
   /** Context-aware next steps (src/lib/nextSteps.ts). */
   chips: NextStep[];
   renderInlineBoard: (m: ChatMessage) => React.ReactNode;
@@ -330,10 +330,11 @@ function Rail({
   const lastDone = [...messages].reverse().find((m) => m.role === "assistant" && !m.pending && (m.text || m.error));
   const announce = busy ? `${tr("thinking", lang)}…` : lastDone ? (lastDone.error ? tr("error", lang) : lastDone.text.replace(/\*\*/g, "")) : "";
 
-  const send = (t: string) => {
+  const send = (t: string, via?: Via) => {
     if (!t.trim() || busy) return;
-    onSend(t);
-    setText("");
+    onSend(t, via);
+    // A chip or a size preset leaves the draft alone.
+    if (!via) setText("");
   };
   const last = messages[messages.length - 1];
 
@@ -388,7 +389,7 @@ function Rail({
                   {tr("error", lang)} <span className="font-mono text-[11px] opacity-70">({m.error})</span>
                 </div>
               )}
-              {m.cards.map((c) => c.kind === "sizes" && <SizesCard key={c.id} card={c} lang={lang} onSend={onSend} disabled={busy} />)}
+              {m.cards.map((c) => c.kind === "sizes" && <SizesCard key={c.id} card={c} lang={lang} onSend={(t) => onSend(t, "sizes")} disabled={busy} />)}
               {m.cards.some((c) => c.kind !== "sizes") && renderInlineBoard(m)}
             </div>
           ),
@@ -396,7 +397,7 @@ function Rail({
       </div>
 
       <div className="border-t border-rule bg-paper px-3 pb-3 pt-2.5 sm:px-5 lg:pb-[max(12px,env(safe-area-inset-bottom))]">
-        {chips.length > 0 && !busy && last?.role === "assistant" && <NextStepChips chips={chips} lang={lang} onSend={send} />}
+        {chips.length > 0 && !busy && last?.role === "assistant" && <NextStepChips chips={chips} lang={lang} onSend={(t) => send(t, "chip")} />}
         <div data-coach="composer" className="flex items-end gap-2 rounded-2xl border border-ink/15 bg-card p-1.5 focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/40">
           <textarea
             rows={1}

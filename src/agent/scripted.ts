@@ -789,10 +789,13 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       extraAmounts.push(ch.totalBefore, Math.abs(ch.delta), ...ch.lines.map((l) => Math.abs(l.deltaRon)));
       const sign = ch.delta > 0 ? "+" : ch.delta < 0 ? "−" : "±";
       const what = ch.edits.map(lowerFirst).join("; ");
+      const same = Math.abs(ch.delta) < 0.005;
+      // A new safety note (e.g. posts and footings above 60 cm) is the real story; don't claim nothing else is needed.
+      const why = ch.warnings?.length ? "" : ` — ${sameReason(ch, lang)}`;
       reply =
         lang === "en"
-          ? `Done — ${what.charAt(0).toLowerCase() + what.slice(1)}. I redrew the sketch and recalculated the list, keeping the products you picked: new total **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`
-          : `Gata — ${what.charAt(0).toLowerCase() + what.slice(1)}. Am redesenat schița și am recalculat lista, păstrând produsele alese: total nou **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`;
+          ? `Done — ${what.charAt(0).toLowerCase() + what.slice(1)}. I redrew the sketch and recalculated the list, keeping the products you picked: ${same ? `the total stays **${lei(ch.totalAfter, lang)}**${why}` : `new total **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)})`}.`
+          : `Gata — ${what.charAt(0).toLowerCase() + what.slice(1)}. Am redesenat schița și am recalculat lista, păstrând produsele alese: ${same ? `totalul rămâne **${lei(ch.totalAfter, lang)}**${why}` : `total nou **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)})`}.`;
       if (ch.warnings?.length) reply += ` ⚠ ${ch.warnings[0]}`;
     }
   } else if (intent.kind === "requality" && state.project) {
@@ -1024,4 +1027,11 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   if (check.checked > 0) yield { type: "verified", ok: check.ok, checked: check.checked };
   yield { type: "history", items: [...(opts.history ?? []), { role: "user", content: opts.message }, { role: "assistant", content: reply }] };
   yield { type: "done", ms: Date.now() - started };
+}
+
+/** Why a sketch edit left the price alone: the packs on the list already cover it, or nothing to buy changed. */
+export function sameReason(ch: { lines: { before: number; after: number }[] }, lang: Lang): string {
+  const moved = ch.lines.some((l) => Math.abs(l.after - l.before) > 1e-6);
+  if (moved) return lang === "en" ? "the packs already on your list cover the new amounts" : "pachetele de pe listă acoperă și noile cantități";
+  return lang === "en" ? "the change doesn't need any more material" : "modificarea nu cere material în plus";
 }

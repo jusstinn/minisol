@@ -477,8 +477,12 @@ function deck(p: Params, lang: Lang): CalculationResult {
     );
   }
   b.safety(
-    heightM > 0.6 ? "Terasa depășește 60 cm: balustrada e obligatorie și poate fi necesară autorizație." : "Terasele înalte de peste 60 cm necesită balustradă și, uneori, autorizație.",
-    heightM > 0.6 ? "This deck is over 60 cm high: a railing is required and a permit may be needed." : "Decks higher than 60 cm need a railing and may need a permit.",
+    heightM > 0.6
+      ? "Terasa depășește 60 cm: balustrada e obligatorie, structura are nevoie de stâlpi și fundații (nu sunt în listă) și poate fi necesară autorizație."
+      : "Terasele înalte de peste 60 cm necesită balustradă și, uneori, autorizație.",
+    heightM > 0.6
+      ? "This deck is over 60 cm high: a railing is required, the frame needs posts and footings (not on the list) and a permit may be needed."
+      : "Decks higher than 60 cm need a railing and may need a permit.",
   );
 
   const hours = area * 1.5 + treads * 1.5 + 4;
