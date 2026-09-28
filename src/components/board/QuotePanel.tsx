@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import type { CategoryId, Lang, QualityTier } from "@/domain/types";
-import { dec, int, km, lei, monthYear } from "@/lib/format";
+import { dec, int, km, lei, monthYear, times } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
@@ -129,7 +129,7 @@ export default function QuotePanel({
               +<Counter value={quote.points.earned} lang={lang} decimals={0} />
             </div>
             <div className="mt-1 font-mono text-[10px] text-paper/60">
-              {tr("points", lang)} · ×{quote.points.tierMultiplier} tier
+              {tr("points", lang)} · {times(quote.points.tierMultiplier, lang)} {lang === "en" ? "tier" : "nivel"}
               {quote.points.bonusNotes.length > 0 && <span className="text-accent"> · bonus</span>}
             </div>
           </div>

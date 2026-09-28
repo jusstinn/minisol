@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SketchChange } from "@/agent/types";
-import { km } from "@/lib/format";
+import { km, times, unitText } from "@/lib/format";
 import { sketchInFocus } from "../Board";
 
 const change = (source: SketchChange["source"]) => ({
@@ -28,5 +28,17 @@ describe("store distances", () => {
     expect(km(9.9, "ro")).toBe("9,9 km");
     expect(km(9.9, "en")).toBe("9.9 km");
     expect(km(12, "ro")).toBe("12 km");
+  });
+
+  it("points multipliers too ('×1.5 tier' in the Romanian list)", () => {
+    expect(times(1.5, "ro")).toBe("×1,5");
+    expect(times(2, "en")).toBe("×2");
+  });
+
+  it("measurement units follow the language (EN showed '11 buc', '20 rânduri')", () => {
+    expect(unitText("buc", "en")).toBe("pcs");
+    expect(unitText("rânduri", "en")).toBe("rows");
+    expect(unitText("rânduri", "ro")).toBe("rânduri");
+    expect(unitText("m²", "en")).toBe("m²");
   });
 });
