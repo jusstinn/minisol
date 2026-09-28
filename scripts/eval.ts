@@ -48,7 +48,7 @@ function moneyValues(text: string): number[] {
 }
 
 function allowedAmounts(q: Quote): Set<number> {
-  const s = new Set<number>([q.total, q.subtotal, q.discountTotal, q.points.redeemableValue, q.points.totalIfRedeemed, q.delivery.fee]);
+  const s = new Set<number>([q.total, q.subtotal, q.discountTotal, q.saving, q.compareAt, q.points.redeemableValue, q.points.totalIfRedeemed, q.delivery.fee]);
   for (const l of q.lines) [l.unitPrice, l.lineTotal, l.netTotal, l.discount].forEach((v) => s.add(v));
   for (const d of q.discounts) s.add(d.amount);
   for (const h of q.hints) if (h.amountToGo) s.add(h.amountToGo);

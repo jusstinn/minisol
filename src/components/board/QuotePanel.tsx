@@ -53,6 +53,7 @@ export default function QuotePanel({
   onTier,
   choices,
   onChoose,
+  redeemSignal,
 }: {
   quote: Quote;
   suggestions: SuggestionView[];
@@ -70,9 +71,16 @@ export default function QuotePanel({
   onTier?: (o: QualityOption) => void;
   choices?: ChoiceGroup[];
   onChoose?: (g: ChoiceGroup, o: ProductOptionView) => void;
+  /** "Pay with points" asked for in the chat ({value, seq}). */
+  redeemSignal?: { value: boolean; seq: number } | null;
 }) {
   const [walletOpen, setWalletOpen] = useState(false);
   const [redeem, setRedeem] = useState(false);
+  const [redeemSeen, setRedeemSeen] = useState(redeemSignal?.seq);
+  if (redeemSignal && redeemSignal.seq !== redeemSeen) {
+    setRedeemSeen(redeemSignal.seq);
+    setRedeem(redeemSignal.value);
+  }
   const [sent, setSent] = useState<null | "wallet" | "reserve">(null);
   const materials = quote.lines.filter((l) => !l.isTool);
   const tools = quote.lines.filter((l) => l.isTool);

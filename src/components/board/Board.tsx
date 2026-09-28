@@ -101,6 +101,7 @@ export default function Board(props: Props) {
             onTier={onTier}
             choices={c.choices}
             onChoose={onChoose}
+            redeemSignal={ui && typeof ui.command.redeemPoints === "boolean" ? { value: ui.command.redeemPoints, seq: ui.seq } : null}
           />
         );
       case "stock":

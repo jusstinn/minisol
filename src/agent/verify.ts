@@ -24,6 +24,9 @@ export function allowedAmounts(q: Quote, extra: number[] = []): number[] {
     q.total,
     q.subtotal,
     q.discountTotal,
+    // Omnibus-safe "was / you save" figures shown in the list and cart.
+    q.saving,
+    q.compareAt,
     q.points.redeemableValue,
     q.points.totalIfRedeemed,
     q.delivery.fee,

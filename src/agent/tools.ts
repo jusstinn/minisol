@@ -348,7 +348,8 @@ function quoteForModel(q: Quote, lang: Lang) {
     // Pre-formatted strings: copy these verbatim instead of composing numbers.
     display: {
       total: lei(q.total, lang),
-      saved: q.discountTotal > 0 ? lei(q.discountTotal, lang) : null,
+      // Measured against the 30-day lowest prices (what the list shows as "you save").
+      saved: q.saving > 0 ? lei(q.saving, lang) : null,
       pointsEarned: int(q.points.earned, lang),
       payWithPoints: q.points.redeemableValue > 0 ? lei(q.points.redeemableValue, lang) : null,
       nearestStoreWithEverything: best ? `${best.name} (${dec(best.distanceKm, lang, 1)} km)` : null,

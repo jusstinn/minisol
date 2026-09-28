@@ -323,8 +323,8 @@ export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, t
   const parts: string[] = [];
   parts.push(
     en
-      ? `Done — ${title.toLowerCase()} comes to **${lei(q.total, lang)}**${q.discountTotal > 0 ? `, including **${lei(q.discountTotal, lang)}** off from your offers` : ""}.`
-      : `Gata — ${title.toLowerCase()} costă **${lei(q.total, lang)}**${q.discountTotal > 0 ? `, cu **${lei(q.discountTotal, lang)}** reducere din ofertele tale` : ""}.`,
+      ? `Done — ${title.toLowerCase()} comes to **${lei(q.total, lang)}**${q.saving > 0 ? `, including **${lei(q.saving, lang)}** off from your offers` : ""}.`
+      : `Gata — ${title.toLowerCase()} costă **${lei(q.total, lang)}**${q.saving > 0 ? `, cu **${lei(q.saving, lang)}** reducere din ofertele tale` : ""}.`,
   );
   parts.push(
     en

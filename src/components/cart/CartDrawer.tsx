@@ -29,6 +29,7 @@ export default function CartDrawer({
   projectTitle,
   onQty,
   onShowPlan,
+  redeemSignal,
 }: {
   open: boolean;
   onClose: () => void;
@@ -38,10 +39,16 @@ export default function CartDrawer({
   projectTitle: string;
   onQty: (sku: string, delta: number) => void;
   onShowPlan?: () => void;
+  redeemSignal?: { value: boolean; seq: number } | null;
 }) {
   const en = lang === "en";
   const [fulfilment, setFulfilment] = useState<Fulfilment>("pickup");
   const [redeem, setRedeem] = useState(false);
+  const [redeemSeen, setRedeemSeen] = useState(redeemSignal?.seq);
+  if (redeemSignal && redeemSignal.seq !== redeemSeen) {
+    setRedeemSeen(redeemSignal.seq);
+    setRedeem(redeemSignal.value);
+  }
   const [done, setDone] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
 

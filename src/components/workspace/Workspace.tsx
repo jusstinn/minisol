@@ -229,6 +229,7 @@ export default function Workspace({
           tenant={tenant}
           projectTitle={project?.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
           onQty={agent.changeQty}
+          redeemSignal={agent.ui && typeof agent.ui.command.redeemPoints === "boolean" ? { value: agent.ui.command.redeemPoints, seq: agent.ui.seq } : null}
           onShowPlan={
             isDesktop
               ? undefined
