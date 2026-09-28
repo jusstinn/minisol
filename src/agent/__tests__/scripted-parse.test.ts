@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getDataSources } from "@/adapters";
 import { getTenant } from "@/config/tenant";
 import type { ProjectType } from "@/domain/calculators";
-import { findDims, parseIntent, runScriptedAgent, shortName } from "../scripted";
+import { findDims, itemName, parseIntent, runScriptedAgent, shortName } from "../scripted";
 import type { AgentEvent, SessionState } from "../types";
 
 /** QA 2026-09-28: phrasings the offline parser used to misread. */
@@ -118,6 +118,18 @@ describe("reply wording", () => {
     const text = await reply("terasa mea e în spatele casei", on("deck"));
     expect(text).toMatch(/Nu am înțeles ce să schimb/);
     expect(text).toMatch(/trepte/);
+  }, 20000);
+
+  it("English replies name products by what they are, not by a lower-cased brand", async () => {
+    expect(itemName("Kronwald adjustable deck support 60–100 mm", "deck_support", "en")).toBe("adjustable deck support");
+    expect(itemName("Gipsa CW profile 50 mm, 3 m", "cw_profile", "en")).toBe("CW metal stud");
+    expect(itemName("Plot reglabil terasă Kronwald 60–100 mm", "deck_support", "ro")).toBe("plot reglabil terasă");
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-309877"))!;
+    let text = "";
+    for await (const ev of runScriptedAgent({ sources, tenant, customer, message: "I want to build a 4 x 3 m wooden deck in my garden, on soil.", state: empty, lang: "en" })) if (ev.type === "text") text += ev.delta;
+    expect(text).not.toMatch(/\b(kronwald|toolcraft|voltmaster|protekt|verdea)\b/);
   }, 20000);
 
   it("distances use the reply language's decimal separator", async () => {

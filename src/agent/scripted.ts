@@ -414,9 +414,20 @@ export function shortName(name: string): string {
   return words.map((w, i) => (i === 0 ? w.charAt(0).toLowerCase() + w.slice(1) : w)).join(" ");
 }
 
+/**
+ * How a reply names a product. Romanian names start with what it is ("Plot reglabil terasă Kronwald…");
+ * English ones start with the brand ("Kronwald adjustable deck support…" → "kronwald adjustable deck"),
+ * so in English say the job it does ("adjustable deck support").
+ */
+export function itemName(name: string, role: MaterialRole | undefined, lang: Lang): string {
+  const label = lang === "en" && role ? MATERIAL_ROLES[role]?.labelEn : undefined;
+  if (!label) return shortName(name);
+  return /^[A-Z]{2}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
 function stockSentence(q: Quote, lang: Lang): string {
   if (q.availability.allInStock) return lang === "en" ? `Everything is in stock at ${q.storeName}.` : `Totul e pe stoc la ${q.storeName}.`;
-  const missing = q.availability.missing.map((m) => shortName(m.name));
+  const missing = [...new Set(q.availability.missing.map((m) => itemName(m.name, q.lines.find((l) => l.sku === m.sku)?.role, lang)))];
   const list = missing.slice(0, 3).join(", ");
   const best = q.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
   if (best) {
@@ -429,7 +440,14 @@ function stockSentence(q: Quote, lang: Lang): string {
     : `La ${q.storeName} nu ajunge stocul pentru ${list} — pot găsi alternative pe stoc sau livrare la domiciliu.`;
 }
 
-export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, title: string, lang: Lang): string {
+export function projectReply(
+  q: Quote,
+  card: Extract<Card, { kind: "quote" }>,
+  title: string,
+  lang: Lang,
+  /** The session's suggestions (they carry the role the reply names them by). */
+  suggested: { sku: string; role: MaterialRole }[] = [],
+): string {
   const en = lang === "en";
   const parts: string[] = [];
   parts.push(
@@ -448,7 +466,7 @@ export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, t
   }
   parts.push(stockSentence(q, lang));
   if (card.suggestions.length) {
-    const s = [...new Set(card.suggestions.map((x) => shortName(x.name)))].slice(0, 2);
+    const s = [...new Set(card.suggestions.map((x) => itemName(x.name, suggested.find((g) => g.sku === x.sku)?.role, lang)))].slice(0, 2);
     parts.push(en ? `Optional: want me to add the ${s.join(" and ")} too?` : `Opțional: vrei să adaug și ${s.join(" și ")}?`);
   }
   return parts.join(" ");
@@ -553,7 +571,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
           plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined },
         },
       };
-      reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang);
+      reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang, state.suggestions);
     }
   } else if (intent.kind === "project") {
     yield* runTool("suggest_sizes", { projectType: intent.type }, 250);
