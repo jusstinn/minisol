@@ -98,6 +98,19 @@ export default function ChangeCard({
         </div>
       )}
 
+      {!up && !down && !change.warnings?.length && (
+        // Same price: say why, so an unchanged total doesn't look like a missed recalculation.
+        <p className={`mx-3.5 mt-2 text-[11.5px] leading-snug ${tone}`}>
+          {change.lines.some((l) => Math.abs(l.after - l.before) > 1e-6)
+            ? en
+              ? "Same price: the packs already on your list cover the new amounts."
+              : "Același preț: pachetele de pe listă acoperă și noile cantități."
+            : en
+              ? "Same price: this change doesn't need any more material."
+              : "Același preț: modificarea nu cere material în plus."}
+        </p>
+      )}
+
       {lines.length > 0 && (
         <div className={`mx-3.5 mt-2.5 border-t pt-2 ${rule}`}>
           {lines.map((l, i) => (
