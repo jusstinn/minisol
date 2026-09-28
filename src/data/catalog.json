@@ -7959,5 +7959,643 @@
     "descriptionEn": "Aluminium, needs a buried supply cable.",
     "rating": 4.4,
     "isTool": false
+  },
+  {
+    "sku": "15410013",
+    "name": "Pavele dreptunghiulare Betonix Classic 20 × 10 × 6 cm, gri",
+    "nameEn": "Betonix Classic rectangular pavers 20 × 10 × 6 cm, grey",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 32.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "budget",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "20x10",
+      "thicknessMm": 60,
+      "color": "gri",
+      "use": "pietonal",
+      "layingPattern": "rânduri decalate, spic, parchet"
+    },
+    "description": "Pavele din beton vibropresat pentru alei și terase pietonale, format clasic care se montează în rânduri decalate sau în spic.",
+    "descriptionEn": "Vibro-pressed pavers for footpaths and patios, a classic format laid in running bond or herringbone.",
+    "rating": 4.3,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410026",
+    "name": "Pavele dreptunghiulare Betonix Classic 20 × 10 × 6 cm, roșu",
+    "nameEn": "Betonix Classic rectangular pavers 20 × 10 × 6 cm, red",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 36.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "budget",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "20x10",
+      "thicknessMm": 60,
+      "color": "roșu",
+      "use": "pietonal",
+      "layingPattern": "rânduri decalate, spic, parchet"
+    },
+    "description": "Pavele roșii din beton vibropresat pentru alei și terase pietonale, bune de combinat cu pavele gri în borduri sau modele.",
+    "descriptionEn": "Red vibro-pressed pavers for footpaths and patios, easy to combine with grey ones for borders or patterns.",
+    "rating": 4.2,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410039",
+    "name": "Pavele Betonix Nova 30 × 20 × 6 cm, bej nisip",
+    "nameEn": "Betonix Nova pavers 30 × 20 × 6 cm, sand beige",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 46.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "standard",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "30x20",
+      "thicknessMm": 60,
+      "color": "bej nisip",
+      "use": "pietonal",
+      "bevelledEdge": true,
+      "layingPattern": "rânduri decalate, parchet"
+    },
+    "description": "Pavele cu margini teșite și suprafață fină, într-o nuanță caldă de nisip, pentru alei și terase de grădină.",
+    "descriptionEn": "Bevelled pavers with a smooth face in a warm sand shade, for garden paths and patios.",
+    "rating": 4.6,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410042",
+    "name": "Pavele Betonix Nova 30 × 20 × 6 cm, antracit",
+    "nameEn": "Betonix Nova pavers 30 × 20 × 6 cm, anthracite",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 48.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "standard",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "30x20",
+      "thicknessMm": 60,
+      "color": "antracit",
+      "use": "pietonal",
+      "bevelledEdge": true,
+      "layingPattern": "rânduri decalate, parchet"
+    },
+    "description": "Pavele antracit cu margini teșite, cu aspect modern, pentru alei și terase lângă case cu fațade deschise la culoare.",
+    "descriptionEn": "Anthracite bevelled pavers with a modern look, for paths and patios next to light-coloured façades.",
+    "rating": 4.5,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410055",
+    "name": "Pavele Betonix Antic cu aspect de piatră 30 × 30 × 6 cm, mix toamnă",
+    "nameEn": "Betonix Antic stone-look pavers 30 × 30 × 6 cm, autumn mix",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 84.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "premium",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "30x30",
+      "thicknessMm": 60,
+      "color": "mix toamnă",
+      "use": "pietonal",
+      "layingPattern": "rânduri drepte, decalate",
+      "frostResistant": true
+    },
+    "description": "Pavele cu muchii îmbătrânite și nuanțe amestecate de toamnă, care imită piatra naturală, rezistente la îngheț și la sare.",
+    "descriptionEn": "Tumbled-edge pavers in mixed autumn shades that look like natural stone, resistant to frost and de-icing salt.",
+    "rating": 4.8,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410068",
+    "name": "Pavele carosabile Betonix Holland 20 × 10 × 8 cm, gri",
+    "nameEn": "Betonix Holland driveway pavers 20 × 10 × 8 cm, grey",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 42.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "budget",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "20x10",
+      "thicknessMm": 80,
+      "color": "gri",
+      "use": "carosabil ușor",
+      "layingPattern": "spic, rânduri decalate"
+    },
+    "description": "Pavele groase de 8 cm pentru intrări auto și locuri de parcare, montate în spic pentru cea mai bună rezistență la trafic.",
+    "descriptionEn": "8 cm pavers for driveways and parking spaces, laid in herringbone for the best resistance to traffic.",
+    "rating": 4.1,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410071",
+    "name": "Pavele carosabile Betonix Nova 30 × 20 × 8 cm, antracit",
+    "nameEn": "Betonix Nova driveway pavers 30 × 20 × 8 cm, anthracite",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 56.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "standard",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "30x20",
+      "thicknessMm": 80,
+      "color": "antracit",
+      "use": "carosabil ușor",
+      "bevelledEdge": true,
+      "layingPattern": "rânduri decalate, spic"
+    },
+    "description": "Pavele antracit de 8 cm cu margini teșite, pentru intrări auto de casă cu autoturisme.",
+    "descriptionEn": "8 cm anthracite bevelled pavers for home driveways used by cars.",
+    "rating": 4.4,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410084",
+    "name": "Pavele carosabile Betonix Antic 30 × 20 × 8 cm, mix toamnă",
+    "nameEn": "Betonix Antic driveway pavers 30 × 20 × 8 cm, autumn mix",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 94.9,
+    "salesUnit": "m²",
+    "roles": [
+      "pavers"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m²"
+    },
+    "quality": "premium",
+    "specs": {
+      "material": "beton vibropresat",
+      "sizeCm": "30x20",
+      "thicknessMm": 80,
+      "color": "mix toamnă",
+      "use": "carosabil ușor",
+      "layingPattern": "rânduri decalate, spic",
+      "frostResistant": true
+    },
+    "description": "Pavele de 8 cm cu aspect de piatră îmbătrânită, pentru intrări auto care arată ca un drum pavat vechi.",
+    "descriptionEn": "8 cm tumbled stone-look pavers for driveways that look like an old cobbled lane.",
+    "rating": 4.7,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410097",
+    "name": "Piatră spartă pentru fundații Betonix 0–31,5 mm, 25 kg",
+    "nameEn": "Betonix crushed stone for sub-bases 0–31.5 mm, 25 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 9.9,
+    "salesUnit": "sac",
+    "roles": [
+      "paving_base"
+    ],
+    "content": {
+      "amount": 25,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 25,
+      "grainMm": "0-31,5",
+      "color": "gri",
+      "use": "fundații pentru alei, terase și intrări auto"
+    },
+    "description": "Piatră spartă cu granulație continuă care se compactează bine, pentru stratul de fundație de sub pavele.",
+    "descriptionEn": "Well-graded crushed stone that compacts tight, for the base layer under pavers.",
+    "rating": 4.5,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410107",
+    "name": "Piatră spartă pentru fundații Betonix 0–31,5 mm, 1000 kg",
+    "nameEn": "Betonix crushed stone for sub-bases 0–31.5 mm, 1000 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 289.9,
+    "salesUnit": "sac",
+    "roles": [
+      "paving_base"
+    ],
+    "content": {
+      "amount": 1000,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 1000,
+      "grainMm": "0-31,5",
+      "color": "gri",
+      "use": "fundații pentru alei, terase și intrări auto"
+    },
+    "description": "Aceeași piatră spartă în sac big bag de o tonă, livrat pe palet, cel mai ieftin pe kilogram pentru terase și intrări auto.",
+    "descriptionEn": "The same crushed stone in a one-tonne big bag delivered on a pallet, the cheapest per kilo for patios and driveways.",
+    "rating": 4.5,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410110",
+    "name": "Nisip de pozare pentru pavaj Betonix 0–4 mm, 25 kg",
+    "nameEn": "Betonix paving bedding sand 0–4 mm, 25 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 8.9,
+    "salesUnit": "sac",
+    "roles": [
+      "paving_sand"
+    ],
+    "content": {
+      "amount": 25,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 25,
+      "grainMm": "0-4",
+      "color": "bej nisip"
+    },
+    "description": "Nisip spălat, fără argilă, pentru patul de 3–5 cm pe care se așază pavelele.",
+    "descriptionEn": "Washed, clay-free sand for the 3–5 cm bed the pavers are laid on.",
+    "rating": 4.4,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410123",
+    "name": "Nisip de pozare pentru pavaj Betonix 0–4 mm, 1000 kg",
+    "nameEn": "Betonix paving bedding sand 0–4 mm, 1000 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 229.9,
+    "salesUnit": "sac",
+    "roles": [
+      "paving_sand"
+    ],
+    "content": {
+      "amount": 1000,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 1000,
+      "grainMm": "0-4",
+      "color": "bej nisip"
+    },
+    "description": "Același nisip de pozare în sac big bag de o tonă, livrat pe palet, pentru suprafețe mari.",
+    "descriptionEn": "The same bedding sand in a one-tonne big bag delivered on a pallet, for larger areas.",
+    "rating": 4.4,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410136",
+    "name": "Nisip de cuarț pentru rosturi Betonix 0,1–0,5 mm, 25 kg",
+    "nameEn": "Betonix quartz jointing sand 0.1–0.5 mm, 25 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 24.9,
+    "salesUnit": "sac",
+    "roles": [
+      "joint_sand"
+    ],
+    "content": {
+      "amount": 25,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 25,
+      "grainMm": "0,1-0,5",
+      "coverageM2PerKg": 0.25,
+      "color": "bej"
+    },
+    "description": "Nisip de cuarț uscat și fin care intră ușor în rosturile de 2–3 mm dintre pavele și le blochează pe poziție.",
+    "descriptionEn": "Fine kiln-dried quartz sand that brushes easily into 2–3 mm paver joints and locks the pavers in place.",
+    "rating": 4.5,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410149",
+    "name": "Nisip polimeric pentru rosturi Betonix gri, 20 kg",
+    "nameEn": "Betonix grey polymeric jointing sand, 20 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 169.9,
+    "salesUnit": "găleată",
+    "roles": [
+      "joint_sand"
+    ],
+    "content": {
+      "amount": 20,
+      "unit": "kg"
+    },
+    "quality": "premium",
+    "specs": {
+      "bagKg": 20,
+      "coverageM2PerKg": 0.35,
+      "color": "gri",
+      "polymeric": true
+    },
+    "description": "Nisip polimeric care se întărește după ce îl uzi, așa că nu crește iarbă în rosturi și nu îl spală ploaia.",
+    "descriptionEn": "Polymeric sand that firms up once wetted, so weeds don't grow in the joints and rain doesn't wash it out.",
+    "rating": 4.7,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410152",
+    "name": "Bordură de grădină din beton Betonix 100 × 20 × 5 cm, gri",
+    "nameEn": "Betonix concrete garden kerb 100 × 20 × 5 cm, grey",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 12.9,
+    "salesUnit": "buc",
+    "roles": [
+      "paving_edging"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m"
+    },
+    "quality": "budget",
+    "specs": {
+      "lengthM": 1,
+      "heightMm": 200,
+      "thicknessMm": 50,
+      "color": "gri",
+      "material": "beton vibropresat"
+    },
+    "description": "Bordură subțire pentru alei și straturi de flori, care ține pavelele pe loc și se fixează într-un pat de beton.",
+    "descriptionEn": "A slim kerb for paths and flower beds that holds the pavers in place, bedded in concrete.",
+    "rating": 4.3,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410165",
+    "name": "Bordură de grădină din beton Betonix 100 × 20 × 5 cm, antracit",
+    "nameEn": "Betonix concrete garden kerb 100 × 20 × 5 cm, anthracite",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 16.9,
+    "salesUnit": "buc",
+    "roles": [
+      "paving_edging"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m"
+    },
+    "quality": "standard",
+    "specs": {
+      "lengthM": 1,
+      "heightMm": 200,
+      "thicknessMm": 50,
+      "color": "antracit",
+      "material": "beton vibropresat"
+    },
+    "description": "Bordură de grădină colorată în masă, care încadrează pavelele deschise la culoare cu o linie închisă și curată.",
+    "descriptionEn": "A through-coloured garden kerb that frames light pavers with a clean dark line.",
+    "rating": 4.5,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410178",
+    "name": "Bordură de trotuar din beton Betonix 100 × 25 × 10 cm, gri",
+    "nameEn": "Betonix concrete footway kerb 100 × 25 × 10 cm, grey",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 27.9,
+    "salesUnit": "buc",
+    "roles": [
+      "paving_edging"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m"
+    },
+    "quality": "standard",
+    "specs": {
+      "lengthM": 1,
+      "heightMm": 250,
+      "thicknessMm": 100,
+      "color": "gri",
+      "material": "beton vibropresat",
+      "use": "carosabil ușor"
+    },
+    "description": "Bordură groasă de 10 cm pentru intrări auto și parcări, care rezistă când trece roata mașinii peste margine.",
+    "descriptionEn": "A 10 cm thick kerb for driveways and parking spaces that holds when a car wheel runs over the edge.",
+    "rating": 4.4,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410181",
+    "name": "Bordură metalică pentru pavaj Verdea 100 × 10 cm, cu țăruși",
+    "nameEn": "Verdea steel paver edging 100 × 10 cm, with spikes",
+    "brand": "Verdea",
+    "category": "garden",
+    "price": 39.9,
+    "salesUnit": "buc",
+    "roles": [
+      "paving_edging"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "m"
+    },
+    "quality": "premium",
+    "specs": {
+      "lengthM": 1,
+      "heightMm": 100,
+      "thicknessMm": 2,
+      "color": "antracit",
+      "material": "oțel zincat",
+      "spikesIncluded": true
+    },
+    "description": "Profil din oțel zincat vopsit, bătut cu țăruși în fundație, aproape invizibil și fără beton la montaj.",
+    "descriptionEn": "A powder-coated galvanised steel profile pinned into the base with spikes, almost invisible and needing no concrete.",
+    "rating": 4.6,
+    "isTool": false
+  },
+  {
+    "sku": "15410194",
+    "name": "Beton uscat pentru borduri Betonix C16/20, 25 kg",
+    "nameEn": "Betonix dry-mix concrete for kerbs C16/20, 25 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 17.9,
+    "salesUnit": "sac",
+    "roles": [
+      "kerb_concrete"
+    ],
+    "content": {
+      "amount": 25,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 25,
+      "strengthClass": "C16/20",
+      "waterLPerBag": 1.5
+    },
+    "description": "Beton gata amestecat, pus umed-pământ, pentru patul și sprijinul lateral al bordurilor.",
+    "descriptionEn": "Ready-mixed concrete, laid earth-moist, for the bed and haunching of kerbs.",
+    "rating": 4.4,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410204",
+    "name": "Beton uscat pentru borduri Betonix C16/20, 40 kg",
+    "nameEn": "Betonix dry-mix concrete for kerbs C16/20, 40 kg",
+    "brand": "Betonix",
+    "category": "building",
+    "price": 26.9,
+    "salesUnit": "sac",
+    "roles": [
+      "kerb_concrete"
+    ],
+    "content": {
+      "amount": 40,
+      "unit": "kg"
+    },
+    "quality": "standard",
+    "specs": {
+      "bagKg": 40,
+      "strengthClass": "C16/20",
+      "waterLPerBag": 2.4
+    },
+    "description": "Același beton pentru borduri în sac mare, mai ieftin pe kilogram pentru contururi lungi.",
+    "descriptionEn": "The same kerb concrete in a bigger bag, cheaper per kilo for long outlines.",
+    "rating": 4.4,
+    "isTool": false,
+    "bulky": true
+  },
+  {
+    "sku": "15410217",
+    "name": "Mai de compactare manual Toolcraft 25 × 25 cm",
+    "nameEn": "Toolcraft hand tamper 25 × 25 cm",
+    "brand": "Toolcraft",
+    "category": "tools",
+    "price": 79.9,
+    "salesUnit": "buc",
+    "roles": [
+      "plate_compactor"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "budget",
+    "specs": {
+      "type": "mai manual",
+      "plateCm": "25x25",
+      "weightKg": 7,
+      "handle": "oțel"
+    },
+    "description": "Mai din oțel cu talpă de 25 × 25 cm pentru compactarea pământului, a pietrei și a nisipului pe suprafețe mici.",
+    "descriptionEn": "A steel tamper with a 25 × 25 cm plate for compacting soil, stone and sand on small areas.",
+    "rating": 4.3,
+    "isTool": true
+  },
+  {
+    "sku": "15410220",
+    "name": "Placă compactoare pe benzină Voltmaster 60 kg",
+    "nameEn": "Voltmaster petrol plate compactor 60 kg",
+    "brand": "Voltmaster",
+    "category": "power_tools",
+    "price": 2199.9,
+    "salesUnit": "buc",
+    "roles": [
+      "plate_compactor"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "premium",
+    "specs": {
+      "type": "placă compactoare",
+      "fuel": "benzină",
+      "weightKg": 60,
+      "forceKn": 11,
+      "plateCm": "50x35"
+    },
+    "description": "Placă compactoare pe benzină pentru fundații de terase și intrări auto, cu covor de cauciuc pentru compactarea pavelelor.",
+    "descriptionEn": "A petrol plate compactor for patio and driveway bases, with a rubber mat for bedding in the pavers.",
+    "rating": 4.6,
+    "isTool": true,
+    "bulky": true
   }
 ]

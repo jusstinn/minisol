@@ -27,6 +27,8 @@ export interface ArtSpec {
 
 const COLOR_WORDS: [RegExp, string][] = [
   [/antracit|negru/, "#34373b"],
+  [/toamn/, "#a4714b"],
+  [/roșu|rosu|cărămiziu|caramiziu|teracot/, "#a5533d"],
   [/gri perl/, "#c9c9c4"],
   [/gri/, "#9c9fa3"],
   [/alb/, "#f3f0e9"],

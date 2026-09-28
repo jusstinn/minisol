@@ -10,7 +10,8 @@ import type { MaterialRole, Product } from "./types";
  * (coverage × content, content ÷ consumption) and carry the arithmetic with them.
  */
 
-export type Surface = "wood" | "metal" | "plastic";
+/** "concrete": kerbs and blocks, drawn with a plain section hatch (no wood grain). */
+export type Surface = "wood" | "metal" | "plastic" | "concrete";
 
 /** Deck boards, joists, posts, skirting, transition strips, CW/UW profiles, laminate planks. */
 export interface LinearSketch {
@@ -204,6 +205,7 @@ function surfaceOf(p: Product): Surface {
   const m = String(p.specs.material ?? "").toLowerCase();
   if (p.roles.includes("cw_profile") || p.roles.includes("uw_profile") || /alumin|oțel|otel|inox|metal/.test(m)) return "metal";
   if (/pvc|wpc|compozit|plastic|polim/.test(m)) return "plastic";
+  if (/beton|concrete|piatr/.test(m)) return "concrete";
   return "wood";
 }
 

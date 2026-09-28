@@ -17,7 +17,8 @@ const CATEGORIES: CategoryId[] = [
   "power_tools", "fasteners", "adhesives", "safety", "electrical", "plumbing", "bathroom",
 ];
 const TIERS: QualityTier[] = ["budget", "standard", "premium"];
-const SALES_UNITS = ["găleată", "bidon", "pachet", "cutie", "sac", "rolă", "buc", "set", "tub"];
+/** "m²": pavers are sold by the square metre. */
+const SALES_UNITS = ["găleată", "bidon", "pachet", "cutie", "sac", "rolă", "buc", "set", "tub", "m²"];
 const BRANDS = [
   "Pigmenta", "Nuanța", "Artizan", "Floorline", "Casaro", "Fixplus", "Kronwald", "Lignara", "Gipsa", "Termika",
   "Ancora", "Verdea", "Toolcraft", "Voltmaster", "Protekt", "Betonix", "Aquanova", "Lumina",
@@ -38,7 +39,7 @@ const TOOL_ROLES = new Set<MaterialRole>([
   "grout_float", "mixing_paddle", "bucket", "rubber_mallet", "post_hole_digger", "garden_rake", "lawn_roller",
   "garden_hose", "sprinkler", "cordless_drill", "jigsaw", "mitre_saw", "hand_saw", "tin_snips", "utility_knife",
   "measuring_tape", "spirit_level", "pencil", "caulking_gun", "work_gloves", "safety_glasses", "dust_mask",
-  "knee_pads", "ladder", "wheelbarrow", "spade",
+  "knee_pads", "ladder", "wheelbarrow", "spade", "plate_compactor",
 ]);
 /** Core consumables: ≥3 products spanning all three quality tiers. */
 const CORE_ROLES: MaterialRole[] = [
@@ -76,6 +77,8 @@ const ROLE_CATEGORIES: Partial<Record<MaterialRole, CategoryId[]>> = {
   bathroom_mirror: ["bathroom"], towel_radiator: ["bathroom", "plumbing"], ceiling_light: ["electrical"],
   wall_light: ["electrical"], floor_lamp: ["electrical"], garden_light: ["garden", "electrical"],
   garden_furniture: ["garden"], planter: ["garden"], bbq: ["garden"], sun_lounger: ["garden"], parasol: ["garden"],
+  pavers: ["building", "garden"], paving_base: ["building"], paving_sand: ["building"], joint_sand: ["building", "garden"],
+  paving_edging: ["building", "garden"], kerb_concrete: ["building"], plate_compactor: ["tools", "power_tools"],
 };
 
 type SpecType = "number" | "string" | "boolean";
@@ -112,6 +115,14 @@ const REQUIRED_SPECS: Partial<Record<MaterialRole, Record<string, SpecType>>> = 
   lawn_fertilizer: { coverageM2PerKg: "number" },
   topsoil: { litres: "number" },
   skirting_board: { lengthM: "number", heightMm: "number", material: "string" },
+  // The 3D sketch draws pavers and kerbs from these (format, thickness, colour).
+  pavers: { sizeCm: "string", thicknessMm: "number", color: "string", material: "string" },
+  paving_base: { bagKg: "number" },
+  paving_sand: { bagKg: "number" },
+  joint_sand: { bagKg: "number", coverageM2PerKg: "number" },
+  paving_edging: { lengthM: "number", heightMm: "number", thicknessMm: "number", material: "string" },
+  kerb_concrete: { bagKg: "number" },
+  plate_compactor: { type: "string" },
 };
 
 /** Inclusive numeric ranges for key specs. */
@@ -125,6 +136,8 @@ const SPEC_RANGES: Partial<Record<MaterialRole, Record<string, [number, number]>
   lawn_fertilizer: { coverageM2PerKg: [20, 50] },
   laminate: { thicknessMm: [6, 14] },
   floor_tiles: { pei: [1, 5] },
+  pavers: { thicknessMm: [40, 100] },
+  joint_sand: { coverageM2PerKg: [0.15, 0.6] },
 };
 
 /** Spec that must equal content.amount (the per-pack quantity). */
@@ -133,11 +146,12 @@ const AMOUNT_SPEC: Partial<Record<MaterialRole, string>> = {
   wall_tiles: "m2PerBox", tile_adhesive: "bagKg", tile_grout: "bagKg", post_concrete: "bagKg", waterproofing: "kg",
   deck_board: "lengthM", deck_joist: "lengthM", skirting_board: "lengthM", cw_profile: "lengthM", uw_profile: "lengthM",
   deck_screws: "perBox", drywall_screws: "perBox", mineral_wool: "m2PerRoll", topsoil: "litres",
+  paving_base: "bagKg", paving_sand: "bagKg", joint_sand: "bagKg", kerb_concrete: "bagKg", paving_edging: "lengthM",
 };
 
 const ALWAYS_BULKY = new Set<MaterialRole>([
   "deck_board", "deck_joist", "fence_panel", "fence_post", "drywall_board", "laminate", "floor_tiles", "wall_tiles",
-  "wheelbarrow", "ladder", "mitre_saw",
+  "wheelbarrow", "ladder", "mitre_saw", "pavers",
 ]);
 
 const approx = (a: number, b: number, tol = 0.01) => Math.abs(a - b) <= Math.max(Math.abs(b) * tol, 1e-9);
@@ -148,7 +162,7 @@ if (!Array.isArray(catalog)) {
   console.error("catalog.json is not an array");
   process.exit(1);
 }
-if (catalog.length < 200 || catalog.length > 300) fail(null, `catalog has ${catalog.length} products; expected 200–300`);
+if (catalog.length < 200 || catalog.length > 350) fail(null, `catalog has ${catalog.length} products; expected 200–350`);
 
 const skus = new Set<string>();
 const PRODUCT_KEYS = new Set([
@@ -322,6 +336,12 @@ for (const p of catalog) {
   }
   if (has("grass_seed") && !["universal", "sport", "umbră", "ornamental"].includes(String(s.type))) fail(p, `grass type "${s.type}" invalid`);
   if (has("deck_support") && !/^\d+-\d+$/.test(String(s.heightRangeMm))) fail(p, `heightRangeMm must look like "60-100"`);
+  if (has("pavers")) {
+    if (!/^\d+x\d+$/.test(String(s.sizeCm))) fail(p, `paver sizeCm "${s.sizeCm}" must look like "20x10"`);
+    if (p.salesUnit !== "m²" || p.content.amount !== 1) fail(p, `pavers are sold per m² (salesUnit "m²", content 1 m²)`);
+    if (p.price < 25 || p.price > 130) fail(p, `paver price ${p.price} RON/m² outside 25–130`);
+  }
+  if (p.salesUnit === "m²" && !has("pavers")) fail(p, `only pavers are sold per m²`);
 
   // pack size in the name for liquids / bagged goods
   if (unit === "l" || unit === "kg") {

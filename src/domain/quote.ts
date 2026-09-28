@@ -139,6 +139,8 @@ export interface QuoteHint {
 const UNNEEDED_WITH: { role: MaterialRole; by: MaterialRole; when: (p: Product) => boolean; because: [string, string] }[] = [
   // Composite boards are factory-finished; the calculator already says "not needed for WPC".
   { role: "deck_oil", by: "deck_board", when: (p) => /wpc/i.test(String(p.specs.material ?? "")), because: ["deck-ul WPC", "WPC boards"] },
+  // Steel edging is pinned into the base with spikes; only concrete kerbs sit in a concrete bed.
+  { role: "kerb_concrete", by: "paving_edging", when: (p) => !/beton/i.test(String(p.specs.material ?? "")), because: ["bordura metalică", "steel edging"] },
 ];
 
 export interface QuoteDeps {
