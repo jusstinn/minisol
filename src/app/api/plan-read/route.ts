@@ -21,17 +21,37 @@ export async function GET(req: Request) {
   return Response.json({ available: who.ok && planReadAvailable() }, { headers: { "Cache-Control": "no-store" } });
 }
 
-export async function POST(req: Request) {
-  const length = Number(req.headers.get("content-length") ?? 0);
-  if (length > PLAN_READ_MAX_BODY + 1024) return Response.json({ error: "Image too large (max 1.5 MB)" }, { status: 413 });
+/** The body as text, or null once it grows past `max` bytes (never buffers more than that). */
+async function readCapped(req: Request, max: number): Promise<string | null> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
 
-  let raw: string;
+export async function POST(req: Request) {
+  const max = PLAN_READ_MAX_BODY + 1024;
+  const tooLarge = () => Response.json({ error: "Image too large (max 1.5 MB)" }, { status: 413 });
+  if (Number(req.headers.get("content-length") ?? 0) > max) return tooLarge();
+
+  let raw: string | null;
   try {
-    raw = await req.text();
+    raw = await readCapped(req, max);
   } catch {
     return Response.json({ error: "Invalid body" }, { status: 400 });
   }
-  if (raw.length > PLAN_READ_MAX_BODY + 1024) return Response.json({ error: "Image too large (max 1.5 MB)" }, { status: 413 });
+  if (raw === null) return tooLarge();
   let body: unknown;
   try {
     body = JSON.parse(raw);

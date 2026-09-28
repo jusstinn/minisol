@@ -156,7 +156,8 @@ export class UploadsStore {
 
     if (pMeta?.project === project && !this.state.plan) {
       const blob = await idbGet<Blob>(uploadKey(scope, "plan", "blob"));
-      if (blob instanceof Blob && pMeta.img?.w > 0 && pMeta.img?.h > 0 && !this.state.plan && !this.disposed) {
+      const okSide = (v: unknown) => typeof v === "number" && v > 0 && v <= 20_000;
+      if (blob instanceof Blob && okSide(pMeta.img?.w) && okSide(pMeta.img?.h) && !this.state.plan && !this.disposed) {
         const img = { w: pMeta.img.w, h: pMeta.img.h };
         const cal = sanitizeCalibration(pMeta.cal, defaultCalibration(img, [0, 0], 4));
         this.set({ plan: { name: String(pMeta.name ?? "plan"), source: pMeta.source === "pdf" ? "pdf" : "image", blob, url: URL.createObjectURL(blob), img, cal, read: sanitizePlanRead(pMeta.read) ?? undefined } });

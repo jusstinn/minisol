@@ -49,6 +49,15 @@ describe("/api/plan-read", () => {
     expect((await post("{nope")).status).toBe(400);
     expect((await post({ image: "https://example.com/a.jpg" })).status).toBe(400);
     expect((await post({ image: `data:image/jpeg;base64,${"A".repeat(2_200_000)}` })).status).toBe(413);
+    // No (or a lying) content-length: the body is cut off while it streams in.
+    const big = new ReadableStream({
+      start(c) {
+        for (let i = 0; i < 40; i++) c.enqueue(new TextEncoder().encode("A".repeat(100_000)));
+        c.close();
+      },
+    });
+    const streamed = await POST(new Request("http://localhost/api/plan-read", { method: "POST", body: big, duplex: "half" } as RequestInit));
+    expect(streamed.status).toBe(413);
     expect(create).not.toHaveBeenCalled();
   });
 
