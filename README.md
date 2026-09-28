@@ -164,6 +164,39 @@ LoyaltyProvider   getMember · getOffers            // WalletLoop
 - Demo data lives in `src/data/` (255 products with fictional brands, 11 stores modelled on a
   Romanian DIY network, deterministic stock, 10 WalletLoop offers, 4 personas).
 
+## Production entry: signed pass links
+
+In the demo anyone can pick one of the four members. In production the customer never says who
+they are: they tap the Blueprint link on their wallet pass. Set `REQUIRE_PASS_LINK=1` and
+`PASS_LINK_SECRET` (≥ 32 characters, shared with WalletLoop's pass backend) to switch it on.
+Without `REQUIRE_PASS_LINK` the demo behaves exactly as before.
+
+1. **Pass → signed link.** WalletLoop's pass backend puts `https://…/?retailer=<tenant>&t=<token>` on
+   the pass, where `token = v1.<base64url(payload)>.<base64url(HMAC-SHA256(secret, "v1.<base64url(payload)>"))>`
+   and `payload = { m: memberId, t: tenantId, exp: unixSeconds, l?: "ro"|"en", n?: nonce }`
+   (`src/lib/passToken.ts`).
+2. **Link → cookie.** `src/proxy.ts` (Next 16's replacement for middleware) runs only on page requests
+   carrying `t`. It checks the signature (constant-time), expiry (60 s clock skew) and that the token's
+   tenant is the page's retailer, then sets an httpOnly, SameSite=Lax session cookie (Secure and
+   `__Host-` prefixed in production, path `/`) and redirects to the same URL without `t`, so the token
+   never stays in the address bar or history. The cookie holds a separate session token (derived key,
+   never valid as a link) that expires with the link, at most after 12 h. A bad or expired link clears
+   any older session and shows a "open it again from your card" note.
+3. **Cookie → routes.** The page renders only that member's pass (no picker); without a session it asks
+   the customer to open Blueprint from their card in Wallet. Every API route resolves the member via
+   `memberFromRequest()` / `sessionFromRequest()` in `src/lib/session.ts`: the `memberId` the browser
+   sends is ignored, a missing/invalid session (or one for another tenant) gets **401**, and
+   `/api/members` returns only the session's member.
+
+Mint a link by hand (what the pass backend does; base URL from `PUBLIC_BASE_URL`, default `http://localhost:3100`):
+
+```bash
+npx tsx --env-file=.env.local scripts/make-pass-link.ts WL-RO-204518 hornbach 24   # <memberId> [tenant] [hours]
+```
+
+Tokens are bearer credentials: they are never logged (only the rejection reason is). The nonce `n`
+lets the pass backend track or revoke individual links; the app does not keep server-side state.
+
 ## Privacy & safety
 
 - **Data minimisation**: the model sees tier, points, home store, city, interests and
@@ -183,6 +216,7 @@ npm run typecheck
 npm run validate:catalog     # catalogue integrity (roles, units, tiers, fictional brands)
 npx tsx scripts/inspect-project.ts deck '{"lengthM":4,"widthM":3}' WL-RO-100231 premium
 npx tsx --env-file=.env.local scripts/try-agent.ts "Vreau o terasă de 4x3 m" WL-RO-100231
+npx tsx --env-file=.env.local scripts/make-pass-link.ts WL-RO-100231 hornbach 24   # signed pass link
 npm run eval                 # live-model scenarios with automatic accuracy checks
 ```
 
