@@ -1,6 +1,8 @@
 import type { ProjectType } from "./calculators";
-import { ITEMS, ITEM_KINDS, ROT_FOR_WALL, footprint, itemRect, lowerFirst, overlaps as rectsOverlap, verticalRange } from "./items";
+import { ITEMS, ITEM_KINDS, ROT_FOR_WALL, footprint, isOutdoor, itemRect, lowerFirst, overlaps as rectsOverlap, verticalRange } from "./items";
 import type { Item, ItemKind, Rect } from "./items";
+import { PAVING_USES, defaultPavingUse, isPavingUse, pavingDepth } from "./paving";
+import type { PavingUse } from "./paving";
 import type { Lang } from "./types";
 
 /**
@@ -57,6 +59,7 @@ type LayoutShape =
   | { type: "deck"; zones: Zone[]; heightM: number; steps: Steps[]; direction: "x" | "z"; base: "soil" | "gravel" | "concrete_slab" }
   | { type: "laminate_floor"; zones: Zone[]; openings: Opening[]; pattern: "straight" | "diagonal"; subfloor: "concrete" | "wood" | "old_tiles" }
   | { type: "lawn"; zones: Zone[]; mode: "new" | "overseed" }
+  | { type: "paving"; zones: Zone[]; use: PavingUse; edging: boolean }
   | {
       type: "paint_room";
       w: number;
@@ -80,9 +83,13 @@ type LayoutShape =
   | { type: "fence"; points: Point[]; heightM: number; gates: Opening[] }
   | { type: "drywall_partition"; length: number; heightM: number; openings: Opening[]; insulation: boolean; doubleLayer: boolean; wetRoom: boolean };
 
+/** Layouts drawn as axis-aligned zones (deck, floor, lawn, paving): resizable, L/U shapes. */
+export type ZonedLayout = Extract<Layout, { zones: Zone[] }>;
+export const isZoned = (l: Layout): l is ZonedLayout => "zones" in l;
+
 // ───────────────────────────── helpers ─────────────────────────────
 
-const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : d);
+const num =(v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : d);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 let seq = 0;
@@ -227,6 +234,11 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
       const d = Math.round((area / w) * 10000) / 10000;
       return { type, zones: [{ id: "A", x: -w / 2, z: -d / 2, w, d }], mode: i.mode === "overseed" ? "overseed" : "new" };
     }
+    case "paving": {
+      const L = num(i.lengthM, 6);
+      const W = num(i.widthM, 1.2);
+      return { type, zones: [{ id: "A", x: -L / 2, z: -W / 2, w: L, d: W }], use: isPavingUse(i.use) ? i.use : defaultPavingUse(L, W), edging: i.edging !== false };
+    }
     case "paint_room": {
       const doors = typeof i.doors === "number" ? i.doors : 1;
       const windows = typeof i.windows === "number" ? i.windows : 1;
@@ -294,6 +306,10 @@ function shapeParams(l: Layout): Record<string, unknown> {
     }
     case "lawn":
       return { areaM2: zoneArea(l.zones), zones: l.zones, mode: l.mode };
+    case "paving": {
+      const b = bbox(l.zones);
+      return { lengthM: r2(b.w), widthM: r2(b.d), zones: l.zones, use: l.use, edging: l.edging };
+    }
     case "paint_room":
       return {
         lengthM: l.w,
@@ -458,7 +474,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
   for (const o of ops.slice(0, 12)) {
     switch (o.op) {
       case "resize": {
-        if (l.type === "deck" || l.type === "laminate_floor" || l.type === "lawn") {
+        if (isZoned(l)) {
           const z = findZone(l.zones, o.zone);
           if (o.w != null) z.w = dim(o.w, "w", 0.5, 30);
           if (o.d != null) z.d = dim(o.d, "d", 0.5, 30);
@@ -485,7 +501,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "add_zone": {
-        if (l.type !== "deck" && l.type !== "laminate_floor" && l.type !== "lawn") fail("Proiectul nu are zone", "This project has no zones");
+        if (!isZoned(l)) fail("Proiectul nu are zone", "This project has no zones");
         if (l.zones.length >= 6) fail("Maximum 6 zone", "Maximum 6 zones");
         const to = findZone(l.zones, o.zone);
         const side = need(o.side, "side");
@@ -499,7 +515,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         break;
       }
       case "remove_zone": {
-        if (l.type !== "deck" && l.type !== "laminate_floor" && l.type !== "lawn") fail("Proiectul nu are zone", "This project has no zones");
+        if (!isZoned(l)) fail("Proiectul nu are zone", "This project has no zones");
         if (l.zones.length <= 1) fail("Nu poți elimina singura zonă", "Can't remove the only zone");
         const z = findZone(l.zones, need(o.zone, "zone"));
         l.zones = l.zones.filter((x) => x !== z);
@@ -676,6 +692,8 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         else if (l.type === "drywall_partition" && key === "insulation") l.insulation = bool;
         else if (l.type === "drywall_partition" && key === "doubleLayer") l.doubleLayer = bool;
         else if (l.type === "lawn" && key === "mode" && ["new", "overseed"].includes(String(v))) l.mode = v as "new";
+        else if (l.type === "paving" && key === "use" && isPavingUse(v)) l.use = v;
+        else if (l.type === "paving" && key === "edging") l.edging = bool;
         else fail(`Opțiunea „${key}” = ${JSON.stringify(v)} nu e validă pentru acest proiect`, `Option "${key}" = ${JSON.stringify(v)} is not valid for this project`);
         const [ro, enTxt] = optionSays(key, v, bool);
         say(ro, enTxt);
@@ -754,6 +772,10 @@ function optionSays(key: string, v: unknown, on: boolean): [string, string] {
       return on ? ["Placare dublă", "Double boarding"] : ["Placare simplă", "Single boarding"];
     case "mode":
       return v === "overseed" ? ["Reînsămânțare", "Overseeding"] : ["Gazon nou", "New lawn"];
+    case "use":
+      return v === "driveway" ? ["Intrare auto (pavele de 8 cm, fundație de 25 cm)", "Driveway (8 cm pavers on a 25 cm base)"] : v === "patio" ? ["Terasă / curte", "Patio"] : ["Alee pietonală", "Footpath"];
+    case "edging":
+      return on ? ["Cu borduri pe margini", "Kerbs along the edges"] : ["Fără borduri", "No edging"];
     default:
       return [`Setare actualizată: ${key}`, `Updated setting: ${key}`];
   }
@@ -793,11 +815,13 @@ export function describeLayout(l: Layout): unknown {
     case "deck":
     case "laminate_floor":
     case "lawn":
+    case "paving":
       return {
         type: l.type,
         zones: l.zones.map((z) => ({ id: z.id, w: z.w, d: z.d, x: z.x, z: z.z })),
         ...("steps" in l ? { steps: l.steps, heightM: l.heightM } : {}),
         ...("openings" in l ? { openings: l.openings } : {}),
+        ...(l.type === "paving" ? { use: l.use, edging: l.edging } : {}),
         ...describeItems(l),
       };
     case "fence":
@@ -861,10 +885,12 @@ export function itemContainer(l: Layout, zoneId?: string | null, at?: { x: numbe
     }
     case "deck":
     case "laminate_floor":
-    case "lawn": {
+    case "lawn":
+    case "paving": {
       const byPoint = at && l.zones.find((z) => at.x >= z.x - 0.01 && at.x <= z.x + z.w + 0.01 && at.z >= z.z - 0.01 && at.z <= z.z + z.d + 0.01);
       const z = byPoint ?? l.zones.find((x) => x.id === zoneId) ?? l.zones[0];
-      const floorY = l.type === "deck" ? l.heightM : l.type === "laminate_floor" ? 0.022 : 0.02;
+      // Paving is drawn as a cut-away section on the ground: items stand on the pavers.
+      const floorY = l.type === "deck" ? l.heightM : l.type === "laminate_floor" ? 0.022 : l.type === "paving" ? pavingDepth(l.use) : 0.02;
       return { rect: { minX: z.x, maxX: z.x + z.w, minZ: z.z, maxZ: z.z + z.d }, floorY, ceilingY: l.type === "laminate_floor" ? 2.6 : null, walls: l.type === "laminate_floor", zone: z.id };
     }
   }
@@ -891,7 +917,7 @@ export function placeItem(
   others: Item[],
 ): { x: number; z: number; rot: Item["rot"]; zone?: string; where: Where } {
   const spec = ITEMS[kind];
-  const outdoorProject = l.type === "deck" || l.type === "lawn" || l.type === "fence";
+  const outdoorProject = isOutdoor(l.type);
   if (spec.indoor && outdoorProject) fail(`${spec.label} e pentru interior — proiectul e în exterior`, `${spec.labelEn} is for indoors — this is an outdoor project`);
   if (spec.outdoor && !outdoorProject) fail(`${spec.label} e pentru exterior — proiectul e în interior`, `${spec.labelEn} is for outdoors — this is an indoor project`);
   const c = itemContainer(l, o.zone, o.x != null && o.z != null ? { x: o.x, z: o.z } : undefined);
@@ -1138,6 +1164,8 @@ export function checkLayout(raw: unknown, type: ProjectType): Layout | null {
         return okZones(l.zones) && okOpenings(l.openings, 8) && ["straight", "diagonal"].includes(l.pattern as string) && ["concrete", "wood", "old_tiles"].includes(l.subfloor as string);
       case "lawn":
         return okZones(l.zones) && ["new", "overseed"].includes(l.mode as string);
+      case "paving":
+        return okZones(l.zones) && (PAVING_USES as readonly string[]).includes(l.use as string) && typeof l.edging === "boolean";
       case "paint_room":
         return (
           fin(l.w, 0.8, 20) &&

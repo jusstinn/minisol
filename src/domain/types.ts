@@ -109,6 +109,15 @@ export const MATERIAL_ROLES = {
   garden_hose: { unit: "buc", label: "Furtun grădină", labelEn: "Garden hose" },
   sprinkler: { unit: "buc", label: "Aspersor", labelEn: "Sprinkler" },
 
+  // paving (paths, patios, driveways)
+  pavers: { unit: "m²", label: "Pavele", labelEn: "Pavers" },
+  paving_base: { unit: "kg", label: "Piatră spartă pentru fundație", labelEn: "Crushed stone base" },
+  paving_sand: { unit: "kg", label: "Nisip de pozare", labelEn: "Bedding sand" },
+  joint_sand: { unit: "kg", label: "Nisip de rosturi", labelEn: "Jointing sand" },
+  paving_edging: { unit: "m", label: "Bordură", labelEn: "Edging kerb" },
+  kerb_concrete: { unit: "kg", label: "Beton pentru borduri", labelEn: "Kerb bedding concrete" },
+  plate_compactor: { unit: "buc", label: "Compactor (mai / placă compactoare)", labelEn: "Compactor (tamper / plate)" },
+
   // fixtures, lights and garden furniture placed in the sketch
   toilet: { unit: "buc", label: "Vas WC", labelEn: "Toilet" },
   washbasin: { unit: "buc", label: "Lavoar", labelEn: "Washbasin" },

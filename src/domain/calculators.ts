@@ -1,6 +1,9 @@
 import { ITEM_KINDS, itemRole } from "./items";
 import type { ItemKind } from "./items";
-import { unionPerimeter, zoneArea } from "./layout";
+import { bbox, unionPerimeter, zoneArea } from "./layout";
+import type { Zone } from "./layout";
+import { PAVING_BUILDUP, defaultPavingUse, isPavingUse, pavingDepth } from "./paving";
+import type { PavingUse } from "./paving";
 import type { BaseUnit, Lang, MaterialRole, Requirement } from "./types";
 import { MATERIAL_ROLES } from "./types";
 
@@ -18,6 +21,7 @@ export const PROJECT_TYPES = [
   "fence",
   "drywall_partition",
   "lawn",
+  "paving",
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
@@ -111,7 +115,7 @@ class Builder {
     });
   }
 
-  tool(role: MaterialRole, count = 1, optional = false) {
+  tool(role: MaterialRole, count = 1, optional = false, match?: Requirement["match"]) {
     this.requirements.push({
       role,
       quantity: count,
@@ -119,6 +123,7 @@ class Builder {
       basis: this.t("unealtă", "tool"),
       isTool: true,
       optional,
+      ...(match ? { match } : {}),
     });
   }
 }
@@ -681,6 +686,171 @@ function lawn(p: Params, lang: Lang): CalculationResult {
   };
 }
 
+// ──────────────────────────── paving ─────────────────────────────
+const PAVING_TITLE: Record<PavingUse, [ro: string, en: string]> = {
+  path: ["Alee din pavele", "Paver path"],
+  patio: ["Terasă din pavele", "Paved patio"],
+  driveway: ["Intrare auto din pavele", "Paved driveway"],
+};
+const PAVING_USE_WORDS: Record<PavingUse, [ro: string, en: string]> = {
+  path: ["o alee pietonală", "a footpath"],
+  patio: ["o terasă / curte", "a patio"],
+  driveway: ["o intrare auto", "a driveway"],
+};
+
+/**
+ * Concrete pavers on a sand bed over a compacted crushed-stone base, the way a DIY
+ * customer lays a garden path, a patio or a driveway: dig out the whole build-up,
+ * geotextile, base in compacted layers, screeded sand, pavers, kerbs, jointing sand.
+ */
+function paving(p: Params, lang: Lang): CalculationResult {
+  const b = new Builder(lang);
+  // Zones come from an edited sketch; a plain request is one rectangle (or a square of the given area).
+  const zones: Zone[] =
+    Array.isArray(p.zones) && p.zones.length
+      ? (p.zones as Zone[]).map((z) => ({ id: String(z.id), x: Number(z.x) || 0, z: Number(z.z) || 0, w: positive("zone.w", z.w, { max: 30 }), d: positive("zone.d", z.d, { max: 30 }) }))
+      : p.lengthM === undefined && p.widthM === undefined && p.areaM2 !== undefined
+        ? (() => {
+            const s = r2(Math.sqrt(positive("areaM2", p.areaM2, { max: 900 })));
+            return [{ id: "A", x: 0, z: 0, w: s, d: s }];
+          })()
+        : [{ id: "A", x: 0, z: 0, w: positive("lengthM", p.lengthM, { max: 30 }), d: positive("widthM", p.widthM, { max: 30 }) }];
+  const box = bbox(zones);
+  const use: PavingUse = isPavingUse(p.use) ? p.use : defaultPavingUse(box.w, box.d);
+  const edging = bool(p.edging, true);
+  const layers = PAVING_BUILDUP[use];
+  const depth = pavingDepth(use);
+  const area = zoneArea(zones);
+  const outline = unionPerimeter(zones);
+  const dug = area * depth;
+  const cm = (m: number) => Math.round(m * 100);
+  const waste = zones.length > 1 ? 0.07 : 0.05;
+  // Small paths are tamped by hand; patios and driveways need a plate compactor (usually hired).
+  const bigJob = area > 10 || use === "driveway";
+
+  b.measure("Suprafață pavată", "Paved area", area, "m²");
+  if (zones.length > 1) b.measure("Zone", "Areas", zones.length, "buc");
+  b.measure("Contur", "Outline", outline, "m");
+  b.measure("Adâncime de săpat", "Dig depth", cm(depth), "cm");
+  b.measure("Pământ de scos", "Soil to dig out", dug, "m³");
+
+  b.assume(
+    `Alcătuire pentru ${PAVING_USE_WORDS[use][0]}: ${cm(layers.base)} cm piatră spartă 0–31,5 mm compactată + ${cm(layers.sand)} cm nisip de pozare + pavele de ${cm(layers.paver)} cm — sapi ${cm(depth)} cm.`,
+    `Build-up for ${PAVING_USE_WORDS[use][1]}: ${cm(layers.base)} cm compacted 0–31.5 mm crushed stone + ${cm(layers.sand)} cm bedding sand + ${cm(layers.paver)} cm pavers — dig ${cm(depth)} cm deep.`,
+  );
+  b.assume("Piatra spartă: +15% pentru compactare (~1,8 t/m³); nisipul: +10%.", "Crushed stone: +15% for compaction (~1.8 t/m³); sand: +10%.");
+  b.assume(
+    `${Math.round(waste * 100)}% rezervă de pavele pentru tăieturi${zones.length > 1 ? " (mai multe colțuri)" : ""}.`,
+    `${Math.round(waste * 100)}% spare pavers for cuts${zones.length > 1 ? " (more corners)" : ""}.`,
+  );
+  b.assume("Pantă de 1–2% dinspre casă, ca apa să se scurgă.", "Keep a 1–2% fall away from the house so rain drains off.");
+  if (use === "driveway") {
+    b.assume(
+      "Pentru mașini: pavele de 8 cm pe o fundație de 25 cm. Pe teren argilos sau moale ori pentru vehicule grele, cere sfatul unui specialist.",
+      "For cars: 8 cm pavers on a 25 cm base. On clay or soft ground, or for heavy vehicles, get a specialist's advice.",
+    );
+  }
+  if (edging) {
+    b.assume(
+      `Borduri pe tot conturul (${ro(outline)} m): cele din beton se fixează în beton, cele metalice cu țăruși. Pe laturile lipite de casă sau de o bordură existentă nu-ți trebuie — scoate-le din listă.`,
+      `Edging along the whole outline (${r1(outline)} m): concrete kerbs are bedded in concrete, steel edging is pinned with spikes. Sides against the house or an existing kerb don't need any — take them off the list.`,
+    );
+  } else {
+    b.assume(
+      "Fără borduri: marginile trebuie sprijinite altfel (perete, bordură existentă), altfel pavelele se desfac în timp.",
+      "No edging: the edges must be held some other way (a wall, an existing kerb), or the pavers will spread over time.",
+    );
+  }
+  b.assume(
+    bigJob
+      ? "Fundația și pavelele se compactează cu o placă compactoare, în straturi de max. 10 cm — cel mai simplu e s-o închiriezi pentru o zi (în listă e doar ca sugestie)."
+      : "Pe o suprafață mică ajunge un mai manual, compactând în straturi de 5 cm.",
+    bigJob
+      ? "Compact the base and the pavers with a plate compactor, in layers of 10 cm max — hiring one for a day is easiest (it's only suggested on the list)."
+      : "On a small area a hand tamper will do, compacting in 5 cm layers.",
+  );
+  b.assume(
+    `Pământul scos (~${ro(dug * 1.25)} m³ afânat) trebuie dus undeva — într-un container sau în altă parte a grădinii.`,
+    `The dug-out soil (~${r1(dug * 1.25)} m³ loose) has to go somewhere — a skip or elsewhere in the garden.`,
+  );
+  b.assume(
+    "Pavelele se taie cu o ghilotină pentru pavele sau cu un flex cu disc diamantat — le poți închiria.",
+    "Pavers are cut with a block splitter or an angle grinder with a diamond disc — both can be hired.",
+  );
+
+  b.need("weed_membrane", area * 1.15, "sub fundație, cu 10 cm suprapunere și întors pe margini", "under the base, 10 cm overlaps, turned up at the edges");
+  const baseKg = area * layers.base * 1.15 * 1800;
+  if (baseKg > 3000) {
+    b.assume(
+      `Fundația are ~${ro(baseKg / 1000)} t de piatră: la cantitatea asta merită și varianta vrac, livrată cu camionul — întreabă la magazin.`,
+      `The base takes ~${r1(baseKg / 1000)} t of stone: at that amount, loose stone delivered by truck is worth asking about in store.`,
+    );
+  }
+  b.need(
+    "paving_base",
+    baseKg,
+    `${cm(layers.base)} cm compactat pe ${ro(area)} m² (+15%)`,
+    `${cm(layers.base)} cm compacted over ${r1(area)} m² (+15%)`,
+  );
+  b.need("paving_sand", area * layers.sand * 1.1 * 1600, `strat de ${cm(layers.sand)} cm (+10%)`, `${cm(layers.sand)} cm bed (+10%)`);
+  b.need(
+    "pavers",
+    area * (1 + waste),
+    `${ro(area)} m² + ${Math.round(waste * 100)}% tăieturi`,
+    `${r1(area)} m² + ${Math.round(waste * 100)}% cuts`,
+    use === "driveway" ? { match: { thicknessMm: 80 } } : {},
+  );
+  b.need("joint_sand", area * 4, `rosturi de 2–3 mm pe ${ro(area)} m² (~3–4 kg/m²)`, `2–3 mm joints over ${r1(area)} m² (~3–4 kg/m²)`, { areaToCover: r2(area) });
+  if (edging) {
+    b.need(
+      "paving_edging",
+      outline * 1.05,
+      `contur ${ro(outline)} m + 5% tăieturi`,
+      `${r1(outline)} m outline + 5% cuts`,
+      use === "driveway" ? { match: { thicknessMm: 100 } } : {},
+    );
+    b.need("kerb_concrete", outline * 20, "~20 kg de beton pe metru de bordură (pat + sprijin lateral)", "~20 kg of concrete per metre of kerb (bed + haunching)");
+  }
+  b.tool("plate_compactor", 1, bigJob, { type: bigJob ? "placă compactoare" : "mai manual" });
+  b.tool("spade");
+  b.tool("wheelbarrow");
+  b.tool("garden_rake");
+  b.tool("rubber_mallet");
+  b.tool("spirit_level");
+  b.tool("measuring_tape");
+  b.tool("work_gloves");
+  b.tool("safety_glasses");
+  b.tool("dust_mask");
+  b.tool("knee_pads", 1, true);
+
+  b.safety(
+    "Înainte să sapi, află pe unde trec cablurile și țevile de apă sau gaz (întreabă furnizorii de utilități).",
+    "Before digging, find out where cables and water or gas pipes run (ask the utility companies).",
+  );
+  b.safety("Sacii de 25 kg și pavelele se ridică din genunchi, cu spatele drept — lucrați în doi.", "Lift 25 kg bags and pavers with your legs, back straight — work in pairs.");
+  if (bigJob) {
+    b.safety(
+      "La placa compactoare: antifoane, mănuși și bocanci cu bombeu; ține picioarele departe de placă.",
+      "With a plate compactor: ear defenders, gloves and steel-toe boots; keep your feet clear of the plate.",
+    );
+  }
+  b.safety("La tăierea pavelelor: ochelari și mască FFP2/FFP3 (praf de siliciu); taie umed când poți.", "When cutting pavers: glasses and an FFP2/FFP3 mask (silica dust); cut wet when you can.");
+
+  // Digging by hand (~¼ m³ an hour) dominates; then base, sand and laying; kerbs take a while per metre.
+  const hours = dug * 4 + area * 0.8 + (edging ? outline * 0.3 : 0) + 3;
+  const [tRo, tEn] = PAVING_TITLE[use];
+  return {
+    projectType: "paving",
+    title: b.t(zones.length > 1 ? `${tRo} în L` : tRo, zones.length > 1 ? `L-shaped ${tEn.toLowerCase()}` : tEn),
+    inputs: { lengthM: r2(box.w), widthM: r2(box.d), areaM2: area, use, edging },
+    measurements: b.measurements,
+    requirements: b.requirements,
+    assumptions: b.assumptions,
+    estimate: { hoursMin: Math.round(hours), hoursMax: Math.round(hours * 1.5), difficulty: use === "driveway" ? 4 : 3, people: 2 },
+    safetyNotes: b.safetyNotes,
+  };
+}
+
 const CALCULATORS: Record<ProjectType, (p: Params, lang: Lang) => CalculationResult> = {
   paint_room: paintRoom,
   laminate_floor: laminateFloor,
@@ -689,6 +859,7 @@ const CALCULATORS: Record<ProjectType, (p: Params, lang: Lang) => CalculationRes
   fence,
   drywall_partition: drywallPartition,
   lawn,
+  paving,
 };
 
 export function calculateProject(type: ProjectType, params: Params, lang: Lang = "ro"): CalculationResult {
@@ -730,4 +901,6 @@ export const PROJECT_PARAM_DOCS: Record<ProjectType, string> = {
   fence: "lengthM, heightM: 0.9 | 1.2 | 1.8 (default 1.8)",
   drywall_partition: "lengthM, heightM (default 2.6), doors (default 0), insulation (default true), doubleLayer (default false), wetRoom (default false)",
   lawn: "areaM2 (or lengthM + widthM), mode: new | overseed (default new)",
+  paving:
+    "lengthM, widthM (or areaM2) of a garden path, patio or driveway laid with concrete pavers; use: path | patio | driveway (default path when ≤ 1.5 m wide, else patio; driveway = cars → 8 cm pavers on a 25 cm base), edging (kerbs along the outline, default true)",
 };

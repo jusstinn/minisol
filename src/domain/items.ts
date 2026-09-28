@@ -55,7 +55,9 @@ export interface ItemSpec {
   indoor?: boolean;
 }
 
-const OUTDOOR: ProjectType[] = ["deck", "lawn", "fence"];
+/** Projects outside: garden furniture, lights and BBQs go here; bathroom fixtures and sofas don't. */
+export const OUTDOOR_TYPES: readonly ProjectType[] = ["deck", "lawn", "fence", "paving"];
+export const isOutdoor = (t: ProjectType) => OUTDOOR_TYPES.includes(t);
 
 export const ITEMS: Record<ItemKind, ItemSpec> = {
   toilet: { label: "Vas WC", labelGen: "vasului WC", labelEn: "Toilet", w: 0.38, d: 0.66, h: 0.8, mount: "floor", color: "#f4f4f2", role: "toilet", indoor: true },
@@ -79,7 +81,7 @@ export const ITEMS: Record<ItemKind, ItemSpec> = {
     mount: "floor",
     color: "#8a6a4a",
     // Outdoors the retailer sells a table + 4 chairs set; indoors it's context.
-    role: (t) => (OUTDOOR.includes(t) ? "garden_furniture" : undefined),
+    role: (t) => (isOutdoor(t) ? "garden_furniture" : undefined),
   },
   chair: { label: "Scaun", labelGen: "scaunului", labelEn: "Chair", w: 0.48, d: 0.5, h: 0.9, mount: "floor", color: "#8a6a4a" },
   sofa: { label: "Canapea", labelGen: "canapelei", labelEn: "Sofa", w: 2.0, d: 0.9, h: 0.85, mount: "floor", color: "#8c93a0", indoor: true },
@@ -117,6 +119,8 @@ export function paletteFor(type: ProjectType): ItemKind[] {
       return ["table", "lounger", "parasol", "bbq", "garden_light", "planter"];
     case "fence":
       return ["garden_light", "planter", "bbq", "table"];
+    case "paving":
+      return ["table", "lounger", "parasol", "bbq", "planter", "garden_light", "plant"];
   }
 }
 
