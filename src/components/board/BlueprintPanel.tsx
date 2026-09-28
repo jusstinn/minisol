@@ -176,8 +176,8 @@ function SketchView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className={`overflow-hidden rounded-2xl ring-1 backdrop-blur-md ${
-        inline ? "" : "shadow-[0_24px_60px_-24px_rgba(0,0,0,0.6)]"
+      className={`thin-scroll overflow-y-auto overflow-x-hidden rounded-2xl ring-1 backdrop-blur-md ${
+        inline ? "" : "max-h-full shadow-[0_24px_60px_-24px_rgba(0,0,0,0.6)]"
       } ${dark ? "bg-[#071634]/80 text-[#e6efff] ring-[#dce9ff]/25" : "bg-white/90 text-ink ring-ink/10"}`}
     >
       <div className={`flex items-center gap-2 border-b px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] ${dark ? "border-[#dce9ff]/15 text-[#9fbcf0]" : "border-ink/10 text-ink-3"}`}>
