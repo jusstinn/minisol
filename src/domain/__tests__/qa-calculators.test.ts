@@ -11,6 +11,7 @@ describe("calculator texts", () => {
     const fence = calculateProject("fence", { lengthM: 20.5, heightM: 1.2 }, "ro");
     expect(fence.assumptions.join(" ")).toContain("înălțime 1,2 m");
     expect(fence.requirements.find((r) => r.role === "fence_panel")?.basis).toBe("20,5 m ÷ 1,89 m");
+    expect(wall.assumptions[0]).toBe("Placare pe ambele fețe, un strat, montanți la 60 cm, 10% pierderi la plăci."); // not "1 strat(uri)"
     // English keeps the point
     expect(calculateProject("paint_room", { lengthM: 4, widthM: 3.5 }, "en").requirements.find((r) => r.role === "interior_paint")?.basis).toBe("49.3 m² × 2 coats");
   });

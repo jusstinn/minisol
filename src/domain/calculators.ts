@@ -597,8 +597,8 @@ function drywallPartition(p: Params, lang: Lang): CalculationResult {
   b.measure("Suprafață perete", "Wall area", wallArea, "m²");
   b.measure("Montanți CW", "CW studs", studs, "buc");
   b.assume(
-    `Placare pe ambele fețe, ${layers} strat(uri), montanți la 60 cm, 10% pierderi la plăci.`,
-    `Boarded on both sides, ${layers} layer(s), studs at 60 cm centres, 10% board waste.`,
+    `Placare pe ambele fețe, ${layers === 1 ? "un strat" : `${layers} straturi`}, montanți la 60 cm, 10% pierderi la plăci.`,
+    `Boarded on both sides, ${layers === 1 ? "one layer" : `${layers} layers`}, studs at 60 cm centres, 10% board waste.`,
   );
   if (p.heightM === undefined) b.assume("Înălțime presupusă 2,6 m.", "Assumed height of 2.6 m.");
 
