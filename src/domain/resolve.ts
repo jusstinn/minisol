@@ -188,7 +188,27 @@ export function chooseLine(req: Requirement, catalog: Product[], quality: Qualit
 /** Structural members are bought in one length: mixing 3 m and 4 m deck boards makes no sense on site. */
 const SINGLE_LENGTH: MaterialRole[] = ["deck_board", "deck_joist", "fence_post"];
 
+/**
+ * Bars of one stock length for structural members: a bar yields ⌊bar ÷ member⌋ members and the offcut is
+ * waste. Members longer than the bar are spliced over supports, so they count by metres (+5% for the cuts).
+ */
+export function barsForMembers(members: NonNullable<Requirement["members"]>, bar: number): number {
+  return members.reduce(
+    (n, m) => n + (bar + 1e-9 >= m.lengthM ? Math.ceil(m.count / Math.floor(bar / m.lengthM + 1e-9)) : Math.ceil((m.count * m.lengthM * 1.05) / bar - 1e-9)),
+    0,
+  );
+}
+
 function packsFor(req: Requirement, needed: number, line: Product[]): { sku: string; qty: number }[] {
+  if (req.members?.length && req.unit === "m") {
+    // One length per job; studs can't be spliced, so prefer bars at least as long as the longest member.
+    const longest = Math.max(...req.members.map((m) => m.lengthM));
+    const long = line.filter((p) => p.content.amount + 1e-9 >= longest);
+    const best = (long.length ? long : line)
+      .map((p) => ({ sku: p.sku, qty: Math.max(1, barsForMembers(req.members!, p.content.amount)), price: p.price }))
+      .sort((a, b) => a.qty * a.price - b.qty * b.price)[0];
+    return [{ sku: best.sku, qty: best.qty }];
+  }
   if (!SINGLE_LENGTH.includes(req.role) || line.length === 1) return optimisePacks(needed, line);
   const best = line
     .map((p) => ({ sku: p.sku, qty: Math.max(1, Math.ceil(needed / p.content.amount - 1e-9)), cost: p.price * Math.ceil(needed / p.content.amount - 1e-9) }))

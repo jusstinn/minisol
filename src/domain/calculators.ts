@@ -93,7 +93,7 @@ class Builder {
     quantity: number,
     basisRo: string,
     basisEn: string,
-    extra: Partial<Pick<Requirement, "optional" | "areaToCover" | "match" | "scaleBySpec" | "fitRange">> = {},
+    extra: Partial<Pick<Requirement, "optional" | "areaToCover" | "match" | "scaleBySpec" | "fitRange" | "members">> = {},
   ) {
     const unit: BaseUnit = MATERIAL_ROLES[role].unit;
     const q = unit === "buc" ? Math.ceil(quantity - 1e-9) : r2(quantity);
@@ -386,6 +386,8 @@ function deck(p: Params, lang: Lang): CalculationResult {
   let joistM = 0;
   let screws = 0;
   let supports = 0;
+  /** Joists by length (each one is a single bar where the stock is long enough). */
+  const joistRuns = new Map<number, number>();
   for (const z of zones) {
     const run = direction === "x" ? z.w : z.d; // boards run along this
     const across = direction === "x" ? z.d : z.w;
@@ -396,6 +398,7 @@ function deck(p: Params, lang: Lang): CalculationResult {
     boardM += r * run;
     joists += j;
     joistM += j * across;
+    joistRuns.set(r2(across), (joistRuns.get(r2(across)) ?? 0) + j);
     screws += r * j * 2;
     supports += j * (Math.ceil(across / 0.6) + 1);
   }
@@ -408,6 +411,7 @@ function deck(p: Params, lang: Lang): CalculationResult {
     treads += count;
     boardM += count * 2 * width;
     joistM += stringers * count * 0.3 * 1.25;
+    joistRuns.set(r2(count * 0.3 * 1.25), (joistRuns.get(r2(count * 0.3 * 1.25)) ?? 0) + stringers);
     screws += count * 2 * stringers * 2;
   }
 
@@ -427,7 +431,9 @@ function deck(p: Params, lang: Lang): CalculationResult {
   b.need("deck_board", boardM * 1.1, `${rows} rânduri${treads ? ` + ${treads} trepte` : ""} + 10%`, `${rows} rows${treads ? ` + ${treads} steps` : ""} + 10%`, {
     scaleBySpec: { key: "widthMm", reference: 145 },
   });
-  b.need("deck_joist", joistM * 1.05, `${joists} grinzi${treads ? " + vanguri trepte" : ""} + 5%`, `${joists} joists${treads ? " + step stringers" : ""} + 5%`);
+  b.need("deck_joist", joistM * 1.05, `${joists} grinzi${treads ? " + vanguri trepte" : ""} + 5%`, `${joists} joists${treads ? " + step stringers" : ""} + 5%`, {
+    members: [...joistRuns].map(([lengthM, count]) => ({ count, lengthM })),
+  });
   b.need("deck_screws", screws * 1.1, "2 șuruburi la fiecare încrucișare deck–grindă", "2 screws per board–joist crossing");
   b.need("deck_support", supports, `suporturi reglate la ~${pedestalMm} mm`, `supports set to ~${pedestalMm} mm`, {
     fitRange: { key: "heightRangeMm", value: Math.max(40, pedestalMm) },
@@ -595,7 +601,7 @@ function drywallPartition(p: Params, lang: Lang): CalculationResult {
     match: wet ? { type: "hidro" } : undefined,
   });
   b.need("uw_profile", (2 * L + doors * 1.2) * 1.05, "sus + jos (+ deasupra ușilor)", "top + bottom (+ door headers)");
-  b.need("cw_profile", studs * H * 1.05, `${studs} montanți × ${r1(H)} m`, `${studs} studs × ${r1(H)} m`);
+  b.need("cw_profile", studs * H * 1.05, `${studs} montanți × ${r1(H)} m`, `${studs} studs × ${r1(H)} m`, { members: [{ count: studs, lengthM: r2(H) }] });
   b.need("drywall_screws", boardArea * 18, "~18 șuruburi / m² de placă", "~18 screws per m² of board");
   b.need("anchor_dowels", Math.ceil((2 * L) / 0.5) + 4, "prindere UW la 50 cm", "UW fixing every 50 cm");
   b.need("sealing_tape", 2 * L + 2 * H, "sub profilele de contur", "under perimeter profiles");
