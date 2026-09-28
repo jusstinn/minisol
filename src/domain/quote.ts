@@ -2,7 +2,8 @@ import { artOf } from "./art";
 import type { ArtSpec } from "./art";
 import { distanceKm } from "./geo";
 import { LOYALTY } from "./loyalty";
-import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, Store } from "./types";
+import { isPersonalisedOffer } from "./offers";
+import type { BaseUnit, CategoryId, Customer, Lang, MaterialRole, Offer, Product, Store } from "./types";
 
 /**
  * Deterministic pricing: line totals, best offer per line, basket-level offers,
@@ -32,6 +33,21 @@ export interface QuoteLine {
   discount: number;
   netTotal: number;
   offerId?: string;
+  /**
+   * Prior price for the reduction (Directive 98/6/EC art. 6a, Omnibus): the product's
+   * lowest price per sales unit in the last 30 days. Set only when the line is shown as
+   * reduced AND the member's price beats it; `referenceTotal` (= × qty) is the only
+   * figure the UI may cross out. No reference → show the net price, nothing crossed out.
+   */
+  referenceUnitPrice?: number;
+  referenceTotal?: number;
+  /**
+   * Unit price (Directive 98/6/EC): selling price per kg / l / m / m² — or per piece for
+   * multi-packs. Absent when it equals the selling price (single pieces, 1 l / 1 kg packs).
+   */
+  measurePrice?: { price: number; unit: BaseUnit };
+  /** Discounted by an offer targeted at this member: a personalised price (CRD art. 6(1)(ea)). */
+  personalised: boolean;
   role?: MaterialRole;
   basis?: string;
   isTool: boolean;
@@ -46,6 +62,8 @@ export interface AppliedDiscount {
   title: string;
   amount: number;
   kind: Offer["kind"];
+  /** Targeted at this member (tier / segment / member offer) — see `isPersonalisedOffer`. */
+  personalised: boolean;
 }
 
 export interface StoreAvailability {
@@ -68,6 +86,15 @@ export interface Quote {
   discounts: AppliedDiscount[];
   discountTotal: number;
   total: number;
+  /**
+   * Price-display figures for the basket (Omnibus-safe): `compareAt` values every line at
+   * its 30-day reference when it is shown as reduced, otherwise at its net price; `saving`
+   * is `compareAt − total`. Show these, not `subtotal`/`discountTotal`, as "was / you save".
+   */
+  compareAt: number;
+  saving: number;
+  /** Some price in this quote is personalised for the member — disclose it (CRD art. 6(1)(ea)). */
+  personalisedPricing: boolean;
   points: {
     earned: number;
     balance: number;
@@ -121,6 +148,22 @@ function offerAppliesToLine(o: Offer, p: Product): boolean {
   if (o.kind === "percent_category") return Boolean(o.categories?.includes(p.category));
   if (o.kind === "percent_role") return p.roles.some((r) => o.roles?.includes(r));
   return false;
+}
+
+/**
+ * The price a reduction on this product may be measured from: the lowest price of the last
+ * 30 days, never above today's list price (after a recent price cut, today's price is the lowest).
+ */
+export function referencePrice(p: Product): number {
+  const low = p.lowestPrice30d;
+  return money(typeof low === "number" && Number.isFinite(low) && low > 0 ? Math.min(p.price, low) : p.price);
+}
+
+/** Price per unit of measure for pack products; undefined when it equals the selling price. */
+export function measurePriceOf(p: Product): QuoteLine["measurePrice"] {
+  const { amount, unit } = p.content;
+  if (!(amount > 0) || amount === 1) return undefined;
+  return { price: Math.round((p.price / amount) * 10000) / 10000, unit };
 }
 
 /** Best single percentage discount a product gets from these offers (same rule as quote lines). */
@@ -177,6 +220,8 @@ export function buildQuote(
       discount: best?.amount ?? 0,
       netTotal: money(lineTotal - (best?.amount ?? 0)),
       offerId: best?.offer.id,
+      measurePrice: measurePriceOf(p),
+      personalised: Boolean(best && isPersonalisedOffer(best.offer)),
       role: it.role,
       basis: it.basis,
       isTool: p.isTool,
@@ -193,7 +238,7 @@ export function buildQuote(
   for (const l of lines) if (l.offerId) byOffer.set(l.offerId, money((byOffer.get(l.offerId) ?? 0) + l.discount));
   for (const [offerId, amount] of byOffer) {
     const o = ctx.offers.find((x) => x.id === offerId)!;
-    discounts.push({ offerId, title: ot(o), amount, kind: o.kind });
+    discounts.push({ offerId, title: ot(o), amount, kind: o.kind, personalised: isPersonalisedOffer(o) });
   }
 
   const hints: QuoteHint[] = [];
@@ -213,7 +258,20 @@ export function buildQuote(
     const unitNet = money(cheapest.netTotal / cheapest.qty);
     cheapest.discount = money(cheapest.discount + unitNet);
     cheapest.netTotal = money(cheapest.netTotal - unitNet);
-    discounts.push({ offerId: o.id, title: ot(o), amount: unitNet, kind: o.kind });
+    if (isPersonalisedOffer(o)) cheapest.personalised = true;
+    discounts.push({ offerId: o.id, title: ot(o), amount: unitNet, kind: o.kind, personalised: isPersonalisedOffer(o) });
+  }
+
+  // Omnibus: a reduction is only shown against the lowest price of the last 30 days. If the
+  // member's price does not beat it, the line shows its net price with nothing crossed out.
+  for (const l of lines) {
+    if (!(l.discount > 0)) continue;
+    const ref = referencePrice(deps.products.get(l.sku)!);
+    const refTotal = money(ref * l.qty);
+    if (l.netTotal < refTotal) {
+      l.referenceUnitPrice = ref;
+      l.referenceTotal = refTotal;
+    }
   }
 
   const afterLineDiscounts = money(lines.reduce((s, l) => s + l.netTotal, 0));
@@ -222,7 +280,9 @@ export function buildQuote(
   const threshold = ctx.offers
     .filter((o) => o.kind === "fixed_threshold" && afterLineDiscounts >= (o.minSpend ?? Infinity))
     .sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))[0];
-  if (threshold) discounts.push({ offerId: threshold.id, title: ot(threshold), amount: threshold.amount ?? 0, kind: threshold.kind });
+  if (threshold) {
+    discounts.push({ offerId: threshold.id, title: ot(threshold), amount: threshold.amount ?? 0, kind: threshold.kind, personalised: isPersonalisedOffer(threshold) });
+  }
   // Nudge towards a better threshold offer that is within reach (≤ 20% away).
   for (const o of ctx.offers.filter((x) => x.kind === "fixed_threshold" && (x.amount ?? 0) > (threshold?.amount ?? 0))) {
     const gap = (o.minSpend ?? 0) - afterLineDiscounts;
@@ -233,6 +293,9 @@ export function buildQuote(
 
   const discountTotal = money(discounts.reduce((s, d) => s + d.amount, 0));
   const total = money(Math.max(0, subtotal - discountTotal));
+  const compareAt = money(lines.reduce((s, l) => s + (l.referenceTotal ?? l.netTotal), 0));
+  const saving = money(Math.max(0, compareAt - total));
+  const personalisedPricing = lines.some((l) => l.personalised) || discounts.some((d) => d.personalised);
 
   // Loyalty points: base × tier multiplier, plus category bonus multipliers.
   const tierMultiplier = LOYALTY.tierMultiplier[ctx.customer.tier];
@@ -298,6 +361,9 @@ export function buildQuote(
     discounts,
     discountTotal,
     total,
+    compareAt,
+    saving,
+    personalisedPricing,
     points: {
       earned,
       balance: ctx.customer.points,
