@@ -8,6 +8,8 @@ import Entry from "./entry/Entry";
 import type { MemberSummary } from "./entry/WalletPass";
 import Workspace from "./workspace/Workspace";
 import { clearSaved, useSavedSummary } from "@/lib/savedSession";
+import { clearPendingShare, readPendingShare, stashIncomingShare } from "@/lib/shareLink";
+import IncomingShare from "./entry/IncomingShare";
 
 export default function App({
   tenant,
@@ -24,9 +26,16 @@ export default function App({
   const [members, setMembers] = useState<MemberSummary[]>(passMember ? [passMember] : []);
   const [memberId, setMemberId] = useState<string | undefined>(passMember?.memberId ?? initialMember);
   const [lang, setLang] = useState<Lang>(initialLang ?? "ro");
-  const [session, setSession] = useState<{ prompt: string; key: number; resume?: boolean } | null>(null);
+  const [session, setSession] = useState<{ prompt: string; key: number; resume?: boolean; shared?: string } | null>(null);
   const saved = useSavedSummary(tenant.id, memberId);
   const fromPass = Boolean(passMember);
+  // A project sent from another device ("#p=…" link) waits here until the member is known.
+  const [incoming, setIncoming] = useState<string | null>(null);
+  useEffect(() => {
+    stashIncomingShare();
+    const token = readPendingShare();
+    if (token) queueMicrotask(() => setIncoming(token));
+  }, []);
 
   useEffect(() => {
     if (fromPass) return;
@@ -48,7 +57,7 @@ export default function App({
   const style = { "--accent": tenant.accent, "--on-accent": tenant.onAccent } as React.CSSProperties;
 
   return (
-    <div style={style} className="min-h-dvh">
+    <div style={style} className="min-h-dvh" data-app-root>
       <AnimatePresence mode="wait">
         {!session || !member ? (
           <motion.div key="entry" exit={{ opacity: 0, y: -24, filter: "blur(6px)" }} transition={{ duration: 0.45, ease: [0.7, 0, 0.84, 0] }}>
@@ -78,11 +87,29 @@ export default function App({
               onLang={setLang}
               initialPrompt={session.prompt}
               resume={session.resume}
+              shared={session.shared}
               onExit={() => setSession(null)}
             />
           </motion.div>
         )}
       </AnimatePresence>
+      {incoming && !session && (
+        <IncomingShare
+          token={incoming}
+          lang={lang}
+          memberName={member?.firstName}
+          onOpen={(snap) => {
+            if (snap) setLang(snap.lang);
+            clearPendingShare();
+            setIncoming(null);
+            setSession({ prompt: "", key: Date.now(), shared: incoming });
+          }}
+          onDismiss={() => {
+            clearPendingShare();
+            setIncoming(null);
+          }}
+        />
+      )}
     </div>
   );
 }

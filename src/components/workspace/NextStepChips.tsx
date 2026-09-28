@@ -54,7 +54,8 @@ export function NextStepChips({ chips, lang, onSend }: { chips: NextStep[]; lang
       role="group"
       aria-label={lang === "en" ? "Suggested next steps" : "Pași următori sugerați"}
       onKeyDown={onKeyDown}
-      className="thin-scroll -mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1"
+      // Phones: one scrolling row (keeps the conversation tall); desktop: all of them, wrapped.
+      className="thin-scroll -mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:flex-wrap lg:overflow-visible"
     >
       {chips.map((c, i) => (
         <motion.button

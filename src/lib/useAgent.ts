@@ -370,6 +370,40 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
 
   const clearSketchError = useCallback(() => setSketchError(null), []);
 
+  /** Reopen a project sent from another device (the `#p=` link, see shareLink.ts) — no LLM call. */
+  const restoreShared = useCallback(
+    async (token: string) => {
+      if (busyRef.current) return;
+      setBusy(true);
+      busyRef.current = true;
+      const aId = uid();
+      const label = opts.lang === "en" ? "Opening the project from your other device" : "Deschid proiectul de pe celălalt dispozitiv";
+      setMessages((ms) => [...ms, { id: aId, role: "assistant", text: "", log: [{ tool: "restore", label, at: Date.now(), done: false }], cards: [], pending: true }]);
+      try {
+        const res = await fetch("/api/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, lang: opts.lang, token }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { state?: SessionState; cards?: Card[]; message?: string; error?: string };
+        if (!res.ok || !data.state || !data.cards) throw new Error(data.error ?? `HTTP ${res.status}`);
+        stateRef.current = data.state;
+        pendingRef.current = null;
+        repriceSeq.current++;
+        for (const c of data.cards) putCard(c);
+        historyRef.current = [...historyRef.current, { role: "assistant", content: data.message ?? "" }];
+        patchAssistant(aId, (m) => ({ ...m, text: data.message ?? "", cards: data.cards! }));
+      } catch (e) {
+        patchAssistant(aId, (m) => ({ ...m, error: (e as Error).message }));
+      } finally {
+        patchAssistant(aId, (m) => ({ ...m, pending: false, log: m.log.map((l) => ({ ...l, done: true })) }));
+        setBusy(false);
+        busyRef.current = false;
+      }
+    },
+    [opts.memberId, opts.tenant, opts.lang, patchAssistant, putCard],
+  );
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     stateRef.current = { basket: [] };
@@ -393,6 +427,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     applyTier,
     chooseOption,
     reset,
+    restoreShared,
     pointsDelta,
     state: stateRef,
     mode,

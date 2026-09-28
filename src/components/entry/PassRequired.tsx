@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { stashIncomingShare } from "@/lib/shareLink";
 import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
 import { Logo } from "../ui/icons";
@@ -20,6 +21,8 @@ export default function PassRequired({
   reason?: "expired" | "invalid";
 }) {
   const [lang, setLang] = useState<Lang>(initialLang);
+  // A "send to phone" link opened before signing in: keep the project for after the pass link.
+  useEffect(() => stashIncomingShare(), []);
   const en = lang === "en";
   const style = { "--accent": tenant.accent, "--on-accent": tenant.onAccent } as React.CSSProperties;
 

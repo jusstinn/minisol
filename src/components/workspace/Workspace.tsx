@@ -21,6 +21,7 @@ import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
 import CardChips from "./CardChips";
 import { NextStepChips, useNextSteps } from "./NextStepChips";
+import { ShareButton } from "./ShareSheet";
 import type { NextStep } from "@/lib/nextSteps";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
 import type { PanelTarget } from "./MobileTabs";
@@ -33,6 +34,7 @@ export default function Workspace({
   onLang,
   initialPrompt,
   resume,
+  shared,
   onExit,
 }: {
   tenant: Tenant;
@@ -42,6 +44,8 @@ export default function Workspace({
   initialPrompt: string;
   /** Continue the project saved in this browser instead of starting a new one. */
   resume?: boolean;
+  /** Reopen a project sent from another device (share-link token). */
+  shared?: string;
   onExit: () => void;
 }) {
   const [offline, setOffline] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo"));
@@ -60,8 +64,9 @@ export default function Workspace({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (initialPrompt) agent.send(initialPrompt);
-  }, [agent, initialPrompt]);
+    if (shared) agent.restoreShared(shared);
+    else if (initialPrompt) agent.send(initialPrompt);
+  }, [agent, initialPrompt, shared]);
 
   const quote = agent.board.quote?.quote;
   const project = agent.board.project?.project;
@@ -106,7 +111,7 @@ export default function Workspace({
     <UiBridge ui={agent.ui} onHighlight={setHighlight} onCart={() => setCartOpen(true)} onPanel={showPanel} />
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
-      <header className="flex items-center gap-3 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:px-6">
+      <header className="flex items-center gap-2 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:gap-3 sm:px-6">
         <button onClick={onExit} className="flex items-center gap-2" title={tr("newProject", lang)}>
           <Logo className="text-ink" />
           <span className="display text-[17px] leading-none">Blueprint</span>
@@ -122,7 +127,8 @@ export default function Workspace({
           <span className={`h-1.5 w-1.5 rounded-full ${offline || agent.mode?.mode === "scripted" ? "bg-accent" : "bg-ok"} ${agent.busy ? "animate-pulse" : ""}`} />
           <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
         </button>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {project && <ShareButton getState={() => agent.state.current} tenant={tenant} lang={lang} />}
           <AnimatePresence>
             {quote && (
               <motion.button
