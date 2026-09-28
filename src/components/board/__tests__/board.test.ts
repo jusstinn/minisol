@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SketchChange } from "@/agent/types";
-import { km, times, unitText } from "@/lib/format";
+import { km, storeLabel, times, unitText } from "@/lib/format";
 import { sketchInFocus } from "../Board";
 
 const change = (source: SketchChange["source"]) => ({
@@ -40,5 +40,12 @@ describe("store distances", () => {
     expect(unitText("rânduri", "en")).toBe("rows");
     expect(unitText("rânduri", "ro")).toBe("rânduri");
     expect(unitText("m²", "en")).toBe("m²");
+  });
+
+  it("store names drop the whole retailer prefix, not just the first word", () => {
+    const brico = ["Brico Nord București Militari", "Brico Nord București Berceni", "Brico Nord Brașov"];
+    expect(storeLabel("Brico Nord București Berceni", brico)).toBe("București Berceni");
+    expect(storeLabel("HORNBACH Brașov", ["HORNBACH București Militari", "HORNBACH Brașov"])).toBe("Brașov");
+    expect(storeLabel("Atelier Brașov", ["Atelier Brașov"])).toBe("Atelier Brașov");
   });
 });

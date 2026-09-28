@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { RO_MAP, projectRO } from "@/data/romania-map";
-import { km } from "@/lib/format";
+import { km, storeLabel } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { PanelHeader } from "../ui/primitives";
 
@@ -87,7 +87,7 @@ export default function StockPanel({ quote, lang, onMoveStore }: { quote: Quote;
                       strokeWidth={2}
                     />
                     <text x={x > RO_MAP.width * 0.6 ? x - 10 - Math.max(250, s.name.length * 15) : x + 42} y={y - 18} fill="#fff" fontSize={26} fontFamily="var(--font-jetbrains)">
-                      {s.name.split(" ").slice(1).join(" ")}
+                      {storeLabel(s.name, stores.map((x) => x.name))}
                     </text>
                     <text x={x > RO_MAP.width * 0.6 ? x - 10 - Math.max(250, s.name.length * 15) : x + 42} y={y + 14} fill={color} fontSize={22} fontFamily="var(--font-jetbrains)">
                       {lineCount - s.missingCount}/{lineCount} · {km(s.distanceKm, lang)}
