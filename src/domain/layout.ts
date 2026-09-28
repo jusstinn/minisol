@@ -1,5 +1,5 @@
 import type { ProjectType } from "./calculators";
-import { ITEMS, ITEM_KINDS, ROT_FOR_WALL, footprint, itemRect, overlaps as rectsOverlap, verticalRange } from "./items";
+import { ITEMS, ITEM_KINDS, ROT_FOR_WALL, footprint, itemRect, lowerFirst, overlaps as rectsOverlap, verticalRange } from "./items";
 import type { Item, ItemKind, Rect } from "./items";
 import type { Lang } from "./types";
 
@@ -648,7 +648,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         const placed = placeItem(l, kind, o, items);
         const it: Item = { id: nid("it"), kind, ...placed };
         items.push(it);
-        say(`Adăugat: ${ITEMS[kind].label.toLowerCase()} ${placed.where.ro}`, `Added: ${ITEMS[kind].labelEn.toLowerCase()} ${placed.where.en}`);
+        say(`Adăugat: ${lowerFirst(ITEMS[kind].label)} ${placed.where.ro}`, `Added: ${lowerFirst(ITEMS[kind].labelEn)} ${placed.where.en}`);
         delete (it as Partial<Item & { where: unknown }>).where;
         break;
       }
@@ -658,7 +658,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         const items = l.items ?? [];
         const target = o.id ? items.find((x) => x.id === o.id) : [...items].reverse().find((x) => !o.item || x.kind === asKind(o.item));
         if (!target) throw new SketchEditError(o.item ? `There is no ${String(o.item)} in the sketch` : "No such item");
-        const name = { ro: ITEMS[target.kind].label.toLowerCase(), en: ITEMS[target.kind].labelEn.toLowerCase() };
+        const name = { ro: lowerFirst(ITEMS[target.kind].label), en: lowerFirst(ITEMS[target.kind].labelEn) };
         if (o.op === "remove_item") {
           l.items = items.filter((x) => x !== target);
           say(`Eliminat: ${name.ro}`, `Removed: ${name.en}`);
@@ -847,7 +847,7 @@ export function placeItem(
       againstWall(anchor.side, 0.5);
       const alongX = anchor.side === "n" || anchor.side === "s";
       const above = spec.mount === "wall" && anchor.item != null && ITEMS[anchor.item].mount === "floor";
-      if (above) where = { ro: `deasupra: ${ITEMS[anchor.item!].label.toLowerCase()}`, en: `above the ${ITEMS[anchor.item!].labelEn.toLowerCase()}` };
+      if (above) where = { ro: `deasupra ${ITEMS[anchor.item!].labelGen}`, en: `above the ${lowerFirst(ITEMS[anchor.item!].labelEn)}` };
       const off = above ? 0 : anchor.half + (alongX ? f0.w : f0.d) / 2 + 0.1;
       const lo = alongX ? r.minX + f0.w / 2 : r.minZ + f0.d / 2;
       const hi = alongX ? r.maxX - f0.w / 2 : r.maxZ - f0.d / 2;
@@ -980,7 +980,7 @@ function findAnchor(
     half: (alongX ? f.w : f.d) / 2,
     side,
     item: it.kind,
-    where: { ro: `lângă ${ITEMS[it.kind].label.toLowerCase()}`, en: `next to the ${ITEMS[it.kind].labelEn.toLowerCase()}` },
+    where: { ro: `lângă ${lowerFirst(ITEMS[it.kind].label)}`, en: `next to the ${lowerFirst(ITEMS[it.kind].labelEn)}` },
   };
 }
 

@@ -38,6 +38,8 @@ export type Mount = "floor" | "wall" | "ceiling";
 
 export interface ItemSpec {
   label: string;
+  /** Romanian genitive ("deasupra lavoarului"). */
+  labelGen: string;
   labelEn: string;
   /** Footprint width (along its wall) × depth, and height, in metres. */
   w: number;
@@ -56,19 +58,20 @@ export interface ItemSpec {
 const OUTDOOR: ProjectType[] = ["deck", "lawn", "fence"];
 
 export const ITEMS: Record<ItemKind, ItemSpec> = {
-  toilet: { label: "Vas WC", labelEn: "Toilet", w: 0.38, d: 0.66, h: 0.8, mount: "floor", color: "#f4f4f2", role: "toilet", indoor: true },
-  sink: { label: "Lavoar", labelEn: "Washbasin", w: 0.55, d: 0.45, h: 0.85, mount: "floor", color: "#f4f4f2", role: "washbasin", indoor: true },
-  shower: { label: "Cabină de duș", labelEn: "Shower enclosure", w: 0.9, d: 0.9, h: 2.0, mount: "floor", color: "#cfe4f2", role: "shower_enclosure", indoor: true },
-  bathtub: { label: "Cadă", labelEn: "Bathtub", w: 1.7, d: 0.7, h: 0.56, mount: "floor", color: "#f4f4f2", role: "bathtub", indoor: true },
-  mirror: { label: "Oglindă", labelEn: "Mirror", w: 0.6, d: 0.04, h: 0.8, mount: "wall", elevation: 1.2, color: "#c9dbe6", role: "bathroom_mirror", indoor: true },
-  towel_radiator: { label: "Calorifer port-prosop", labelEn: "Towel radiator", w: 0.5, d: 0.08, h: 1.2, mount: "wall", elevation: 0.3, color: "#e9e9e6", role: "towel_radiator", indoor: true },
-  washing_machine: { label: "Mașină de spălat", labelEn: "Washing machine", w: 0.6, d: 0.6, h: 0.85, mount: "floor", color: "#f1f1ee", indoor: true },
-  ceiling_lamp: { label: "Plafonieră", labelEn: "Ceiling light", w: 0.4, d: 0.4, h: 0.08, mount: "ceiling", color: "#fff4cf", role: "ceiling_light", indoor: true },
-  wall_lamp: { label: "Aplică", labelEn: "Wall light", w: 0.18, d: 0.12, h: 0.22, mount: "wall", elevation: 1.75, color: "#fff4cf", role: "wall_light", indoor: true },
-  floor_lamp: { label: "Lampadar", labelEn: "Floor lamp", w: 0.36, d: 0.36, h: 1.6, mount: "floor", color: "#2f2f2f", role: "floor_lamp", indoor: true },
-  garden_light: { label: "Lampă de grădină", labelEn: "Garden light", w: 0.14, d: 0.14, h: 0.5, mount: "floor", color: "#3a3a3a", role: "garden_light", outdoor: true },
+  toilet: { label: "Vas WC", labelGen: "vasului WC", labelEn: "Toilet", w: 0.38, d: 0.66, h: 0.8, mount: "floor", color: "#f4f4f2", role: "toilet", indoor: true },
+  sink: { label: "Lavoar", labelGen: "lavoarului", labelEn: "Washbasin", w: 0.55, d: 0.45, h: 0.85, mount: "floor", color: "#f4f4f2", role: "washbasin", indoor: true },
+  shower: { label: "Cabină de duș", labelGen: "cabinei de duș", labelEn: "Shower enclosure", w: 0.9, d: 0.9, h: 2.0, mount: "floor", color: "#cfe4f2", role: "shower_enclosure", indoor: true },
+  bathtub: { label: "Cadă", labelGen: "căzii", labelEn: "Bathtub", w: 1.7, d: 0.7, h: 0.56, mount: "floor", color: "#f4f4f2", role: "bathtub", indoor: true },
+  mirror: { label: "Oglindă", labelGen: "oglinzii", labelEn: "Mirror", w: 0.6, d: 0.04, h: 0.8, mount: "wall", elevation: 1.2, color: "#c9dbe6", role: "bathroom_mirror", indoor: true },
+  towel_radiator: { label: "Calorifer port-prosop", labelGen: "caloriferului port-prosop", labelEn: "Towel radiator", w: 0.5, d: 0.08, h: 1.2, mount: "wall", elevation: 0.3, color: "#e9e9e6", role: "towel_radiator", indoor: true },
+  washing_machine: { label: "Mașină de spălat", labelGen: "mașinii de spălat", labelEn: "Washing machine", w: 0.6, d: 0.6, h: 0.85, mount: "floor", color: "#f1f1ee", indoor: true },
+  ceiling_lamp: { label: "Plafonieră", labelGen: "plafonierei", labelEn: "Ceiling light", w: 0.4, d: 0.4, h: 0.08, mount: "ceiling", color: "#fff4cf", role: "ceiling_light", indoor: true },
+  wall_lamp: { label: "Aplică", labelGen: "aplicei", labelEn: "Wall light", w: 0.18, d: 0.12, h: 0.22, mount: "wall", elevation: 1.75, color: "#fff4cf", role: "wall_light", indoor: true },
+  floor_lamp: { label: "Lampadar", labelGen: "lampadarului", labelEn: "Floor lamp", w: 0.36, d: 0.36, h: 1.6, mount: "floor", color: "#2f2f2f", role: "floor_lamp", indoor: true },
+  garden_light: { label: "Lampă de grădină", labelGen: "lămpii de grădină", labelEn: "Garden light", w: 0.14, d: 0.14, h: 0.5, mount: "floor", color: "#3a3a3a", role: "garden_light", outdoor: true },
   table: {
     label: "Masă",
+    labelGen: "mesei",
     labelEn: "Table",
     w: 1.6,
     d: 0.9,
@@ -78,17 +81,17 @@ export const ITEMS: Record<ItemKind, ItemSpec> = {
     // Outdoors the retailer sells a table + 4 chairs set; indoors it's context.
     role: (t) => (OUTDOOR.includes(t) ? "garden_furniture" : undefined),
   },
-  chair: { label: "Scaun", labelEn: "Chair", w: 0.48, d: 0.5, h: 0.9, mount: "floor", color: "#8a6a4a" },
-  sofa: { label: "Canapea", labelEn: "Sofa", w: 2.0, d: 0.9, h: 0.85, mount: "floor", color: "#8c93a0", indoor: true },
-  bed: { label: "Pat", labelEn: "Bed", w: 1.6, d: 2.05, h: 0.5, mount: "floor", color: "#d9d2c3", indoor: true },
-  wardrobe: { label: "Dulap", labelEn: "Wardrobe", w: 1.2, d: 0.6, h: 2.1, mount: "floor", color: "#cbb79a", indoor: true },
-  tv: { label: "Televizor", labelEn: "TV", w: 1.25, d: 0.08, h: 0.72, mount: "wall", elevation: 1.0, color: "#1d1f22", indoor: true },
-  radiator: { label: "Calorifer", labelEn: "Radiator", w: 0.8, d: 0.1, h: 0.6, mount: "wall", elevation: 0.15, color: "#ededea", indoor: true },
-  plant: { label: "Plantă", labelEn: "Plant", w: 0.45, d: 0.45, h: 1.0, mount: "floor", color: "#5d8f4e" },
-  planter: { label: "Jardinieră", labelEn: "Planter", w: 0.8, d: 0.35, h: 0.4, mount: "floor", color: "#6b4a33", role: "planter", outdoor: true },
-  bbq: { label: "Grătar", labelEn: "BBQ grill", w: 0.9, d: 0.6, h: 1.1, mount: "floor", color: "#26282b", role: "bbq", outdoor: true },
-  lounger: { label: "Șezlong", labelEn: "Sun lounger", w: 0.7, d: 1.9, h: 0.4, mount: "floor", color: "#d8cfbf", role: "sun_lounger", outdoor: true },
-  parasol: { label: "Umbrelă de soare", labelEn: "Parasol", w: 0.4, d: 0.4, h: 2.4, mount: "floor", color: "#e8dcc4", role: "parasol", outdoor: true },
+  chair: { label: "Scaun", labelGen: "scaunului", labelEn: "Chair", w: 0.48, d: 0.5, h: 0.9, mount: "floor", color: "#8a6a4a" },
+  sofa: { label: "Canapea", labelGen: "canapelei", labelEn: "Sofa", w: 2.0, d: 0.9, h: 0.85, mount: "floor", color: "#8c93a0", indoor: true },
+  bed: { label: "Pat", labelGen: "patului", labelEn: "Bed", w: 1.6, d: 2.05, h: 0.5, mount: "floor", color: "#d9d2c3", indoor: true },
+  wardrobe: { label: "Dulap", labelGen: "dulapului", labelEn: "Wardrobe", w: 1.2, d: 0.6, h: 2.1, mount: "floor", color: "#cbb79a", indoor: true },
+  tv: { label: "Televizor", labelGen: "televizorului", labelEn: "TV", w: 1.25, d: 0.08, h: 0.72, mount: "wall", elevation: 1.0, color: "#1d1f22", indoor: true },
+  radiator: { label: "Calorifer", labelGen: "caloriferului", labelEn: "Radiator", w: 0.8, d: 0.1, h: 0.6, mount: "wall", elevation: 0.15, color: "#ededea", indoor: true },
+  plant: { label: "Plantă", labelGen: "plantei", labelEn: "Plant", w: 0.45, d: 0.45, h: 1.0, mount: "floor", color: "#5d8f4e" },
+  planter: { label: "Jardinieră", labelGen: "jardinierei", labelEn: "Planter", w: 0.8, d: 0.35, h: 0.4, mount: "floor", color: "#6b4a33", role: "planter", outdoor: true },
+  bbq: { label: "Grătar", labelGen: "grătarului", labelEn: "BBQ grill", w: 0.9, d: 0.6, h: 1.1, mount: "floor", color: "#26282b", role: "bbq", outdoor: true },
+  lounger: { label: "Șezlong", labelGen: "șezlongului", labelEn: "Sun lounger", w: 0.7, d: 1.9, h: 0.4, mount: "floor", color: "#d8cfbf", role: "sun_lounger", outdoor: true },
+  parasol: { label: "Umbrelă de soare", labelGen: "umbrelei", labelEn: "Parasol", w: 0.4, d: 0.4, h: 2.4, mount: "floor", color: "#e8dcc4", role: "parasol", outdoor: true },
 };
 
 export const ITEM_KINDS = Object.keys(ITEMS) as ItemKind[];
@@ -177,3 +180,6 @@ export function verticalRange(kind: ItemKind, ceilingY: number | null): [number,
   if (s.mount === "wall") return [s.elevation ?? 1, (s.elevation ?? 1) + s.h];
   return [0, s.h];
 }
+
+/** "Vas WC" → "vas WC" (only the first letter, so abbreviations stay). */
+export const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);

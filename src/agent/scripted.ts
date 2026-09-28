@@ -5,6 +5,7 @@ import type { Quote } from "@/domain/quote";
 import { fold } from "@/domain/search";
 import type { Customer, Lang, MaterialRole, QualityTier } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import { lowerFirst } from "@/domain/items";
 import type { ItemKind } from "@/domain/items";
 import type { SketchOp, Side } from "@/domain/layout";
 import { lei, int } from "@/lib/format";
@@ -563,7 +564,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     } else {
       extraAmounts.push(ch.totalBefore, Math.abs(ch.delta), ...ch.lines.map((l) => Math.abs(l.deltaRon)));
       const sign = ch.delta > 0 ? "+" : ch.delta < 0 ? "−" : "±";
-      const what = ch.edits.join("; ");
+      const what = ch.edits.map(lowerFirst).join("; ");
       reply =
         lang === "en"
           ? `Done — ${what.charAt(0).toLowerCase() + what.slice(1)}. I redrew the sketch and recalculated the list, keeping the products you picked: new total **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`

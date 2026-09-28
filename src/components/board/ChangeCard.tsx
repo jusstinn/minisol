@@ -99,17 +99,17 @@ export default function ChangeCard({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + i * 0.06 }}
-              className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-3 py-[3px]"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 py-[3px]"
             >
               <span className="min-w-0 truncate" title={l.beforeName ? `${l.beforeName} → ${l.name}` : l.name}>
                 {l.label}
-                {l.beforeName && <span className={`ml-1 text-[10.5px] ${tone}`}>{en ? "· product swapped" : "· produs schimbat"}</span>}
-              </span>
-              <span className={`font-mono text-[11.5px] tabular-nums ${tone}`}>
-                {l.before === 0 ? (en ? "new" : "nou") : qty(l.before, lang)} → {l.after === 0 ? (en ? "none" : "0") : qty(l.after, lang)} {l.unit}
               </span>
               <span className={`text-right font-mono text-[11.5px] font-medium tabular-nums ${l.deltaRon > 0 ? "" : l.deltaRon < 0 ? "text-[#2f9e5b]" : tone}`}>
                 {signed(l.deltaRon, lang)}
+              </span>
+              <span className={`col-span-2 -mt-0.5 font-mono text-[10.5px] tabular-nums ${tone} opacity-80`}>
+                {l.before === 0 ? (en ? "new" : "nou") : qty(l.before, lang)} → {l.after === 0 ? (en ? "none" : "0") : qty(l.after, lang)} {l.unit}
+                {l.beforeName && ` · ${en ? "product swapped" : "produs schimbat"}`}
               </span>
             </motion.div>
           ))}
