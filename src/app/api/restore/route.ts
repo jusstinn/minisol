@@ -1,6 +1,7 @@
 import { getDataSources } from "@/adapters";
 import { restoreSharedProject } from "@/agent/restore";
 import { getTenant } from "@/config/tenant";
+import { readJson } from "@/lib/body";
 import { requirePassLink } from "@/lib/passToken";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { memberFromRequest } from "@/lib/session";
@@ -14,7 +15,10 @@ export const runtime = "nodejs";
  * the member comes from the pass-link session like every other route (401 without one).
  */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as { memberId?: string; tenant?: string; lang?: "ro" | "en"; token?: unknown } | null;
+  // A link token is ≤ 12 k characters: refuse anything much bigger before parsing (413).
+  const parsed = await readJson(req, 32_000);
+  if (!parsed.ok) return parsed.res;
+  const body = parsed.body as { memberId?: string; tenant?: string; lang?: "ro" | "en"; token?: unknown } | null;
   if (!body || typeof body.token !== "string" || body.token.length > MAX_TOKEN_CHARS || (!body.memberId && !requirePassLink())) {
     return Response.json({ error: "memberId and token required" }, { status: 400 });
   }

@@ -100,10 +100,11 @@ describe("POST /api/restore", () => {
     expect(data.cards.map((c) => c.kind)).toEqual(["project", "quote", "plan"]);
   });
 
-  it("400s on a link without a project", async () => {
+  it("400s on a link without a project, 413 on an oversized body", async () => {
     vi.stubEnv("REQUIRE_PASS_LINK", "");
     expect((await post({ tenant: "hornbach", memberId: "WL-RO-100231", token: "zAAAA" })).status).toBe(400);
     expect((await post({ tenant: "hornbach", memberId: "WL-RO-100231" })).status).toBe(400);
+    expect((await post({ tenant: "hornbach", memberId: "WL-RO-100231", token: `j${"A".repeat(40_000)}` })).status).toBe(413);
   });
 
   it("product mode: 401 without a pass session, 200 with one (member from the session)", async () => {
