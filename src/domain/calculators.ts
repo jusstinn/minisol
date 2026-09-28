@@ -828,12 +828,11 @@ function paving(p: Params, lang: Lang): CalculationResult {
     "Before digging, find out where cables and water or gas pipes run (ask the utility companies).",
   );
   b.safety("Sacii de 25 kg și pavelele se ridică din genunchi, cu spatele drept — lucrați în doi.", "Lift 25 kg bags and pavers with your legs, back straight — work in pairs.");
-  if (bigJob) {
-    b.safety(
-      "La placa compactoare: antifoane, mănuși și bocanci cu bombeu; ține picioarele departe de placă.",
-      "With a plate compactor: ear defenders, gloves and steel-toe boots; keep your feet clear of the plate.",
-    );
-  }
+  // Always the same note (not only for big jobs), so resizing a path doesn't raise it as a new warning.
+  b.safety(
+    "La compactare: mănuși și bocanci cu bombeu; la placa compactoare și antifoane — ține picioarele departe de placă.",
+    "When compacting: gloves and steel-toe boots; with a plate compactor also ear defenders — keep your feet clear of the plate.",
+  );
   b.safety("La tăierea pavelelor: ochelari și mască FFP2/FFP3 (praf de siliciu); taie umed când poți.", "When cutting pavers: glasses and an FFP2/FFP3 mask (silica dust); cut wet when you can.");
 
   // Digging by hand (~¼ m³ an hour) dominates; then base, sand and laying; kerbs take a while per metre.

@@ -115,7 +115,7 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 
 | Layer | File | Responsibility |
 |---|---|---|
-| Calculators | `src/domain/calculators.ts` | 7 project types → material requirements by *role* (e.g. `18.4 l interior_paint`), with waste factors and the reasoning shown to the customer |
+| Calculators | `src/domain/calculators.ts` | 8 project types → material requirements by *role* (e.g. `18.4 l interior_paint`), with waste factors and the reasoning shown to the customer |
 | Resolver | `src/domain/resolve.ts` | Role → product line by quality tier and spec match; cheapest pack-size combination (15 l + 5 l beats 2 × 10 l); skips tools the member already owns |
 | Quote engine | `src/domain/quote.ts` | Line totals, best single offer per line, bundles, basket thresholds, loyalty points (tier + category multipliers), redemption cap, stock at chosen store, alternatives, delivery |
 | Offers | `src/domain/offers.ts` | Eligibility by tier, segment, member, validity — targeted offers only with personalisation consent |
@@ -128,6 +128,32 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 | Scripted agent | `src/agent/scripted.ts` | Offline RO/EN intent parser + same tools, used as fallback |
 | Verification | `src/agent/verify.ts` | Every lei amount in the model's reply must exist in the quote; failing replies are replaced by the deterministic one |
 | 3D | `src/components/blueprint/` | Procedural assemblies drawn from the layout, animated build and edit diffs, blueprint/real/exploded views, 2D plan editor |
+
+### Project types
+
+| Type | Say (RO / EN) | Calculated from the sketch | 3D sketch |
+|---|---|---|---|
+| `deck` | „terasă din lemn 4 × 3 m” / “4 × 3 m deck” | boards (by width), joists (cut lists), screws, pedestals (by height), membrane, oil; steps, L/U shapes | membrane → pedestals → joists → boards, steps |
+| `paint_room` | „vopsesc dormitorul 4 × 3,5 m” | walls − openings, ceiling, coats, primer/filler by surface, tape, foil | room shell, taped and painted walls |
+| `laminate_floor` | „parchet în living 5 × 4 m” | laminate + waste (diagonal), underlay, vapour barrier, skirting along the outline, profiles per door | slab → barrier → underlay → planks → skirting |
+| `tiling` | „baie 2,5 × 2 m” / “bathroom” | floor/wall tiles per wall height, adhesive by format, grout, spacers, primer, waterproofing | walls, waterproofing, tiles in the chosen format |
+| `fence` | „gard 20 m, 1,8 m” | panels per run between gates, posts (shared corners), concrete, clips, caps, gates | footings → posts → panels → gates → caps |
+| `drywall_partition` | „perete de gips-carton 3,5 m” | boards (layers, both sides), CW/UW, screws, anchors, tape, compound, wool | tracks → studs → wool → boards |
+| `lawn` | „gazon nou pe 80 mp” | seed, topsoil, fertiliser (new or overseed) | soil → topsoil → growing grass |
+| `paving` | „alee din pavele 6 × 1,2 m”, „curte pavată”, „intrare auto” / “paver path”, “patio”, “driveway” | dig depth, geotextile, crushed stone (10/15/25 cm for path/patio/driveway, +15 % compaction), 4 cm bedding sand, pavers (+5 %, 8 cm for cars), jointing sand by coverage, kerbs along the outline + kerb concrete, tamper or (hired) plate compactor | cut-away: membrane → stone → sand → pavers in the chosen format/colour (running bond) → kerbs on concrete, dug into the lawn |
+
+**Paving** (`paving`, added 2026-09-28) is zone-based like the deck: L/U shapes, resize, placed
+furniture (table, BBQ, loungers, planters, garden lights), plus a *use* (path / patio / driveway —
+cars get 8 cm pavers on a 25 cm base and footway kerbs) and *edging* on/off, both one tap in the plan
+editor or a sentence („fă-o pentru mașini”, „fără borduri”). Catalogue: Betonix pavers sold per m²
+(20 × 10, 30 × 20, 30 × 30; grey, red, sand, anthracite, autumn mix), stone and sand in 25 kg bags or
+1 t big bags, quartz or polymeric jointing sand, concrete kerbs or spiked steel edging (which makes the
+kerb concrete unnecessary — the list says so). Swapping the pavers re-lays the sketch in the new
+format and colour.
+
+| Paver path in L, anthracite, with a garden set | Phone |
+|---|---|
+| ![Paving](docs/screenshots/paving-desktop.png) | ![Paving on a phone](docs/screenshots/paving-phone.png) |
 
 Conversation state (basket, store, project) is round-tripped by the client, so the server is
 stateless and horizontally scalable; history and state from the browser are validated before reuse
@@ -153,7 +179,7 @@ If the model fails after that, the turn completes from the template plan and the
 
 **The sketch shows the actual products** (`src/domain/look.ts`): board width/colour, joist
 section, tile format (incl. wood-look planks in running bond), laminate decor, paint colour,
-panel/gate material — straight from catalogue specs. Swapping an option re-draws the sketch
+panel/gate material, paver format and colour, kerb size — straight from catalogue specs. Swapping an option re-draws the sketch
 (same part ids → the change morphs and glows). Why not real 3D models of each SKU: retailers
 rarely have them, image-to-3D isn't dimensionally reliable, and the sketch is mostly boards,
 tiles and panels whose look is fully described by their specs; hero products can get a GLB later.
@@ -255,7 +281,7 @@ Phone (390 × 844): [project received](docs/screenshots/interaction-share-receiv
 - **Context-aware next steps** (`src/lib/nextSteps.ts`, pure): 3–5 chips from the board — fix first
   (move the list to the nearest store that has everything; *Anulează* right after a change), then a
   reshape per project (steps / L-shape for decks, gate / corner / height for fences, wall tiles to
-  1,2 m for bathrooms, window, door, extend…), the suggested extra by name, WPC for decks, a
+  1,2 m for bathrooms, window, door, extend, an L-turn / edging on-off for paving…), the suggested extra by name, WPC for decks, a
   structural layer to look at (or the realistic view on on-demand tenants), points, cheaper, offers.
   Never repeats what the customer already asked; per-kind caps. Every chip is plain text sent as a
   message, so it also works with the live model — and the tests run **every chip of every starter
