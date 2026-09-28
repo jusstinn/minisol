@@ -66,9 +66,10 @@ streaming.
    route through the store), tick-off boxes, a QR for the till.
 7. Scroll: plan with durations, pro tips, hazard-striped safety box, **7-day weather window**
    (live Open-Meteo forecast, best days to build).
-8. Quick replies: *"Variantă mai ieftină"*, *"Ce oferte am?"* (coupons with personal reasons),
-   *"Unde e totul pe stoc?"* (Romania stock map). Note the **"✓ N amounts verified"** badge
-   under every answer.
+8. **Next steps** under every answer fit the project and its state: *"Mută lista la Berceni"* (stock
+   short at the home store), *"Adaugă trepte"*, *"Fă-o în L: +2 × 2 m în dreapta"*, *"Adaugă ferăstrău
+   unghiular"*, *"Alege deck din WPC"*, *"Plătesc cu puncte"*… Note the **"✓ N amounts verified"**
+   badge under every answer.
 9. **Reshape the project.** Say *"Fă-o în L cu o extindere de 2 × 2 m în dreapta"* or *"Adaugă 3
    trepte în față și ridic-o la 50 cm"* — or tap **Modifică** and drag an edge / tap **+** on the
    plan. Only what changed builds in 3D (new parts glow, removed ones sink away in red), the list
@@ -232,6 +233,60 @@ browser and stay on the device** — nothing is uploaded, except the optional AI
 | Own 3D model (real view) | Calibrated plan + AI-read size sent to the chat | Phone (Schiță tab) |
 | --- | --- | --- |
 | ![](docs/screenshots/uploads-model.png) | ![](docs/screenshots/uploads-plan.png) | ![](docs/screenshots/uploads-phone.png) |
+
+### Client interaction: next steps, send to phone, Click & Collect, hints, a11y
+
+| Next steps that fit the project | Send to phone (QR + link) |
+|---|---|
+| ![Next steps](docs/screenshots/interaction-next-steps.png) | ![Share](docs/screenshots/interaction-share-desktop.png) |
+| **Reserve in store: stock check, nearest store** | **Reserved: code, pickup window, held until** |
+| ![Reserve](docs/screenshots/interaction-reserve-short.png) | ![Reserved](docs/screenshots/interaction-reserve-done.png) |
+| **Compare two options for a job** | **First-run hint on the sketch** |
+| ![Compare](docs/screenshots/interaction-compare-desktop.png) | ![Hint](docs/screenshots/interaction-hint-sketch.png) |
+
+Phone (390 × 844): [project received](docs/screenshots/interaction-share-received.png) →
+[reopened](docs/screenshots/interaction-share-restored.png) ·
+[pickup step](docs/screenshots/interaction-reserve-phone.png) ·
+[reservation on the pass](docs/screenshots/interaction-reserve-wallet.png) ·
+[compare](docs/screenshots/interaction-compare-phone.png) ·
+[chat hint](docs/screenshots/interaction-hint-phone-chat.png) ·
+[English chips](docs/screenshots/interaction-en-chips-phone.png).
+
+- **Context-aware next steps** (`src/lib/nextSteps.ts`, pure): 3–5 chips from the board — fix first
+  (move the list to the nearest store that has everything; *Anulează* right after a change), then a
+  reshape per project (steps / L-shape for decks, gate / corner / height for fences, wall tiles to
+  1,2 m for bathrooms, window, door, extend…), the suggested extra by name, WPC for decks, a
+  structural layer to look at (or the realistic view on on-demand tenants), points, cheaper, offers.
+  Never repeats what the customer already asked; per-kind caps. Every chip is plain text sent as a
+  message, so it also works with the live model — and the tests run **every chip of every starter
+  project (RO + EN) through the offline agent** and check it did what it says. The offline parser
+  learned one thing: *"Adaugă ferăstrăul"* adds just that suggestion.
+- **Send to phone** (header *Pe telefon*): QR + *Copiază link* (+ the native share sheet where there
+  is one). The link carries a snapshot in the URL fragment `#p=` — project type, inputs, the edited
+  sketch, basket sku × qty + role, store, quality, language; **no conversation, no member, nothing
+  personal**; deflate-raw + base64url (≈ 0,4–0,7 kB for the starter projects; plain-JSON fallback).
+  The receiving page moves it out of the address bar (also through the pass-link sign-in), shows
+  *"Trimis de pe alt dispozitiv"* and opens it for the member picked there: `POST /api/restore`
+  (session required in product mode) sanitises it, recalculates the project from the shared sketch
+  and re-prices the customer's own picks for **that** member; the chat says *"Am redeschis proiectul
+  trimis de pe alt dispozitiv"*.
+- **Reserve in store (demo Click & Collect)**: store with its hours, the list's availability there
+  (short lines flagged, one tap to *Rezervă la Berceni* — the nearest store with everything — or
+  reserve the rest), 2-hour pickup windows today/tomorrow from the store's opening hours
+  (`src/lib/pickup.ts`, 08–20 when unknown; ready 2 h after reserving), then a reservation code with
+  barcode, pickup window, *păstrat până* (closing time of the next open day) and *Adaugă în Wallet*
+  (code and window on the pass). Labelled as a demo throughout — nothing reaches the store; the
+  retailer's order API goes behind the same screen (roadmap 3).
+- **Compară variantele**: in the options drawer, any alternative side by side with the one in the
+  list — price for this project with the member's offers (real difference and %), pack sizes,
+  quality, rating, stock, highlights, the better side marked.
+- **First-run hints**: one at a time, only when the target is on screen, never over a dialog or
+  blocking; dismissed by ×, Escape, using the thing or after 14 s, and never shown again
+  (`localStorage` `blueprint:hints:v1`).
+- **Accessibility**: dialogs (cart, wallet pass, share) trap focus, close on Escape and give focus
+  back; chips, phone tabs and pickup windows work with the arrow keys; icon buttons are named; the
+  conversation announces each finished answer once (not every streamed word); secondary text is
+  ≥ 4.5 : 1 (`--ink-3` darkened); every motion animation follows *reduce motion*.
 
 ## Integrating the real systems
 
