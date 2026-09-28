@@ -7,7 +7,7 @@ import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import type { CategoryId, Lang, QualityTier } from "@/domain/types";
 import { int, lei, monthYear } from "@/lib/format";
 import { tr } from "@/lib/i18n";
-import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet } from "../ui/icons";
+import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
 import WalletListModal from "./WalletListModal";
 import OptionsStrip from "./OptionsStrip";
@@ -133,6 +133,16 @@ export default function QuotePanel({
             </button>
           )}
         </div>
+      </div>
+
+      {/* estimate disclaimer — quantities are calculated, not measured */}
+      <div className="mt-4 flex items-start gap-2 rounded-xl bg-paper-2 px-3 py-2 text-[12px] leading-snug text-ink-2">
+        <IconWarn size={14} className="mt-0.5 shrink-0 text-warn" />
+        <span>
+          {lang === "en"
+            ? "Quantities are estimated from your dimensions, with spare for cuts already included (see each line). Measure on site before buying — unopened packs can be returned under the store's return policy."
+            : "Cantitățile sunt estimate din dimensiunile tale, cu rezervă pentru tăieturi inclusă (vezi fiecare linie). Măsoară la fața locului înainte de cumpărare — produsele nedesfăcute se pot returna conform politicii magazinului."}
+        </span>
       </div>
 
       {/* quality tiers */}

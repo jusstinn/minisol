@@ -56,8 +56,18 @@ export default function BlueprintPanel({
 
       {/* title block */}
       <div className="pointer-events-none absolute left-4 top-4 max-w-[70%] sm:left-6 sm:top-5">
-        <div className={`font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
-          FIG. 01 · {project.type.replace("_", " ")}
+        <div className={`flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
+          <span>{lang === "en" ? "Indicative sketch" : "Schiță orientativă"}</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[9px] tracking-[0.12em] ${dark ? "bg-[#0a1f47]/70 text-[#ffd479] ring-1 ring-[#ffd479]/40" : "bg-warn/15 text-ink"}`}
+            title={
+              lang === "en"
+                ? "A to-scale visualisation of your dimensions. It does not account for slope, soil, loads or existing structures and is not a construction plan."
+                : "Vizualizare la scară a dimensiunilor tale. Nu ține cont de pantă, teren, sarcini sau structuri existente și nu este un proiect de execuție."
+            }
+          >
+            {lang === "en" ? "not a technical plan" : "nu e proiect tehnic"}
+          </span>
         </div>
         <motion.h2
           key={project.title}
@@ -141,7 +151,7 @@ export default function BlueprintPanel({
           dark ? "border-[#dce9ff]/35 text-[#dce9ff]" : "border-ink/20 text-ink-2"
         }`}
       >
-        <EstRow dark={dark} icon={<IconClock size={12} />} k={lang === "en" ? "Time" : "Timp"} v={`${project.estimate.hoursMin}–${project.estimate.hoursMax} ${tr("hours", lang)}`} />
+        <EstRow dark={dark} icon={<IconClock size={12} />} k={lang === "en" ? "Est. time" : "Timp estimat"} v={`${project.estimate.hoursMin}–${project.estimate.hoursMax} ${tr("hours", lang)}`} />
         <EstRow dark={dark} icon={<IconUsers size={12} />} k={lang === "en" ? "Crew" : "Echipă"} v={`${project.estimate.people} ${tr("people", lang)}`} />
         <EstRow
           dark={dark}

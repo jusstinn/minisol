@@ -267,9 +267,10 @@ function PassStack({
 
 function TitleBlock({ lang }: { lang: Lang }) {
   const date = new Date().toLocaleDateString(lang === "en" ? "en-GB" : "ro-RO");
+  // Deliberately NOT a technical-drawing title block: this is an indicative sketch.
   const rows: [string, string][] = [
-    [lang === "en" ? "Drawn by" : "Desenat", "Blueprint AI"],
-    [lang === "en" ? "Scale" : "Scara", "1:50"],
+    [lang === "en" ? "Type" : "Tip", lang === "en" ? "Indicative sketch" : "Schiță orientativă"],
+    [lang === "en" ? "From" : "Din", lang === "en" ? "your dimensions" : "dimensiunile tale"],
     [lang === "en" ? "Date" : "Data", date],
   ];
   return (

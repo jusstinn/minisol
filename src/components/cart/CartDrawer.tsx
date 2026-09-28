@@ -203,7 +203,11 @@ export default function CartDrawer({
                         <IconWallet size={18} />
                       </button>
                     </div>
-                    <div className="mt-2 text-center font-mono text-[9.5px] text-ink-3">{en ? "Demo checkout — no order is placed" : "Checkout demo — nu se plasează nicio comandă"}</div>
+                    <div className="mt-2 text-center font-mono text-[9.5px] leading-relaxed text-ink-3">
+                      {en ? "Estimated quantities — measure on site before buying." : "Cantități estimate — măsoară la fața locului înainte de cumpărare."}
+                      <br />
+                      {en ? "Demo checkout — no order is placed" : "Checkout demo — nu se plasează nicio comandă"}
+                    </div>
                   </div>
                 </>
               )}
