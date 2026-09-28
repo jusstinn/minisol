@@ -6,6 +6,7 @@ import { fold } from "@/domain/search";
 import type { Customer, Lang, MaterialRole, QualityTier } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import type { SketchOp, Side } from "@/domain/layout";
+import { explainEditError } from "@/lib/editErrors";
 import { dec, km, lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
 import { TOOL_STATUS, executeTool, priceBasket } from "./tools";
@@ -31,7 +32,8 @@ type Intent =
   | { kind: "requality"; quality: QualityTier }
   | { kind: "offers" }
   | { kind: "stock" }
-  | { kind: "add_suggestions" }
+  /** `text`: "adaugă uleiul" adds only the suggestions it names. */
+  | { kind: "add_suggestions"; text?: string }
   | { kind: "unsafe"; topic: "electrical" | "gas" | "structural" | "roof" | "asbestos" }
   | { kind: "unknown" };
 
@@ -100,10 +102,19 @@ const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
   ["paint_room", /\b(vops\w*|zugrav\w*|paint\w*|repaint)\b/],
 ];
 
-/** Words that never identify a product/store in "remove X" / "choose X" / "move to X". */
+/** Words that never identify a product/store in "remove X" / "choose X" / "move to X" / "add X". */
 const STOP_WORDS = new Set(
-  "scoate scot elimina sterge remove drop fara vreau nu mai din lista cos coșul alege schimba schimb foloseste inlocuieste loc instead switch use choose prefer prefera varianta variant option optiunea the and with pentru mea meu mele muta move mut lista magazin magazinul store la in pe de cu un una doua sau".split(" "),
+  "scoate scot elimina sterge remove drop fara vreau nu mai din lista cos coșul alege schimba schimb foloseste inlocuieste loc instead switch use choose prefer prefera varianta variant option optiunea the and with pentru mea meu mele muta move mut lista magazin magazinul store la in pe de cu un una doua sau adauga adaug add also too si".split(" "),
 );
+
+/** Content words of a request, lightly stemmed for Romanian articles/plurals: "geotextilul" → "geotextil", "grinzile" → "grinz". */
+function contentWords(text: string): string[] {
+  const stem = (w: string) => (w.length >= 6 ? w.replace(/(urile|ului|elor|ilor|ele|ile|ul|ii|le|a|e|i)$/, "") : w);
+  return text
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
+    .map(stem);
+}
 
 const SIDE_WORDS: [Side, RegExp][] = [
   ["s", /\b(in fata|din fata|la fata|fata casei|front|sud|south)\b/],
@@ -134,12 +145,12 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
   const edits: Partial<SketchOp>[] = [];
 
   if (type === "deck") {
-    const steps = /\b(trept\w*|scari|scara|scarile|steps?|stairs?)\b/.test(t);
+    const steps = /\b(trept\w*|treapt\w*|scari|scara|scarile|steps?|stairs?)\b/.test(t);
     // "ridic-o la 50 cm" — but "3 trepte de 17 cm" is about the steps, not the deck.
     if (RAISE.test(t) && size !== undefined && !(steps && !/\b(ridic\w*|rais\w*)\b/.test(t))) edits.push({ op: "set_height", value: size });
     if (steps) {
       if (removing) edits.push({ op: "remove_steps" });
-      else edits.push({ op: "add_steps", zone: "A", side: side ?? "s", count: countWord(/\b(\d+|o|una|doua|trei|patru|one|two|three|four)\s+(?:trept\w*|steps?|stairs?)\b/) ?? null });
+      else edits.push({ op: "add_steps", zone: "A", side: side ?? "s", count: countWord(/\b(\d+|o|una|doua|trei|patru|one|two|three|four)\s+(?:trept\w*|treapt\w*|steps?|stairs?)\b/) ?? null });
     }
     const base = /\b(pe|on)\s+(beton|placa|concrete|slab)\b/.test(t) ? "concrete_slab" : /\b(pe|on)\s+(pietris|gravel)\b/.test(t) ? "gravel" : /\b(pe|on)\s+(pamant|soil|earth)\b/.test(t) ? "soil" : undefined;
     if (base) edits.push({ op: "set_option", key: "base", value: base });
@@ -240,6 +251,26 @@ export function parseView(t: string): UiCommand | null {
   return Object.keys(c).length ? c : null;
 }
 
+/**
+ * "Da" / "yes please" answering the question that ended the previous reply: "…vrei să adaug și X?" adds the
+ * suggestions, "…la **Berceni** (9,9 km) e tot — mut lista acolo?" moves the list. Whichever was asked last wins.
+ */
+export function answerToQuestion(raw: string, history: unknown[] | undefined): Intent | null {
+  const t = fold(raw).trim();
+  if (t.length > 40 || !/^(da|yes|yep|yeah|sure|ok|okay|sigur|desigur|bine|hai|go ahead|do it|please)\b/.test(t) || /\b(nu|no|not)\b/.test(t)) return null;
+  const last = [...(history ?? [])]
+    .reverse()
+    .find((m): m is { role: string; content: string } => !!m && typeof m === "object" && (m as { role?: unknown }).role === "assistant" && typeof (m as { content?: unknown }).content === "string");
+  if (!last) return null;
+  const c = fold(last.content);
+  const add = Math.max(c.lastIndexOf("vrei sa adaug"), c.lastIndexOf("want me to add"), c.lastIndexOf("le adaug"));
+  const move = last.content.match(/\*\*([^*]+)\*\*\s*\([^)]*\)\s*(?:e tot|has everything)/);
+  const moveAt = Math.max(c.lastIndexOf("mut lista acolo"), c.lastIndexOf("move your list there"));
+  if (add >= 0 && add > moveAt) return { kind: "add_suggestions" };
+  if (move && moveAt >= 0) return { kind: "move", text: fold(move[1]) };
+  return null;
+}
+
 /** The project type mentioned in the latest earlier user message, if any. */
 function projectTypeFromHistory(history: unknown[] | undefined): ProjectType | undefined {
   for (const it of [...(history ?? [])].reverse()) {
@@ -287,12 +318,12 @@ export function parseIntent(raw: string, state: SessionState): Intent {
     if (/\b(ofert\w*|offer\w*|reducer\w*|discount\w*|cupon\w*)\b/.test(t)) return { kind: "offers" };
     if (/\b(muta\w*|move|transfer\w*|schimba magazinul|other store|alt magazin)\b/.test(t)) return { kind: "move", text: t };
     if (/\b(stoc\w*|stock|unde|where|magazin\w*|store\w*)\b/.test(t)) return { kind: "stock" };
-    if (/\b(sugest\w*|suggest\w*|extra\w*)\b/.test(t) || /^\s*(adauga|add)\s*(le|them|tot|all)?\s*[.!]?\s*$/.test(t)) return { kind: "add_suggestions" };
+    if (/\b(sugest\w*|suggest\w*|extra\w*)\b/.test(t) || /^\s*(adauga|add)[\s-]*(le|them|tot|all)?(\s+pe toate)?\s*[.!]?\s*$/.test(t)) return { kind: "add_suggestions" };
     if (/\b(scoate\w*|elimina\w*|sterge\w*|remove|drop|nu mai vreau|fara)\b/.test(t)) return { kind: "remove", text: t };
     if (/\b(alege\w*|schimba\w*|foloseste|inlocuieste|in loc de|instead|switch|use|choose|prefer\w*)\b/.test(t)) return { kind: "choose", text: t };
     // "o vreau din WPC", "made of larch"
     if (/\b(din|made of|in)\s+(pin|larice|wpc|compozit\w*|brad|pine|larch|composite)\b/.test(t)) return { kind: "choose", text: t };
-    if (/\b(adaug\w*|add)\b/.test(t)) return { kind: "add_suggestions" };
+    if (/\b(adaug\w*|add)\b/.test(t)) return { kind: "add_suggestions", text: t };
   }
   if (!type) return { kind: "unknown" };
 
@@ -519,7 +550,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   const status = (tool: string): AgentEvent => ({ type: "status", tool, label: TOOL_STATUS[tool]?.[lang] ?? tool });
 
   yield { type: "mode", mode: "scripted", reason: opts.reason };
-  const intent = parseIntent(opts.message, state);
+  const intent = (state.project && answerToQuestion(opts.message, opts.history)) || parseIntent(opts.message, state);
   let reply = "";
   let lastQuote: Quote | undefined;
   const extraAmounts: number[] = [];
@@ -538,6 +569,18 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     }
     if (r.ui) yield { type: "ui", command: r.ui } as AgentEvent;
     return r;
+  };
+
+  /** The session's suggestions named in the text ("adaugă uleiul" → the decking oil). */
+  const namedSuggestions = async (text: string) => {
+    const words = contentWords(text);
+    if (!words.length || !state.suggestions?.length) return [];
+    const products = new Map((await opts.sources.catalog.getMany(state.suggestions.map((sg) => sg.sku))).map((p) => [p.sku, p]));
+    return state.suggestions.filter((sg) => {
+      const p = products.get(sg.sku);
+      const hay = fold(`${p?.name ?? ""} ${p?.nameEn ?? ""} ${MATERIAL_ROLES[sg.role]?.label ?? ""} ${MATERIAL_ROLES[sg.role]?.labelEn ?? ""}`);
+      return words.some((w) => hay.includes(w));
+    });
   };
 
   if (intent.kind === "project" && !intent.missing) {
@@ -595,8 +638,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     const r = yield* runTool("edit_sketch", { edits: intent.edits.map((e) => ({ ...blank, option: null, ...e })) }, 700);
     const ch = r.cards?.find((c): c is Extract<Card, { kind: "change" }> => c.kind === "change")?.change;
     if (!ch) {
-      const err = (r.forModel as { error?: string }).error ?? "";
-      reply = lang === "en" ? `I couldn't change the sketch that way (${err}). Try another size or side?` : `Nu am putut modifica schița așa (${err}). Încercăm altă dimensiune sau latură?`;
+      const err = explainEditError((r.forModel as { error?: string }).error ?? "", lang);
+      reply = lang === "en" ? `I couldn't change the sketch that way: ${err}. Try another size or side?` : `Nu am putut modifica schița așa: ${err}. Încercăm altă dimensiune sau latură?`;
     } else {
       extraAmounts.push(ch.totalBefore, Math.abs(ch.delta), ...ch.lines.map((l) => Math.abs(l.deltaRon)));
       const sign = ch.delta > 0 ? "+" : ch.delta < 0 ? "−" : "±";
@@ -676,12 +719,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       .join(" ");
   } else if ((intent.kind === "choose" || intent.kind === "remove" || intent.kind === "move") && state.project) {
     const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
-    // Light stemming for Romanian articles/plurals: "geotextilul" → "geotextil", "grinzile" → "grinz".
-    const stem = (w: string) => (w.length >= 6 ? w.replace(/(urile|ului|elor|ilor|ele|ile|ul|ii|le|a|e|i)$/, "") : w);
-    const words = intent.text
-      .split(/[^a-z0-9]+/)
-      .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
-      .map(stem);
+    const words = contentWords(intent.text);
     const hit = (name: string) => words.filter((w) => fold(name).includes(w)).length;
     let op: Record<string, unknown> | null = null;
     let storeId: string | null = null;
@@ -752,8 +790,19 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
               : en ? `Switched to ${label}, sized for your project — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am trecut la ${label}, calculat pentru proiectul tău — total nou **${lei(q.quote.total, lang)}**${delta}.`;
       }
     }
+  } else if (intent.kind === "add_suggestions" && intent.text && state.project && !(await namedSuggestions(intent.text)).length) {
+    // "Adaugă o bancă": not something we suggested — don't add every extra instead.
+    const names = (await opts.sources.catalog.getMany((state.suggestions ?? []).map((sg) => sg.sku))).map((p) => (lang === "en" ? p.nameEn : p.name).split(",")[0]);
+    reply = names.length
+      ? lang === "en"
+        ? `I can add the suggested extras: ${names.slice(0, 3).join("; ")}. Which one? For other products, open the options on a line of the list.`
+        : `Pot adăuga extra-urile sugerate: ${names.slice(0, 3).join("; ")}. Pe care? Pentru alte produse, deschide opțiunile de pe o linie din listă.`
+      : lang === "en"
+        ? "I didn't find that among this project's materials — you can change products from the options on each line of the list."
+        : "Nu am găsit asta printre materialele proiectului — poți schimba produsele din opțiunile de pe fiecare linie a listei.";
   } else if (intent.kind === "add_suggestions" && state.project && state.suggestions?.length) {
-    const added = state.suggestions.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
+    const chosen = intent.text ? await namedSuggestions(intent.text) : state.suggestions;
+    const added = chosen.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
     const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
     const r = yield* runTool("modify_basket", { operations: added, storeId: null }, 500);
     const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getDataSources } from "@/adapters";
 import { getTenant } from "@/config/tenant";
 import type { ProjectType } from "@/domain/calculators";
-import { findDims, itemName, parseIntent, runScriptedAgent, shortName } from "../scripted";
+import { answerToQuestion, findDims, itemName, parseIntent, runScriptedAgent, shortName } from "../scripted";
 import type { AgentEvent, SessionState } from "../types";
 
 /** QA 2026-09-28: phrasings the offline parser used to misread. */
@@ -97,6 +97,39 @@ describe("follow-ups on an existing project", () => {
     expect(parseIntent("montaj diagonal", on("laminate_floor"))).toMatchObject({ kind: "sketch", edits: [{ op: "set_option", key: "pattern", value: "diagonal" }] });
     expect(parseIntent("o vreau din WPC", on("deck"))).toMatchObject({ kind: "choose" });
   });
+});
+
+describe("adding things and answering 'da'", () => {
+  it("'adaugă o treaptă' is one step (singular 'treaptă' used to fall through to 'add every extra')", () => {
+    expect(parseIntent("adaugă o treaptă în față", on("deck"))).toMatchObject({ kind: "sketch", edits: [{ op: "add_steps", count: 1 }] });
+    expect(parseIntent("adaugă-le", on("deck"))).toEqual({ kind: "add_suggestions" });
+    expect(parseIntent("adaugă o bancă", on("deck"))).toMatchObject({ kind: "add_suggestions", text: expect.any(String) });
+  });
+
+  it("'da' answers the question the last reply ended with", () => {
+    const reply = (content: string) => [{ role: "user", content: "x" }, { role: "assistant", content }];
+    const both = "…la **Atelier București Berceni** (9,9 km) e tot — mut lista acolo? Opțional: vrei să adaug și ferăstrău unghiular?";
+    expect(answerToQuestion("Da", reply(both))).toEqual({ kind: "add_suggestions" });
+    expect(answerToQuestion("da, te rog", reply("Varianta economică costă **2.664,40 lei**. La X nu ajunge stocul pentru plot; la **Atelier București Berceni** (9,9 km) e tot — mut lista acolo?"))).toEqual({
+      kind: "move",
+      text: "atelier bucuresti berceni",
+    });
+    expect(answerToQuestion("Yes please", reply("…**Atelier Timișoara 2** (3.4 km) has everything — shall I move your list there?"))).toMatchObject({ kind: "move" });
+    expect(answerToQuestion("nu, mersi", reply(both))).toBeNull();
+    expect(answerToQuestion("da", reply("Gata — 3 trepte de 1,5 m pe latura de sud."))).toBeNull();
+  });
+
+  it("an unknown 'adaugă X' offers the suggestions instead of adding them all", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    let state: SessionState = empty;
+    for await (const ev of runScriptedAgent({ sources, tenant, customer, message: "Vreau o terasă de 4 x 3 m", state, lang: "ro" })) if (ev.type === "state") state = ev.state;
+    const events: AgentEvent[] = [];
+    for await (const ev of runScriptedAgent({ sources, tenant, customer, message: "adaugă o bancă", state, lang: "ro" })) events.push(ev);
+    expect(events.some((e) => e.type === "card" && e.card.kind === "quote")).toBe(false);
+    expect(events.filter((e) => e.type === "text").map((e) => (e as { delta: string }).delta).join("")).toMatch(/Pot adăuga extra-urile sugerate/);
+  }, 20000);
 });
 
 describe("reply wording", () => {
