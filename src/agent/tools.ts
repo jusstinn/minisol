@@ -59,7 +59,7 @@ const nullable = (schema: Record<string, unknown>) => ({
 
 // ───────────────────────────── tool schemas ─────────────────────────────
 
-const PARAM_FIELDS: Record<string, Record<string, unknown>> = {
+export const PARAM_FIELDS: Record<string, Record<string, unknown>> = {
   lengthM: { type: "number", description: "Length in metres (room floor length, deck length, fence length, wall length)" },
   widthM: { type: "number", description: "Width in metres" },
   heightM: { type: "number", description: "Height in metres (room/wall height, fence height)" },

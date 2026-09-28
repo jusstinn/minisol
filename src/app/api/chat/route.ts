@@ -86,7 +86,8 @@ export async function POST(req: Request) {
         try {
           send({ type: "mode", mode: "live" });
           for await (const ev of runAgent({ llm, sources, tenant, customer, message, history, state, lang: body.lang, signal: req.signal })) {
-            streamed = true;
+            // Status lines alone (e.g. the prefilled profile lookup) don't commit us to the live agent.
+            if (ev.type !== "status" && ev.type !== "mode") streamed = true;
             send(ev);
           }
         } catch (e) {

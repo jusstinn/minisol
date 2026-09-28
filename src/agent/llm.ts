@@ -33,6 +33,8 @@ export interface LlmRequest {
 export interface LlmClient {
   stream(req: LlmRequest): AsyncIterable<LlmEvent>;
   userMessage(text: string): unknown;
+  /** A tool call the server already made on the model's behalf (prefilled turn). */
+  toolCall(callId: string, name: string, args: string): unknown;
   toolOutput(callId: string, output: string): unknown;
   /** Make stored history safe & portable for the next turn. */
   sanitizeHistory(items: unknown[]): unknown[];
@@ -108,6 +110,10 @@ export class OpenAIResponsesClient implements LlmClient {
 
   userMessage(text: string) {
     return { role: "user", content: text };
+  }
+
+  toolCall(callId: string, name: string, args: string) {
+    return { type: "function_call", call_id: callId, name, arguments: args };
   }
 
   toolOutput(callId: string, output: string) {
