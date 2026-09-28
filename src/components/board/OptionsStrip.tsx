@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 import type { ChoiceGroup, ProductOptionView } from "@/agent/types";
 import type { QuoteLine } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
@@ -8,6 +9,7 @@ import { lei } from "@/lib/format";
 import { IconCheck } from "../ui/icons";
 import { ProductArt } from "../ui/ProductArt";
 import { ProductName, ProductThumb } from "./ProductSheet";
+import OptionsCompare from "./OptionsCompare";
 
 const QUALITY = {
   budget: { ro: "Economic", en: "Budget", cls: "bg-paper-2 text-ink-2" },
@@ -39,6 +41,9 @@ export default function OptionsStrip({
   const current = group.options.find((o) => isCurrentOption(o, lines, group.role));
   const currentTotal = current?.total ?? lines.filter((l) => l.role === group.role).reduce((s, l) => s + l.netTotal, 0);
   const cheapest = Math.min(...group.options.map((o) => o.total));
+  // "Compară": the option in the list side by side with another one.
+  const [compareKey, setCompareKey] = useState<string | null>(null);
+  const comparing = current && group.options.find((o) => o.key === compareKey && o.key !== current.key);
 
   return (
     <motion.div
@@ -55,6 +60,8 @@ export default function OptionsStrip({
           </div>
           <div className="hidden font-mono text-[10px] text-ink-3 sm:block">{lang === "en" ? "your price, incl. offers" : "prețul tău, cu oferte"}</div>
         </div>
+        {/* minmax(0,1fr): the scrolling row must not widen the list (and the whole board) to its content. */}
+        <div className="grid grid-cols-[minmax(0,1fr)]">
         <div className="thin-scroll -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1">
           {group.options.map((o, i) => {
             const active = current?.key === o.key;
@@ -112,6 +119,18 @@ export default function OptionsStrip({
                     <span className={`h-1.5 w-1.5 rounded-full ${o.inStock ? "bg-ok" : "bg-warn"}`} />
                     {o.inStock ? (lang === "en" ? "In stock at your store" : "Pe stoc în magazinul tău") : lang === "en" ? "Not enough at your store" : "Stoc insuficient în magazin"}
                   </div>
+                  {!active && current && (
+                    <button
+                      onClick={() => setCompareKey(compareKey === o.key ? null : o.key)}
+                      aria-pressed={compareKey === o.key}
+                      aria-label={`${lang === "en" ? "Compare with yours" : "Compară cu ce ai"}: ${o.name}`}
+                      className={`mt-2 w-full rounded-lg py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition ${
+                        compareKey === o.key ? "bg-accent/15 text-ink" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
+                      }`}
+                    >
+                      ⇆ {lang === "en" ? "Compare" : "Compară"}
+                    </button>
+                  )}
                   <button
                     onClick={() => !active && onChoose(group, o)}
                     disabled={active}
@@ -134,6 +153,23 @@ export default function OptionsStrip({
             );
           })}
         </div>
+        </div>
+        <AnimatePresence>
+          {comparing && current && (
+            <OptionsCompare
+              key={comparing.key}
+              group={group}
+              current={current}
+              other={comparing}
+              lang={lang}
+              onChoose={(g, o) => {
+                setCompareKey(null);
+                onChoose(g, o);
+              }}
+              onClose={() => setCompareKey(null)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
