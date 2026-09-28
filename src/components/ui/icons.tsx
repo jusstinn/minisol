@@ -208,6 +208,20 @@ export const IconRuler = ({ size, ...p }: P) => (
   </svg>
 );
 
+/** Drafting pencil — edit the sketch. */
+export const IconPencil = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z" />
+    <path d="M14.5 6.5l3 3M4 20l4-1" />
+  </svg>
+);
+export const IconUndo = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M9 14L4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 010 11H11" />
+  </svg>
+);
+
 /** Blueprint wordmark glyph: a square with dimension ticks. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {
   return (

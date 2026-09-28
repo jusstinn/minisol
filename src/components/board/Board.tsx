@@ -9,6 +9,8 @@ import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
 import type { Board as BoardState } from "@/lib/useAgent";
 import BlueprintPanel from "./BlueprintPanel";
+import type { SketchControls } from "./BlueprintPanel";
+import ChangeCard from "./ChangeCard";
 import OffersPanel from "./OffersPanel";
 import PlanPanel from "./PlanPanel";
 import ProductsPanel from "./ProductsPanel";
@@ -30,10 +32,12 @@ interface Props {
   /** Mobile: render only these cards, inline in the conversation. */
   onlyCards?: Card[];
   inline?: boolean;
+  /** Sketch editing (plan editor, undo, on-demand sketch). */
+  sketch?: SketchControls;
 }
 
 export default function Board(props: Props) {
-  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onChoose, onlyCards, inline } = props;
+  const { board, tenant, lang, highlight, onHighlight, onQty, onAdd, onMoveStore, onTier, onChoose, onlyCards, inline, sketch } = props;
 
   if (onlyCards) {
     return (
@@ -56,8 +60,24 @@ export default function Board(props: Props) {
 
   function renderCard(c: Card) {
     switch (c.kind) {
-      case "project":
-        return <BlueprintPanel project={c.project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} />;
+      case "project": {
+        // Only the current project is editable; older snapshots in the conversation stay as they were.
+        const current = board.project?.id === c.id;
+        return (
+          <BlueprintPanel
+            project={current ? board.project!.project : c.project}
+            tenant={tenant}
+            lang={lang}
+            highlight={highlight}
+            onHighlight={onHighlight}
+            inline={inline}
+            sketch={current ? sketch : undefined}
+            change={current ? board.change : undefined}
+          />
+        );
+      }
+      case "change":
+        return <ChangeCard change={c.change} lang={lang} />;
       case "quote":
         return (
           <QuotePanel

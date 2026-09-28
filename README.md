@@ -69,9 +69,14 @@ streaming.
 8. Quick replies: *"Variantă mai ieftină"*, *"Ce oferte am?"* (coupons with personal reasons),
    *"Unde e totul pe stoc?"* (Romania stock map). Note the **"✓ N amounts verified"** badge
    under every answer.
-9. Switch to Maria → **"Gazon nou"** (garden ×3 points), James → **"New bathroom"** in English,
+9. **Reshape the project.** Say *"Fă-o în L cu o extindere de 2 × 2 m în dreapta"* or *"Adaugă 3
+   trepte în față și ridic-o la 50 cm"* — or tap **Modifică** and drag an edge / tap **+** on the
+   plan. Only what changed builds in 3D (new parts glow, removed ones sink away in red), the list
+   is recalculated keeping the products you picked, and a receipt shows every material and the
+   price difference (**Anulează** undoes it). Raising the deck swaps in taller pedestals by itself.
+10. Switch to Maria → **"Gazon nou"** (garden ×3 points), James → **"New bathroom"** in English,
    Elena → no personalisation consent. Try the mic button (voice, ro-RO / en-GB).
-10. Close with **/pitch?retailer=hornbach** — the ROI calculator and the 6-week pilot plan.
+11. Close with **/pitch?retailer=hornbach** — the ROI calculator and the 6-week pilot plan.
 
 ## How it works
 
@@ -107,14 +112,36 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 | Resolver | `src/domain/resolve.ts` | Role → product line by quality tier and spec match; cheapest pack-size combination (15 l + 5 l beats 2 × 10 l); skips tools the member already owns |
 | Quote engine | `src/domain/quote.ts` | Line totals, best single offer per line, bundles, basket thresholds, loyalty points (tier + category multipliers), redemption cap, stock at chosen store, alternatives, delivery |
 | Offers | `src/domain/offers.ts` | Eligibility by tier, segment, member, validity — targeted offers only with personalisation consent |
-| Agent tools | `src/agent/tools.ts` | `get_customer_context`, `calculate_project`, `modify_basket`, `search_products`, `check_stock`, `get_offers`, `present_plan` |
+| Layout | `src/domain/layout.ts` | The editable sketch per project (zones, steps, openings, fence corners/gates), validated edit ops, geometry helpers |
+| Agent tools | `src/agent/tools.ts` | `get_customer_context`, `calculate_project`, `edit_sketch`, `modify_basket`, `search_products`, `check_stock`, `get_offers`, `present_plan` |
 | Agent loop | `src/agent/run.ts`, `llm.ts` | Streaming tool-use loop behind a provider-neutral `LlmClient` interface |
 | Scripted agent | `src/agent/scripted.ts` | Offline RO/EN intent parser + same tools, used as fallback |
 | Verification | `src/agent/verify.ts` | Every lei amount in the model's reply must exist in the quote; failing replies are replaced by the deterministic one |
-| 3D | `src/components/blueprint/` | Procedural assemblies for each project type, animated build, blueprint/real/exploded views |
+| 3D | `src/components/blueprint/` | Procedural assemblies drawn from the layout, animated build and edit diffs, blueprint/real/exploded views, 2D plan editor |
 
 Conversation state (basket, store, project) is round-tripped by the client, so the server is
-stateless and horizontally scalable; history from the browser is sanitised before reuse.
+stateless and horizontally scalable; history and state from the browser are validated before reuse
+(`src/agent/state.ts`).
+
+### The editable sketch
+
+Every project has a **layout** (`src/domain/layout.ts`) — zones (L/U shapes), deck height and steps,
+fence corners and gates, doors/windows, per-wall tile heights. It is the single source of truth:
+the calculators compute quantities from it and the 3D builders draw it, so the sketch and the
+shopping list can't disagree.
+
+- Edits are validated `SketchOp`s (`resize`, `add_zone`, `add_steps`, `set_height`, `add_opening`,
+  `add_fence_segment`, `set_wall_tiles`, `set_option`, …) with a readable change log.
+- The agent uses them through the **`edit_sketch`** tool; the plan editor posts the same ops to
+  **`/api/sketch`** (no LLM call — instant and free). Both keep the customer's product picks
+  (unless they no longer fit, e.g. pedestals after raising a deck), leave out what they removed and
+  return a **change card**: per-material difference and the price delta, which the verifier accepts.
+- The 3D scene diffs part ids between builds, so an edit animates only new/resized/removed parts,
+  and the camera glides instead of jumping.
+- **When to sketch** is per retailer: `sketch: "auto"` draws every project (demos), `"on_demand"`
+  shows a light card with a *Schițează proiectul* button and only builds the 3D when asked
+  (production — most people just want the list). Override with `?sketch=auto|on_demand`.
+- Cost: hand edits cost nothing (deterministic); an edit by chat is one normal agent turn.
 
 ## Integrating the real systems
 
@@ -162,7 +189,9 @@ npm run eval                 # live-model scenarios with automatic accuracy chec
 ## Configuration
 
 See `.env.example`. Key ones: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-5.4-mini`),
-`AGENT_MODE=scripted`, `TENANT`, `DATA_SOURCE`.
+`AGENT_MODE=scripted`, `TENANT`, `DATA_SOURCE`. Per retailer (`src/config/tenant.ts`): brand,
+colours, loyalty programme name and `sketch: "auto" | "on_demand"` (demo tenant: auto; HORNBACH and
+Brico Nord: on demand).
 
 > **Note on the current OpenAI key:** the account is on a low usage tier (≈50 requests/day
 > for `gpt-5.4-mini`, 3 req/min for `gpt-5.5`). One customer turn uses 3–4 requests. Add a

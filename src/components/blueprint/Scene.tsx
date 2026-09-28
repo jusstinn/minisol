@@ -117,7 +117,9 @@ function nextTrack(prev: Track, build: Build, replayKey: Track["replayKey"]): Tr
 
 function Driver({ shared, mode }: { shared: Shared; mode: ViewMode }) {
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.05);
+    // Real time (so slow devices don't play the build in slow motion), capped so a
+    // background tab doesn't skip the whole animation when it comes back.
+    const dt = Math.min(delta, 0.25);
     shared.clock.current += dt;
     const target = mode === "exploded" ? 1 : 0;
     shared.explode.current += (target - shared.explode.current) * Math.min(1, dt * 5);
@@ -147,6 +149,8 @@ function PartMesh({
   const ref = useRef<THREE.Mesh>(null);
   const mat = useRef<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>(null);
   const glow = useMemo(() => new THREE.Color(anim.kind === "leave" ? REMOVED : accent), [anim.kind, accent]);
+  /** Last glow applied; once a part has settled (0) the material is left to its props. */
+  const lastGlow = useRef(-1);
   const leaving = anim.kind === "leave";
   const blue = mode !== "real";
   const baseColor = highlighted ? accent : blue ? (part.context ? "#4f82ea" : "#5b8cf0") : part.color;
@@ -216,6 +220,8 @@ function PartMesh({
     const mtl = mat.current;
     if (!mtl) return;
     const g = leaving ? 1 : anim.kind === "new" || anim.kind === "changed" ? 1 - clamp01((age - PART_DUR * 0.5) / GLOW_DUR) : 0;
+    if (g === 0 && lastGlow.current === 0 && !leaving) return;
+    lastGlow.current = g;
     mtl.color.set(baseColor);
     if (g > 0) mtl.color.lerp(glow, g);
     if (blue) mtl.opacity = (leaving ? 1 - e : 1) * lerp(baseOpacity, 0.7, g);
@@ -415,13 +421,13 @@ function LabelProjector({ labels, els, shared }: { labels: OverlayLabel[]; els: 
   return null;
 }
 
-function CameraRig({ build, compact, epoch }: { build: Build; compact: boolean; epoch: number }) {
+function CameraRig({ build, compact, epoch, focusLeft }: { build: Build; compact: boolean; epoch: number; focusLeft: boolean }) {
   const { camera, controls, size } = useThree() as unknown as {
     camera: THREE.PerspectiveCamera;
     controls: { target: THREE.Vector3; update: () => void } | null;
     size: { width: number; height: number };
   };
-  const framed = useRef<{ epoch: number; w: number; h: number; compact: boolean } | null>(null);
+  const framed = useRef<{ epoch: number; compact: boolean } | null>(null);
   /** After an edit the camera eases to the new framing instead of jumping (and keeps the user's angle). */
   const glide = useRef<{ dist: number; target: THREE.Vector3 } | null>(null);
 
@@ -432,31 +438,32 @@ function CameraRig({ build, compact, epoch }: { build: Build; compact: boolean; 
     const aspect = size.width / Math.max(1, size.height);
     const vfov = (camera.fov * Math.PI) / 180;
     const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
-    const dist = (radius / Math.sin(Math.min(vfov, hfov) / 2)) * (compact ? 1.05 : 0.95);
+    // While the plan editor covers the right side, the model has ~55% of the width.
+    const dist = (radius / Math.sin(Math.min(vfov, hfov * (focusLeft ? 0.54 : 1)) / 2)) * (compact ? 1.05 : 0.95);
     const target = new THREE.Vector3(0, H * 0.25, 0);
     camera.near = 0.05;
     camera.far = Math.max(400, dist * 4);
+    // On the board the title block sits top-left: shift the projection (not the orbit pivot)
+    // so the model renders lower-right and still spins around its own centre; when editing,
+    // shift it left of the plan editor instead.
+    if (compact) camera.clearViewOffset();
+    else camera.setViewOffset(size.width, size.height, focusLeft ? size.width * 0.235 : -size.width * 0.09, -size.height * 0.07, size.width, size.height);
+    camera.updateProjectionMatrix();
     const f = framed.current;
-    const edit = f && f.epoch === epoch && f.w === size.width && f.h === size.height && f.compact === compact;
-    framed.current = { epoch, w: size.width, h: size.height, compact };
-    if (edit && controls) {
+    const same = f && f.epoch === epoch && f.compact === compact;
+    framed.current = { epoch, compact };
+    if (same && controls) {
       glide.current = { dist, target };
-      camera.updateProjectionMatrix();
       return;
     }
     glide.current = null;
     const dir = new THREE.Vector3(0.9, 0.75, 1).normalize();
     camera.position.copy(dir.multiplyScalar(dist)).add(target);
-    // On the board the title block sits top-left: shift the projection (not the orbit pivot)
-    // so the model renders lower-right and still spins around its own centre.
-    if (compact) camera.clearViewOffset();
-    else camera.setViewOffset(size.width, size.height, -size.width * 0.09, -size.height * 0.07, size.width, size.height);
-    camera.updateProjectionMatrix();
     if (controls) {
       controls.target.copy(target);
       controls.update();
     }
-  }, [build, camera, controls, compact, epoch, size.width, size.height]);
+  }, [build, camera, controls, compact, epoch, focusLeft, size.width, size.height]);
 
   const off = useMemo(() => new THREE.Vector3(), []);
   useFrame((_, delta) => {
@@ -484,9 +491,11 @@ export interface SceneProps {
   interactive?: boolean;
   /** Called after an edit with how many parts were added, changed and removed. */
   onDiff?: (d: { added: number; changed: number; removed: number }) => void;
+  /** Keep the model left of an overlay on the right (plan editor). */
+  focusLeft?: boolean;
 }
 
-export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff }: SceneProps) {
+export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -577,7 +586,7 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
         minDistance={1.5}
         maxDistance={120}
       />
-      <CameraRig build={build} compact={compact} epoch={current.epoch} />
+      <CameraRig build={build} compact={compact} epoch={current.epoch} focusLeft={focusLeft && !compact} />
     </Canvas>
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {labels.map((l) => (

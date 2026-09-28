@@ -17,6 +17,12 @@ export interface Tenant {
   programName: string;
   country: string;
   currency: "RON";
+  /**
+   * When the 3D sketch is drawn: "auto" for every project (demos, pitches) or
+   * "on_demand" — only when the customer taps "Sketch my project" (production:
+   * most people just want the list; the sketch is an extra). ?sketch=auto|on_demand overrides.
+   */
+  sketch: "auto" | "on_demand";
 }
 
 export const TENANTS: Record<string, Tenant> = {
@@ -29,6 +35,7 @@ export const TENANTS: Record<string, Tenant> = {
     programName: "Atelier Club",
     country: "RO",
     currency: "RON",
+    sketch: "auto",
   },
   hornbach: {
     id: "hornbach",
@@ -39,6 +46,7 @@ export const TENANTS: Record<string, Tenant> = {
     programName: "HORNBACH Club",
     country: "RO",
     currency: "RON",
+    sketch: "on_demand",
   },
   brico: {
     id: "brico",
@@ -49,6 +57,7 @@ export const TENANTS: Record<string, Tenant> = {
     programName: "Brico Nord Plus",
     country: "RO",
     currency: "RON",
+    sketch: "on_demand",
   },
 };
 

@@ -138,6 +138,7 @@ export default function Workspace({
                 onMoveStore={agent.moveStore}
                 onTier={agent.applyTier}
                 onChoose={agent.chooseOption}
+                sketch={agent.sketch}
                 inline
               />
             )
@@ -156,6 +157,7 @@ export default function Workspace({
             onMoveStore={agent.moveStore}
             onTier={agent.applyTier}
                 onChoose={agent.chooseOption}
+                sketch={agent.sketch}
           />
         </div>
         )}
@@ -208,6 +210,7 @@ export default function Workspace({
               onMoveStore={agent.moveStore}
               onTier={agent.applyTier}
                 onChoose={agent.chooseOption}
+                sketch={agent.sketch}
             />
           </motion.div>
         )}

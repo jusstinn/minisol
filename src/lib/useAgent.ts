@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { AgentEvent, Card, ChoiceGroup, ProductOptionView, QualityOption, SessionState } from "@/agent/types";
+import type { SketchOp } from "@/domain/layout";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 
@@ -32,6 +33,8 @@ export interface Board {
   offers?: CardOf<"offers">;
   plan?: CardOf<"plan">;
   products?: CardOf<"products">;
+  /** Last sketch edit (what changed + price delta). */
+  change?: CardOf<"change">;
   /** Most recently updated panel, for scroll-into-view + highlight. */
   last?: Card["kind"];
   version: number;
@@ -83,6 +86,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
       if (!message || busy) return;
       setBusy(true);
       busyRef.current = true;
+      // Undo covers hand edits since the last message; the conversation owns anything older.
+      undoRef.current = [];
+      setUndoDepth(0);
       const aId = uid();
       setMessages((ms) => [
         ...ms,
@@ -265,14 +271,105 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     [reprice],
   );
 
+  // ───────────── sketch editing (plan editor → /api/sketch, no LLM) ─────────────
+  const [sketchBusy, setSketchBusy] = useState(false);
+  const [sketchError, setSketchError] = useState<string | null>(null);
+  const [undoDepth, setUndoDepth] = useState(0);
+  const undoRef = useRef<{ state: SessionState; board: Board }[]>([]);
+  const boardRef = useRef(board);
+  boardRef.current = board;
+  const sketchSeq = useRef(0);
+
+  /** Apply edits to the sketch; the list and price are recalculated server-side. Returns false if rejected. */
+  const editSketch = useCallback(
+    async (edits: SketchOp[]): Promise<boolean> => {
+      if (busyRef.current || !stateRef.current.project || !edits.length) return false;
+      const seq = ++sketchSeq.current;
+      setSketchBusy(true);
+      setSketchError(null);
+      const before = { state: stateRef.current, board: boardRef.current };
+      try {
+        const res = await fetch("/api/sketch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId: opts.memberId, tenant: opts.tenant, lang: opts.lang, state: { ...stateRef.current, basket: pendingRef.current ?? stateRef.current.basket }, edits }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { state?: SessionState; cards?: Card[]; error?: string };
+        if (seq !== sketchSeq.current) return false;
+        if (!res.ok || !data.state) {
+          setSketchError(data.error ?? `HTTP ${res.status}`);
+          return false;
+        }
+        undoRef.current = [...undoRef.current.slice(-19), before];
+        setUndoDepth(undoRef.current.length);
+        stateRef.current = data.state;
+        pendingRef.current = null;
+        repriceSeq.current++;
+        // Hand edits update the cards in place (same ids), so the panel being edited —
+        // e.g. inline in the conversation on a phone — stays the live one.
+        for (const c of data.cards ?? []) {
+          const keep = c.kind === "project" ? boardRef.current.project?.id : c.kind === "quote" ? boardRef.current.quote?.id : undefined;
+          putCard(keep ? ({ ...c, id: keep } as Card) : c);
+        }
+        return true;
+      } catch (e) {
+        if (seq === sketchSeq.current) setSketchError((e as Error).message);
+        return false;
+      } finally {
+        if (seq === sketchSeq.current) setSketchBusy(false);
+      }
+    },
+    [opts.memberId, opts.tenant, opts.lang, putCard],
+  );
+
+  /** Step back to the sketch (and list) before the last edit. */
+  const undoSketch = useCallback(() => {
+    if (busyRef.current) return;
+    const prev = undoRef.current.pop();
+    setUndoDepth(undoRef.current.length);
+    if (!prev) return;
+    sketchSeq.current++;
+    stateRef.current = prev.state;
+    pendingRef.current = null;
+    repriceSeq.current++;
+    setBoard((b) => ({ ...prev.board, change: undefined, last: "project", version: b.version + 1 }));
+    if (prev.board.quote) setPointsDelta(prev.board.quote.quote.points.earned);
+  }, []);
+
+  /** On-demand tenants: the customer asked to see the sketch. */
+  const openSketch = useCallback(() => {
+    const p = stateRef.current.project;
+    if (p) stateRef.current = { ...stateRef.current, project: { ...p, sketched: true } };
+    setBoard((b) => (b.project ? { ...b, project: { ...b.project, project: { ...b.project.project, sketched: true } }, last: "project", version: b.version + 1 } : b));
+  }, []);
+
+  const clearSketchError = useCallback(() => setSketchError(null), []);
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     stateRef.current = { basket: [] };
     historyRef.current = [];
+    undoRef.current = [];
+    setUndoDepth(0);
     setMessages([]);
     setBoard({ version: 0 });
     setPointsDelta(null);
   }, []);
 
-  return { messages, board, busy, send, changeQty, addItem, moveStore, applyTier, chooseOption, reset, pointsDelta, state: stateRef, mode };
+  return {
+    messages,
+    board,
+    busy,
+    send,
+    changeQty,
+    addItem,
+    moveStore,
+    applyTier,
+    chooseOption,
+    reset,
+    pointsDelta,
+    state: stateRef,
+    mode,
+    sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0 },
+  };
 }

@@ -1,0 +1,37 @@
+import { getDataSources } from "@/adapters";
+import { sanitizeState } from "@/agent/state";
+import { applySketchEdit } from "@/agent/tools";
+import { getTenant } from "@/config/tenant";
+import type { SketchOp } from "@/domain/layout";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
+
+export const runtime = "nodejs";
+
+const OPS = new Set<SketchOp["op"]>([
+  "resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening",
+  "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option",
+]);
+
+/**
+ * Apply hand edits from the plan editor — no LLM involved: the same validated
+ * edit ops as the agent's edit_sketch, recalculated and re-priced in one call.
+ */
+export async function POST(req: Request) {
+  const body = (await req.json().catch(() => null)) as { memberId?: string; tenant?: string; lang?: "ro" | "en"; state?: unknown; edits?: unknown } | null;
+  if (!body?.memberId || !Array.isArray(body.edits)) return Response.json({ error: "memberId and edits required" }, { status: 400 });
+  const limit = rateLimit(`sketch:${clientKey(req)}`, 120, 10 * 60_000);
+  if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfterS) } });
+
+  const tenant = getTenant(body.tenant);
+  const sources = getDataSources(tenant.id);
+  const customer = await sources.loyalty.getMember(body.memberId);
+  if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
+  const stores = await sources.stores.list();
+  const state = sanitizeState(body.state as never, stores.map((s) => s.id));
+  const edits = (body.edits as SketchOp[]).filter((e) => e && typeof e === "object" && OPS.has(e.op)).slice(0, 12);
+  const lang = body.lang === "en" ? "en" : body.lang === "ro" ? "ro" : customer.language;
+
+  const r = await applySketchEdit({ sources, customer, state, lang, now: new Date() }, edits, "editor");
+  if (r.error || !r.state) return Response.json({ error: r.error ?? "Edit failed" }, { status: 422 });
+  return Response.json({ state: r.state, cards: r.cards ?? [] });
+}
