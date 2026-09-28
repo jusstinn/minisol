@@ -6,7 +6,9 @@ import type { Tenant } from "@/config/tenant";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { int, lei } from "@/lib/format";
+import { tr } from "@/lib/i18n";
 import WalletListModal from "../board/WalletListModal";
+import { LowestPriceNote, PersonalisedBadge, ReferencePrice, measurePriceLabel } from "../board/QuotePanel";
 import { IconBag, IconCheck, IconClose, IconMinus, IconPin, IconPlus, IconTrash, IconTruck, IconWallet } from "../ui/icons";
 import { Counter } from "../ui/primitives";
 import { ProductArt } from "../ui/ProductArt";
@@ -121,12 +123,19 @@ export default function CartDrawer({
                                   {en ? "Aisle" : "Culoar"} {l.aisle}
                                 </span>
                               </div>
+                              {l.personalised && (
+                                <div className="mt-1.5">
+                                  <PersonalisedBadge lang={lang} programName={tenant.programName} />
+                                </div>
+                              )}
+                              <LowestPriceNote line={l} lang={lang} className="mt-1 text-[9.5px]" />
                             </div>
                             <div className="self-start pt-1 text-right">
-                              {l.discount > 0 && <div className="num text-[10.5px] text-ink-3 line-through">{lei(l.lineTotal, lang)}</div>}
-                              <div className={`num text-[13.5px] font-semibold ${l.discount > 0 ? "text-accent" : ""}`}>
+                              <ReferencePrice line={l} lang={lang} className="text-[10.5px]" />
+                              <div className={`num text-[13.5px] font-semibold ${l.referenceTotal !== undefined ? "text-accent" : ""}`}>
                                 {l.netTotal === 0 ? (en ? "FREE" : "GRATUIT") : lei(l.netTotal, lang)}
                               </div>
+                              {l.measurePrice && <div className="mt-0.5 whitespace-nowrap font-mono text-[9.5px] text-ink-3">{measurePriceLabel(l.measurePrice, lang)}</div>}
                             </div>
                           </motion.li>
                         ))}
@@ -170,7 +179,7 @@ export default function CartDrawer({
                     <dl className="mt-3 space-y-1 text-[13px]">
                       <Row k={en ? "Subtotal" : "Subtotal"} v={lei(quote.subtotal, lang)} />
                       {quote.discounts.map((d) => (
-                        <Row key={d.offerId} k={d.title} v={`−${lei(d.amount, lang)}`} accent />
+                        <Row key={d.offerId} k={d.title} v={`−${lei(d.amount, lang)}`} accent tag={d.personalised ? (en ? "personalised" : "personalizat") : undefined} />
                       ))}
                       {fulfilment === "delivery" && <Row k={en ? "Delivery" : "Livrare"} v={deliveryFee === 0 ? (en ? "free" : "gratuită") : lei(deliveryFee, lang)} />}
                       {redeem && <Row k={en ? "Paid with points" : "Plătit cu puncte"} v={`−${lei(redeemValue, lang)}`} accent />}
@@ -191,6 +200,7 @@ export default function CartDrawer({
                         <div className="display text-[34px] leading-none">
                           <Counter value={payable} lang={lang} /> <span className="text-[16px] text-ink-3">lei</span>
                         </div>
+                        <div className="mt-1 font-mono text-[10px] text-ink-3">{tr("vatIncluded", lang)}</div>
                       </div>
                       <div className="text-right font-mono text-[11px] text-accent">
                         +{int(quote.points.earned, lang)} {en ? "points" : "puncte"}
@@ -209,6 +219,12 @@ export default function CartDrawer({
                     <div className="mt-2 text-center font-mono text-[9.5px] leading-relaxed text-ink-3">
                       {en ? "Estimated quantities — measure on site before buying." : "Cantități estimate — măsoară la fața locului înainte de cumpărare."}
                       <br />
+                      {quote.personalisedPricing && (
+                        <>
+                          {tr("personalisedDisclosure", lang)}
+                          <br />
+                        </>
+                      )}
                       {en ? "Demo checkout — no order is placed" : "Checkout demo — nu se plasează nicio comandă"}
                     </div>
                   </div>
@@ -223,10 +239,13 @@ export default function CartDrawer({
   );
 }
 
-function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
+function Row({ k, v, accent, tag }: { k: string; v: string; accent?: boolean; tag?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="min-w-0 truncate text-ink-2">{k}</dt>
+      <dt className="flex min-w-0 items-baseline gap-1.5 text-ink-2">
+        <span className="truncate">{k}</span>
+        {tag && <span className="shrink-0 rounded-full bg-accent/10 px-1.5 font-mono text-[9px] uppercase tracking-wider text-ink">{tag}</span>}
+      </dt>
       <dd className={`num shrink-0 font-medium ${accent ? "text-accent" : "text-ink"}`}>{v}</dd>
     </div>
   );

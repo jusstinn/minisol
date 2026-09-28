@@ -1,11 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import type { CategoryId, Lang, QualityTier } from "@/domain/types";
-import { int, lei, monthYear } from "@/lib/format";
+import { dec, int, lei, monthYear } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
@@ -98,15 +98,20 @@ export default function QuotePanel({
             <span className="display-cond text-[22px] text-ink-3">lei</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
-            {quote.discountTotal > 0 && (
+            {/* "was" = reduced items at their 30-day lowest price (Omnibus), never at today's list price */}
+            {quote.saving > 0 && (
               <>
-                <span className="num text-ink-3 line-through decoration-accent/70">{lei(quote.subtotal, lang)}</span>
+                <span className="num text-ink-3 line-through decoration-accent/70" title={tr("compareAtHint", lang)}>
+                  <span className="sr-only">{tr("referencePrice", lang)}: </span>
+                  {lei(quote.compareAt, lang)}
+                </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 font-mono text-[11px] font-semibold text-on-accent">
-                  <IconTag size={12} /> {tr("youSave", lang)} {lei(quote.discountTotal + (redeem ? quote.points.redeemableValue : 0), lang)}
+                  <IconTag size={12} /> {tr("youSave", lang)} {lei(quote.saving + (redeem ? quote.points.redeemableValue : 0), lang)}
                 </span>
               </>
             )}
             <span className="font-mono text-[11px] text-ink-3">· {quote.storeName}</span>
+            <span className="font-mono text-[11px] text-ink-3">· {tr("vatIncluded", lang)}</span>
           </div>
         </div>
         <div className="flex flex-col justify-between gap-3 rounded-2xl bg-ink p-4 text-paper sm:min-w-[210px]">
@@ -228,6 +233,7 @@ export default function QuotePanel({
         lines={materials}
         allLines={quote.lines}
         lang={lang}
+        programName={tenant.programName}
         highlight={highlight}
         onHighlight={onHighlight}
         onQty={onQty}
@@ -240,6 +246,7 @@ export default function QuotePanel({
           lines={tools}
           allLines={quote.lines}
           lang={lang}
+          programName={tenant.programName}
           highlight={highlight}
           onHighlight={onHighlight}
           onQty={onQty}
@@ -326,6 +333,7 @@ export default function QuotePanel({
             {tr("delivery", lang)} {quote.delivery.type === "truck" ? tr("truck", lang) : tr("courier", lang)}:{" "}
             {quote.delivery.fee === 0 ? tr("free", lang) : lei(quote.delivery.fee, lang)}
           </span>
+          {quote.personalisedPricing && <span className="mt-1 block font-mono text-[10.5px] leading-snug text-ink-3">{tr("personalisedDisclosure", lang)}</span>}
         </div>
         <div className="flex gap-2">
           <button
@@ -356,6 +364,7 @@ function LineGroup({
   lines,
   allLines,
   lang,
+  programName,
   highlight,
   onHighlight,
   onQty,
@@ -366,6 +375,7 @@ function LineGroup({
   lines: QuoteLine[];
   allLines: QuoteLine[];
   lang: Lang;
+  programName: string;
   highlight: string | null;
   onHighlight: (l: string | null) => void;
   onQty: (sku: string, delta: number) => void;
@@ -409,9 +419,11 @@ function LineGroup({
                     <span>
                       {l.qty} {l.salesUnit} × {lei(l.unitPrice, lang)}
                     </span>
+                    {l.measurePrice && <span>({measurePriceLabel(l.measurePrice, lang)})</span>}
                     {l.basis && l.basis !== "unealtă" && l.basis !== "tool" && <span className="hidden text-ink-3/80 xl:inline">· {l.basis}</span>}
                   </div>
-                  <div className="mt-1.5 flex items-center gap-2">
+                  <LowestPriceNote line={l} lang={lang} className="mt-0.5" />
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg border border-rule bg-paper">
                       <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
                         <IconMinus size={12} />
@@ -432,11 +444,12 @@ function LineGroup({
                         <span className={`transition-transform ${isOpen ? "rotate-180" : ""}`}>▾</span>
                       </button>
                     )}
+                    {l.personalised && <PersonalisedBadge lang={lang} programName={programName} />}
                   </div>
                 </div>
                 <div className="text-right">
-                  {l.discount > 0 && <div className="num text-[11px] text-ink-3 line-through">{lei(l.lineTotal, lang)}</div>}
-                  <div className={`num text-[14px] font-semibold ${l.discount > 0 ? "text-accent" : "text-ink"}`}>
+                  <ReferencePrice line={l} lang={lang} className="text-[11px]" />
+                  <div className={`num text-[14px] font-semibold ${l.referenceTotal !== undefined ? "text-accent" : "text-ink"}`}>
                     {l.netTotal === 0 ? (lang === "en" ? "FREE" : "GRATUIT") : lei(l.netTotal, lang)}
                   </div>
                 </div>
@@ -449,6 +462,65 @@ function LineGroup({
         })}
       </ul>
     </div>
+  );
+}
+
+// ── price display (consumer law) — the domain computes, these only format ──
+
+/** Unit price (Dir. 98/6/EC) for pack products: "16,23 lei/m", "0,35 lei/buc", "0,028 lei/buc". */
+export function measurePriceLabel(mp: NonNullable<QuoteLine["measurePrice"]>, lang: Lang): string {
+  const unit = mp.unit === "buc" ? (lang === "en" ? "pc" : "buc") : mp.unit;
+  return `${dec(mp.price, lang, mp.price >= 0.1 ? 2 : 3)} lei/${unit}`;
+}
+
+/** Struck-through line price — only ever the 30-day lowest (Omnibus), never today's list price. */
+export function ReferencePrice({ line, lang, className = "" }: { line: QuoteLine; lang: Lang; className?: string }) {
+  if (line.referenceTotal === undefined) return null;
+  return (
+    <div className={`num text-ink-3 line-through ${className}`}>
+      <span className="sr-only">{tr("referencePrice", lang)}: </span>
+      {lei(line.referenceTotal, lang)}
+    </div>
+  );
+}
+
+/** "Cel mai mic preț din ultimele 30 de zile: X lei/buc" — shown wherever a line price is crossed out. */
+export function LowestPriceNote({ line, lang, className = "" }: { line: QuoteLine; lang: Lang; className?: string }) {
+  if (line.referenceUnitPrice === undefined) return null;
+  return (
+    <div className={`font-mono text-[10px] leading-snug text-ink-3 ${className}`}>
+      {tr("lowest30", lang)}: {lei(line.referenceUnitPrice, lang)}/{line.salesUnit}
+    </div>
+  );
+}
+
+/** Personalised-price badge (CRD art. 6(1)(ea)); hover, focus or tap explains why. */
+export function PersonalisedBadge({ lang, programName }: { lang: Lang; programName: string }) {
+  const [open, setOpen] = useState(false);
+  const tipId = useId();
+  const label = lang === "en" ? `${tr("personalisedPrice", lang)} · ${programName} member` : `${tr("personalisedPrice", lang)} · membru ${programName}`;
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setOpen(false)}
+        aria-describedby={tipId}
+        className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-ink transition hover:bg-accent/20"
+      >
+        <IconSpark size={11} className="shrink-0 text-accent" />
+        {label}
+      </button>
+      <span
+        id={tipId}
+        role="tooltip"
+        className={`absolute left-0 top-full z-20 mt-1 w-[250px] rounded-lg bg-ink px-2.5 py-2 text-[11px] leading-snug text-paper shadow-lg ${
+          open ? "block" : "hidden group-hover:block group-focus-within:block"
+        }`}
+      >
+        {tr("personalisedWhy", lang)}
+      </span>
+    </span>
   );
 }
 
