@@ -83,9 +83,11 @@ export interface PlanEditorProps {
   onPreview: (l: Layout | null) => void;
   /** Commit edits; resolves false if the server rejected them. */
   onCommit: (ops: SketchOp[]) => Promise<boolean>;
+  /** Drawn behind the shapes, in plan metres via the frame (e.g. the customer's own plan image). */
+  underlay?: (frame: Frame) => React.ReactNode;
 }
 
-export default function PlanEditor({ layout, lang, dark, busy, onPreview, onCommit }: PlanEditorProps) {
+export default function PlanEditor({ layout, lang, dark, busy, onPreview, onCommit, underlay }: PlanEditorProps) {
   const en = lang === "en";
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -488,6 +490,7 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
           </pattern>
         </defs>
         <rect width={VW} height={VH} fill="url(#pe-grid)" />
+        {underlay?.(f)}
         {els}
         {/* north arrow + scale */}
         <g opacity={0.8}>

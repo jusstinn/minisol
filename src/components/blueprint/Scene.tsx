@@ -507,9 +507,15 @@ export interface SceneProps {
    * no shadows, edge overlays only on the products (and only the larger ones in big builds).
    */
   lite?: boolean | "low";
+  /**
+   * Extra things drawn in plan coordinates inside the world group (e.g. the customer's own
+   * model, a plan on the ground): they move with the drawing but never explode, aren't part
+   * of the edit animation and don't change the camera fit.
+   */
+  extra?: React.ReactNode;
 }
 
-export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false, lite = false }: SceneProps) {
+export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false, lite = false, extra }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -590,6 +596,7 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
       ))}
       {build.grass && <Grass grass={build.grass} shared={shared} mode={mode} epoch={current.epoch} />}
       <DimLines build={build} mode={mode} />
+      {extra}
       </World>
       <LabelProjector labels={labels} els={labelEls} shared={shared} />
 

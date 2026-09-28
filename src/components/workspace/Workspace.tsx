@@ -22,6 +22,7 @@ import { Counter, RevealText, Spinner } from "../ui/primitives";
 import CardChips from "./CardChips";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
 import type { PanelTarget } from "./MobileTabs";
+import { UploadsProvider } from "../blueprint/uploads/UploadsContext";
 
 export default function Workspace({
   tenant,
@@ -87,6 +88,18 @@ export default function Workspace({
   return (
     // Product sheets open from the list, options, cart and search results; stock is shown for the quote's store.
     <ProductSheetProvider tenantId={tenant.id} lang={lang} storeId={quote?.storeId ?? member.homeStoreId}>
+    {/* The customer's own model / plan, kept on this device per project; AI-read sizes go to the chat (phones: back to Chat). */}
+    <UploadsProvider
+      tenant={tenant.id}
+      memberId={member.memberId}
+      project={agent.messages[0]?.id}
+      busy={agent.busy}
+      offline={offline}
+      onSend={(t) => {
+        void agent.send(t);
+        if (!isDesktop) tabs.select("chat");
+      }}
+    >
     <UiBridge ui={agent.ui} onHighlight={setHighlight} onCart={() => setCartOpen(true)} onPanel={showPanel} />
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
@@ -226,6 +239,7 @@ export default function Workspace({
         />
       )}
     </div>
+    </UploadsProvider>
     </ProductSheetProvider>
   );
 }

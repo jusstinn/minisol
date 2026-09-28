@@ -15,6 +15,7 @@ import type { UiSignal } from "@/lib/useAgent";
 import type { LiteGraphics } from "@/lib/useLiteGraphics";
 import { buildScene } from "../blueprint/builders";
 import type { ViewMode } from "../blueprint/Scene";
+import { useUploads } from "../blueprint/uploads/useUploads";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
 import ChangeCard, { Rolling, signed } from "./ChangeCard";
 
@@ -142,6 +143,8 @@ function SketchView({
   const build = useMemo(() => buildScene(project.type, project.inputs, lang, layout, look), [project.type, project.inputs, lang, layout, look]);
   const dark = mode !== "real";
   const canEdit = Boolean(sketch && project.layout);
+  // The customer's own 3D model / architect's plan (see blueprint/uploads).
+  const up = useUploads({ lang, dark, mode, lite, inline, build, projectType: project.type, enabled: canEdit, openEditor: setEditing });
 
   const onDiff = useCallback((d: { added: number; changed: number; removed: number }) => {
     if (d.added + d.changed + d.removed > 0) setDiff({ ...d, at: Date.now() });
@@ -176,7 +179,7 @@ function SketchView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className={`overflow-hidden rounded-2xl ring-1 backdrop-blur-md ${
+      className={`flex flex-col overflow-hidden rounded-2xl ring-1 backdrop-blur-md ${
         inline ? "" : "shadow-[0_24px_60px_-24px_rgba(0,0,0,0.6)]"
       } ${dark ? "bg-[#071634]/80 text-[#e6efff] ring-[#dce9ff]/25" : "bg-white/90 text-ink ring-ink/10"}`}
     >
@@ -184,6 +187,7 @@ function SketchView({
         <IconPencil size={12} />
         <span className="flex-1 truncate">{en ? "Plan · drag edges, tap +" : "Plan · trage de margini, apasă +"}</span>
         {sketch?.busy && <span className="animate-pulse normal-case tracking-normal">{en ? "recalculating…" : "recalculez…"}</span>}
+        {up.dockButton}
         <button
           disabled={!sketch?.canUndo || sketch.busy}
           onClick={() => sketch?.undo()}
@@ -217,8 +221,9 @@ function SketchView({
       )}
       <QuickControls layout={committed} lang={lang} dark={dark} busy={Boolean(sketch?.busy)} onCommit={commit} />
       <div className="px-2 pb-2">
-        <PlanEditor layout={committed} lang={lang} dark={dark} busy={Boolean(sketch?.busy)} onPreview={setPreview} onCommit={commit} />
+        <PlanEditor layout={committed} lang={lang} dark={dark} busy={Boolean(sketch?.busy)} onPreview={setPreview} onCommit={commit} underlay={up.underlay} />
       </div>
+      {up.dock}
     </motion.div>
   );
 
@@ -228,6 +233,7 @@ function SketchView({
         className={`relative overflow-hidden rounded-[22px] transition-colors duration-700 ${
           dark ? "bp-sheet" : "bg-[radial-gradient(120%_100%_at_30%_0%,#fbf8f1,#e7e1d3)] text-ink"
         } ${inline ? "h-[380px]" : "h-[clamp(460px,62vh,660px)]"}`}
+        {...up.dropProps}
       >
         <div className="absolute inset-0">
           <Scene
@@ -241,6 +247,7 @@ function SketchView({
             onDiff={onDiff}
             focusLeft={(editing || Boolean(floatingChange)) && !inline}
             lite={lite}
+            extra={up.sceneExtra}
           />
         </div>
 
@@ -313,6 +320,7 @@ function SketchView({
                 <span className={inline ? "sr-only" : "hidden sm:inline"}>{editing ? (en ? "Done" : "Gata") : en ? "Edit sketch" : "Modifică"}</span>
               </button>
             )}
+            {up.button}
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title="Replay">
               <IconReplay size={15} />
             </RoundBtn>
@@ -359,6 +367,7 @@ function SketchView({
             </motion.button>
           )}
         </AnimatePresence>
+        {up.overlay}
 
         {/* legend */}
         <div className={`absolute bottom-3 left-3 right-3 flex flex-wrap items-end gap-1.5 sm:bottom-5 sm:left-6 sm:right-auto ${editing && !inline ? "sm:max-w-[38%]" : "sm:max-w-[60%]"}`}>
