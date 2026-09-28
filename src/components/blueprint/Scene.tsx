@@ -441,6 +441,8 @@ function CameraRig({ build, compact, epoch, focusLeft }: { build: Build; compact
   const glide = useRef<{ dist: number; target: THREE.Vector3 } | null>(null);
 
   useLayoutEffect(() => {
+    // A hidden canvas (a phone tab in the background) measures 0 × 0: keep the current framing.
+    if (size.width < 10 || size.height < 10) return;
     const [L, H, W] = build.extent;
     // Fit the bounding sphere into both the vertical and the horizontal field of view.
     const radius = 0.5 * Math.sqrt(L * L + H * H + W * W) + 0.4;
@@ -513,9 +515,11 @@ export interface SceneProps {
    * of the edit animation and don't change the camera fit.
    */
   extra?: React.ReactNode;
+  /** Kept mounted but not visible (phone tabs): stop rendering, keep the state. */
+  paused?: boolean;
 }
 
-export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false, lite = false, extra }: SceneProps) {
+export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false, lite = false, extra, paused = false }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -556,6 +560,7 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
       camera={{ fov: 32, position: [6, 5, 6] }}
       gl={{ antialias: !lite, alpha: true, powerPreference: "high-performance" }}
       shadows={shadows}
+      frameloop={paused ? "never" : "always"}
       style={{ touchAction: interactive ? "none" : "auto" }}
     >
       <Driver shared={shared} mode={mode} />

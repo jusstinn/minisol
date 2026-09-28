@@ -273,8 +273,9 @@ export function MobilePanels(props: MobilePanelsProps) {
 
   return (
     <div ref={root} className={tabs.tab === "chat" ? "hidden" : "relative min-h-0"}>
-      {/* The one 3D canvas on phones: mounted only while this tab is open. */}
-      {tabs.tab === "sketch" &&
+      {/* The one 3D canvas on phones: mounted once the tab is opened, then kept (paused while
+          hidden) so switching tabs doesn't replay the build or reset the view. */}
+      {visited.includes("sketch") &&
         board.project &&
         pane(
           "sketch",
@@ -292,6 +293,7 @@ export function MobilePanels(props: MobilePanelsProps) {
                 ui={ui}
                 look={board.quote?.look}
                 lite={lite}
+                paused={tabs.tab !== "sketch"}
               />
             </div>
             <AnimatePresence>{agentChange && <ChangeCard key={agentChange.id} change={agentChange.change} lang={lang} onClose={() => setDismissed(agentChange.id)} />}</AnimatePresence>

@@ -57,6 +57,7 @@ export default function BlueprintPanel({
   ui,
   look,
   lite,
+  paused,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -72,6 +73,8 @@ export default function BlueprintPanel({
   look?: Look;
   /** Lighter 3D for phones / low-end devices (see useLiteGraphics). */
   lite?: LiteGraphics;
+  /** Mounted in a hidden phone tab: don't render frames. */
+  paused?: boolean;
 }) {
   const sketchMode = useSketchMode(tenant);
   const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
@@ -85,7 +88,7 @@ export default function BlueprintPanel({
   if (sketchMode === "on_demand" && !project.sketched && sketch) {
     return <SketchCta project={project} lang={lang} inline={inline} onOpen={sketch.open} />;
   }
-  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} look={look} lite={lite} />;
+  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} look={look} lite={lite} paused={paused} />;
 }
 
 function SketchView({
@@ -100,6 +103,7 @@ function SketchView({
   ui,
   look,
   lite,
+  paused,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -112,6 +116,7 @@ function SketchView({
   ui?: UiSignal | null;
   look?: Look;
   lite?: LiteGraphics;
+  paused?: boolean;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -247,6 +252,7 @@ function SketchView({
             onDiff={onDiff}
             focusLeft={(editing || Boolean(floatingChange)) && !inline}
             lite={lite}
+            paused={paused}
             extra={up.sceneExtra}
           />
         </div>
