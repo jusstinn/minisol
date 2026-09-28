@@ -276,6 +276,16 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
       edits.push({ op: "resize", zone: "A", w: dims.a, d: dims.b });
     }
   }
+  // "fă-o de 8 m lungime", "lată de 2 m", "make it 8 m long": one side changes, the other stays.
+  const oneSide = type === "deck" || type === "laminate_floor" || type === "lawn" || type === "paving" || type === "paint_room" || type === "tiling";
+  if (oneSide && !dims && !edits.length && !/\b(zon\w*|area|section|aripa|wing|extinde\w*|extend|trept\w*|steps?)\b/.test(t)) {
+    const len = tagged(t, LENGTH_WORD)?.value;
+    const wid = tagged(t, WIDTH_WORD)?.value;
+    if (len || wid) {
+      const zoned = type !== "paint_room" && type !== "tiling";
+      edits.push({ op: "resize", ...(zoned ? { zone: "A" } : {}), ...(len ? { w: len } : {}), ...(wid ? { d: wid } : {}) });
+    }
+  }
   if (type === "laminate_floor" && /\b(diagonal\w*)\b/.test(t)) edits.push({ op: "set_option", key: "pattern", value: removing || /\b(drept|straight)\b/.test(t) ? "straight" : "diagonal" });
   if (type === "paint_room" || type === "tiling") {
     const h = type === "paint_room" ? tagged(t, HEIGHT_WORD, dims)?.value : undefined;

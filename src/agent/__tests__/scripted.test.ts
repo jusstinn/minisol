@@ -82,6 +82,16 @@ describe("sketch edits", () => {
     expect(parseIntent("Variantă mai ieftină", deckState)).toEqual({ kind: "requality", quality: "budget" });
   });
 
+  it("changes one side and keeps the other", () => {
+    const at = (type: "deck" | "paving" | "paint_room") => ({ basket: [], project: { type, title: "", inputs: {}, measurements: [], assumptions: [], estimate: { hoursMin: 1, hoursMax: 2, difficulty: 1 as const, people: 1 as const }, safetyNotes: [] } });
+    expect(parseIntent("fă-o de 8 m lungime", at("paving"))).toEqual({ kind: "sketch", edits: [{ op: "resize", zone: "A", w: 8 }] });
+    expect(parseIntent("și lată de 1,5 m", at("paving"))).toEqual({ kind: "sketch", edits: [{ op: "resize", zone: "A", d: 1.5 }] });
+    expect(parseIntent("make it 5 m long", at("deck"))).toEqual({ kind: "sketch", edits: [{ op: "resize", zone: "A", w: 5 }] });
+    expect(parseIntent("camera are de fapt 4,2 m lungime", at("paint_room"))).toEqual({ kind: "sketch", edits: [{ op: "resize", w: 4.2 }] });
+    // Steps have a width too — that's not the deck's.
+    expect(parseIntent("adaugă 2 trepte de 1,5 m lățime", at("deck"))).toMatchObject({ kind: "sketch", edits: [{ op: "add_steps" }] });
+  });
+
   it("edits the sketch, keeps the chosen products and reports a verified price delta", async () => {
     const tenant = getTenant("demo");
     const sources = getDataSources(tenant.id);
