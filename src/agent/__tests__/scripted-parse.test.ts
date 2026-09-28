@@ -132,6 +132,27 @@ describe("adding things and answering 'da'", () => {
   }, 20000);
 });
 
+describe("moving the list", () => {
+  it("'Timișoara 2' is not 'Timișoara 1', and moving to the current store says so", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-309877"))!; // James, home store Timișoara 1
+    let state: SessionState = empty;
+    const say = async (message: string) => {
+      let text = "";
+      for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state, lang: "en" })) {
+        if (ev.type === "state") state = ev.state;
+        if (ev.type === "text") text += ev.delta;
+      }
+      return text;
+    };
+    await say("I want a 4 x 3 m deck in my garden");
+    expect(await say("move my list to Timișoara 2")).toMatch(/^Moved your list to \*\*Atelier Timișoara 2/);
+    expect(state.storeId).toBe("timisoara-2");
+    expect(await say("move my list to Timisoara 2")).toMatch(/^Your list is already at/);
+  }, 20000);
+});
+
 describe("reply wording", () => {
   it("short names never end on a preposition", () => {
     expect(shortName("Genunchiere Protekt cu gel, mărime universală")).toBe("genunchiere Protekt");

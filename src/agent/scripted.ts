@@ -108,11 +108,11 @@ const STOP_WORDS = new Set(
 );
 
 /** Content words of a request, lightly stemmed for Romanian articles/plurals: "geotextilul" → "geotextil", "grinzile" → "grinz". */
-function contentWords(text: string): string[] {
+function contentWords(text: string, { numbers = false } = {}): string[] {
   const stem = (w: string) => (w.length >= 6 ? w.replace(/(urile|ului|elor|ilor|ele|ile|ul|ii|le|a|e|i)$/, "") : w);
   return text
     .split(/[^a-z0-9]+/)
-    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
+    .filter((w) => (w.length >= 3 || (numbers && /^\d+$/.test(w))) && !STOP_WORDS.has(w))
     .map(stem);
 }
 
@@ -725,8 +725,14 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     let storeId: string | null = null;
     let label = "";
     if (intent.kind === "move") {
+      // Numbers count here: "Timișoara 2" is not "Timișoara 1" (whole words, so "2" doesn't match "20").
+      const storeWords = contentWords(intent.text, { numbers: true });
+      const storeHit = (name: string) => storeWords.filter((w) => new RegExp(`\\b${w}`).test(fold(name))).length;
+      const current = state.storeId ?? opts.customer.homeStoreId;
       const stores = await opts.sources.stores.list();
-      const best = stores.map((st) => ({ st, n: hit(`${st.name} ${st.city}`) })).sort((a, b) => b.n - a.n)[0];
+      const best = stores
+        .map((st) => ({ st, n: storeHit(`${st.name} ${st.city}`) }))
+        .sort((a, b) => b.n - a.n || Number(a.st.id === current) - Number(b.st.id === current))[0];
       if (best?.n) {
         storeId = best.st.id;
         label = best.st.name;
@@ -784,7 +790,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         const en = lang === "en";
         reply =
           intent.kind === "move"
-            ? `${en ? `Moved your list to **${label}**` : `Am mutat lista la **${label}**`}. ${stockSentence(q.quote, lang)}`
+            ? `${storeId === before.storeId ? (en ? `Your list is already at **${label}**` : `Lista e deja la **${label}**`) : en ? `Moved your list to **${label}**` : `Am mutat lista la **${label}**`}. ${stockSentence(q.quote, lang)}`
             : intent.kind === "remove"
               ? en ? `Removed ${label} — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am scos ${label} — total nou **${lei(q.quote.total, lang)}**${delta}.`
               : en ? `Switched to ${label}, sized for your project — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am trecut la ${label}, calculat pentru proiectul tău — total nou **${lei(q.quote.total, lang)}**${delta}.`;
