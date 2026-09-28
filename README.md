@@ -197,6 +197,42 @@ shopping list can't disagree.
   (production — most people just want the list). Override with `?sketch=auto|on_demand`.
 - Cost: hand edits cost nothing (deterministic); an edit by chat is one normal agent turn.
 
+### Your own plans and models
+
+Customers can bring their own files into the sketch: **Încarcă** in the sketch controls or in the plan
+editor's header, or drop a file on the sketch (phones: the Schiță tab). Files are opened **in the
+browser and stay on the device** — nothing is uploaded, except the optional AI read below.
+
+- **3D model** — GLB, single-file glTF or OBJ, ≤ 30 MB and ≤ 500k triangles, parsed with three.js'
+  own loaders. glTF that points at external files or needs Draco/KTX2 decoders is refused, and only
+  `data:`/`blob:` URLs are ever loaded. It is drawn as context around the sketch (translucent blue
+  with one merged edge overlay in the blueprint views, its own materials in the real view) and never
+  explodes, animates or changes the camera fit. Dock controls: units (guessed from the bounding box:
+  > 200 → mm, > 20 → cm, else m), turn 90°, move ±0.1 / ±1 m, on the ground, opacity, hide, remove.
+- **Architect's plan** — PNG, JPG, WebP or the first page of a PDF (pdf.js, rendered locally). It
+  sits under the plan editor. *Calibrează*: tap both ends of a known dimension and type the real
+  distance; then *Aliniază* (drag), turn 90°, opacity, hide. Once calibrated it is also laid on the
+  ground of the 3D sketch (toggle *3D*).
+- **Read the sizes with AI** (optional) — only shown when an OpenAI key is configured and
+  `AGENT_MODE` isn't `scripted` (`GET /api/plan-read`). One downscaled JPEG (≤ 1.5 MB) goes to
+  `POST /api/plan-read` (Responses API, image input, strict JSON schema, `store: false`, per-visitor
+  limit `PLAN_READS_PER_10_MIN`, pass session required in product mode, the image is never logged).
+  Rooms come back as chips marked *citite de AI — verifică-le*; tapping one sends a normal chat
+  message ("Baie 3,2 × 2,4 m"), so nothing is applied without the customer.
+- **Storage** — IndexedDB `blueprint-uploads` / `files`, keys `${tenant}:${memberId}:{model|plan}:{meta|blob}`
+  (blob = the file, meta = placement / calibration / AI reading). The meta carries the id of the
+  conversation's first message, which the saved session keeps: a reload or *Continuă* brings the
+  files back, a new project doesn't inherit them, and *forget my project* deletes them.
+- **Code** — `src/lib/uploads/*` (checks, units, calibration, IndexedDB, loaders, store) and
+  `src/components/blueprint/{UserModel,PlanGround,PlanUnderlay,PlanCalibrator,ModelControls,PlanControls}.tsx`
+  + `blueprint/uploads/*`. The sketch only exposes two hooks: `Scene`'s `extra` and `PlanEditor`'s
+  `underlay` props. Samples: `docs/samples/house.glb`, `docs/samples/plan-baie.png`
+  (`npx tsx scripts/make-upload-samples.ts`).
+
+| Own 3D model (real view) | Calibrated plan + AI-read size sent to the chat | Phone (Schiță tab) |
+| --- | --- | --- |
+| ![](docs/screenshots/uploads-model.png) | ![](docs/screenshots/uploads-plan.png) | ![](docs/screenshots/uploads-phone.png) |
+
 ## Integrating the real systems
 
 Everything the agent touches goes through four interfaces in `src/adapters/types.ts`:

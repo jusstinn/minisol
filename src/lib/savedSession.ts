@@ -3,6 +3,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { SessionState } from "@/agent/types";
 import type { Board, ChatMessage } from "./useAgent";
+import { clearUploads } from "./uploads/idb";
 
 /**
  * The customer's project, saved in their own browser (per retailer + member), so
@@ -65,6 +66,7 @@ export function clearSaved(tenant: string, memberId: string): void {
   } catch {
     /* ignore */
   }
+  void clearUploads(tenant, memberId); // the customer's own model / plan (IndexedDB) go with it
   window.dispatchEvent(new Event("blueprint:saved"));
 }
 
