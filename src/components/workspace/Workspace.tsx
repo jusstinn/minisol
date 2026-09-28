@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
@@ -12,6 +12,7 @@ import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
 import CartDrawer from "../cart/CartDrawer";
+import { CartActionsContext } from "../cart/cartActions";
 import SizesCard from "./SizesCard";
 import { ProductSheetProvider, useProductSheet } from "../board/ProductSheet";
 import type { UiCommand } from "@/agent/types";
@@ -52,6 +53,17 @@ export default function Workspace({
   const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline, restore: resume });
   const [highlight, setHighlight] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  // "Rezervă pentru ridicare" from the list opens the cart at the pickup step.
+  const [reserveSignal, setReserveSignal] = useState(0);
+  const cartActions = useMemo(
+    () => ({
+      reserve: () => {
+        setReserveSignal((s) => s + 1);
+        setCartOpen(true);
+      },
+    }),
+    [],
+  );
   const started = useRef(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)", true);
   // Phones: the board lives in tabs under the conversation (see MobileTabs).
@@ -108,6 +120,7 @@ export default function Workspace({
         if (!isDesktop) tabs.select("chat");
       }}
     >
+    <CartActionsContext.Provider value={cartActions}>
     <UiBridge ui={agent.ui} onHighlight={setHighlight} onCart={() => setCartOpen(true)} onPanel={showPanel} />
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
@@ -236,6 +249,8 @@ export default function Workspace({
           tenant={tenant}
           projectTitle={project?.title ?? (lang === "en" ? "Your project" : "Proiectul tău")}
           onQty={agent.changeQty}
+          onMoveStore={agent.moveStore}
+          reserveSignal={reserveSignal}
           redeemSignal={agent.ui && typeof agent.ui.command.redeemPoints === "boolean" ? { value: agent.ui.command.redeemPoints, seq: agent.ui.seq } : null}
           onShowPlan={
             isDesktop
@@ -248,6 +263,7 @@ export default function Workspace({
         />
       )}
     </div>
+    </CartActionsContext.Provider>
     </UploadsProvider>
     </ProductSheetProvider>
   );

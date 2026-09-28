@@ -10,6 +10,7 @@ import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
 import WalletListModal from "./WalletListModal";
+import { useCartActions } from "../cart/cartActions";
 import OptionsStrip from "./OptionsStrip";
 import { ProductArt } from "../ui/ProductArt";
 import { ProductName, ProductThumb } from "./ProductSheet";
@@ -82,6 +83,8 @@ export default function QuotePanel({
     setRedeem(redeemSignal.value);
   }
   const [sent, setSent] = useState<null | "wallet" | "reserve">(null);
+  // Opens the cart at the pickup step (slot + availability) when the Workspace provides it.
+  const cart = useCartActions();
   const materials = quote.lines.filter((l) => !l.isTool);
   const tools = quote.lines.filter((l) => l.isTool);
   const total = redeem ? quote.points.totalIfRedeemed : quote.total;
@@ -345,7 +348,7 @@ export default function QuotePanel({
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setSent("reserve")}
+            onClick={() => (cart ? cart.reserve() : setSent("reserve"))}
             className="rounded-xl border border-ink/20 px-3.5 py-2.5 text-[13px] font-semibold text-ink transition hover:border-ink"
           >
             {sent === "reserve" ? "✓ " : ""}

@@ -7,6 +7,7 @@ import type { Tenant } from "@/config/tenant";
 import type { Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { lei } from "@/lib/format";
+import { useDialog } from "@/lib/useDialog";
 import { IconCheck, IconClose, IconPin } from "../ui/icons";
 
 /**
@@ -20,6 +21,7 @@ export default function WalletListModal({
   title,
   tenant,
   lang,
+  reservation,
 }: {
   open: boolean;
   onClose: () => void;
@@ -27,8 +29,11 @@ export default function WalletListModal({
   title: string;
   tenant: Tenant;
   lang: Lang;
+  /** A Click & Collect reservation to put on the pass (code + pickup window). */
+  reservation?: { code: string; when: string };
 }) {
   const [flipped, setFlipped] = useState(false);
+  const dialogRef = useDialog<HTMLDivElement>(open, onClose);
   const [qr, setQr] = useState<string>("");
   const [ticked, setTicked] = useState<Set<string>>(new Set());
 
@@ -38,10 +43,11 @@ export default function WalletListModal({
     return [...byAisle.entries()].sort((a, b) => a[0] - b[0]);
   }, [quote]);
 
+  const rzCode = reservation?.code;
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => setFlipped(true), 650);
-    const payload = `BLUEPRINT|${quote.storeId}|${quote.lines.map((l) => `${l.sku}x${l.qty}`).join(",")}`;
+    const payload = rzCode ? `BLUEPRINT|RZ|${rzCode}|${quote.storeId}` : `BLUEPRINT|${quote.storeId}|${quote.lines.map((l) => `${l.sku}x${l.qty}`).join(",")}`;
     QRCode.toString(payload, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#141311", light: "#ffffff00" } })
       .then(setQr)
       .catch(() => setQr(""));
@@ -49,7 +55,7 @@ export default function WalletListModal({
       clearTimeout(t);
       setFlipped(false);
     };
-  }, [open, quote]);
+  }, [open, quote, rzCode]);
 
   const toggle = (sku: string) =>
     setTicked((s) => {
@@ -70,6 +76,10 @@ export default function WalletListModal({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === "en" ? `Shopping list on your ${tenant.programName} pass` : `Lista pe cardul ${tenant.programName}`}
             initial={{ y: 60, scale: 0.92, opacity: 0 }}
             animate={{ y: 0, scale: 1, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
@@ -93,7 +103,7 @@ export default function WalletListModal({
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-70">{tenant.programName}</div>
                 <div className="mt-auto font-mono text-[10px] uppercase tracking-[0.2em] opacity-70">{lang === "en" ? "Project" : "Proiect"}</div>
                 <div className="display text-[34px] leading-tight">{title}</div>
-                <div className="mt-4 font-mono text-[12px]">{lei(quote.total, lang)}</div>
+                <div className="mt-4 font-mono text-[12px]">{reservation ? `${reservation.code} · ${reservation.when}` : lei(quote.total, lang)}</div>
               </div>
               {/* back */}
               <div
@@ -107,6 +117,12 @@ export default function WalletListModal({
                     <div className="mt-1 flex items-center gap-1 font-mono text-[10.5px] text-ink-2">
                       <IconPin size={12} /> {quote.storeName}
                     </div>
+                    {reservation && (
+                      <div className="mt-2 inline-flex flex-wrap items-center gap-x-2 rounded-lg bg-accent/15 px-2 py-1 font-mono text-[10.5px] text-ink">
+                        <b className="tracking-[0.08em]">{reservation.code}</b>
+                        <span>{reservation.when}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="display-cond text-[22px] leading-none">{lei(quote.total, lang)}</div>

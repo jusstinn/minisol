@@ -13,6 +13,10 @@ import { IconBag, IconCheck, IconClose, IconMinus, IconPin, IconPlus, IconTrash,
 import { Counter } from "../ui/primitives";
 import { ProductArt } from "../ui/ProductArt";
 import { ProductName, ProductThumb } from "../board/ProductSheet";
+import { slotLabel } from "@/lib/pickup";
+import { useDialog } from "@/lib/useDialog";
+import { ReservationDone, ReservePickup } from "./ReservePickup";
+import type { Reservation } from "./ReservePickup";
 
 type Fulfilment = "pickup" | "delivery";
 
@@ -30,6 +34,8 @@ export default function CartDrawer({
   onQty,
   onShowPlan,
   redeemSignal,
+  onMoveStore,
+  reserveSignal,
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,6 +46,10 @@ export default function CartDrawer({
   onQty: (sku: string, delta: number) => void;
   onShowPlan?: () => void;
   redeemSignal?: { value: boolean; seq: number } | null;
+  /** Move the list to another store (from the pickup step). */
+  onMoveStore?: (storeId: string) => void;
+  /** Bumps when "Rezervă pentru ridicare" is pressed outside the cart: open straight at the pickup step. */
+  reserveSignal?: number;
 }) {
   const en = lang === "en";
   const [fulfilment, setFulfilment] = useState<Fulfilment>("pickup");
@@ -51,6 +61,25 @@ export default function CartDrawer({
   }
   const [done, setDone] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  // Click & Collect: the pickup step (store, availability, slot) and the demo reservation.
+  const [step, setStep] = useState<"cart" | "reserve">("cart");
+  const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [reserveSeen, setReserveSeen] = useState(reserveSignal);
+  if (reserveSignal !== reserveSeen) {
+    setReserveSeen(reserveSignal);
+    setFulfilment("pickup");
+    setStep("reserve");
+    setReservation(null);
+  }
+  const close = () => {
+    onClose();
+    // Next time the cart opens on the list again (a finished reservation stays on the pass).
+    if (reservation) {
+      setReservation(null);
+      setStep("cart");
+    }
+  };
+  const dialogRef = useDialog<HTMLElement>(open, close);
 
   const deliveryFee = fulfilment === "delivery" ? quote.delivery.fee : 0;
   const redeemValue = redeem ? quote.points.redeemableValue : 0;
@@ -62,8 +91,12 @@ export default function CartDrawer({
     <>
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-[2px]" onClick={onClose}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-[2px]" onClick={close}>
             <motion.aside
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cart-title"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -77,17 +110,23 @@ export default function CartDrawer({
                   <IconBag size={19} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="display text-[20px] leading-none">{en ? "Your cart" : "Coșul tău"}</div>
+                  <h2 id="cart-title" className="display text-[20px] leading-none">
+                    {en ? "Your cart" : "Coșul tău"}
+                  </h2>
                   <div className="mt-1 truncate font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-3">
                     {projectTitle} · {quote.lines.length} {en ? "products" : "produse"} · {units} {en ? "units" : "bucăți"}
                   </div>
                 </div>
-                <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border border-rule" aria-label="close">
+                <button onClick={close} className="grid h-9 w-9 place-items-center rounded-full border border-rule hover:border-ink" aria-label={en ? "Close the cart" : "Închide coșul"}>
                   <IconClose size={17} />
                 </button>
               </div>
 
-              {done ? (
+              {reservation ? (
+                <ReservationDone r={reservation} lang={lang} onWallet={() => setWalletOpen(true)} onClose={close} />
+              ) : step === "reserve" && fulfilment === "pickup" ? (
+                <ReservePickup quote={quote} lang={lang} payable={payable} onBack={() => setStep("cart")} onMoveStore={onMoveStore} onConfirm={setReservation} />
+              ) : done ? (
                 <Confirmation en={en} orderNo={orderNo} storeName={quote.storeName} fulfilment={fulfilment} total={payable} lang={lang} onWallet={() => setWalletOpen(true)} />
               ) : (
                 <>
@@ -181,7 +220,17 @@ export default function CartDrawer({
                         </button>
                       ))}
                     </div>
-                    {fulfilment === "pickup" && <div className="mt-2 truncate font-mono text-[10.5px] text-ink-2">{quote.storeName}</div>}
+                    {fulfilment === "pickup" && (
+                      <div className="mt-2 flex items-center gap-1.5 truncate font-mono text-[10.5px] text-ink-2">
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${quote.availability.allInStock ? "bg-ok" : "bg-warn"}`} />
+                        {quote.storeName}
+                        {!quote.availability.allInStock && (
+                          <span className="text-ink-3">
+                            · {quote.availability.missing.length} {en ? "short here" : "lipsă aici"}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     <dl className="mt-3 space-y-1 text-[13px]">
                       <Row k={en ? "Subtotal" : "Subtotal"} v={lei(quote.subtotal, lang)} />
@@ -216,7 +265,7 @@ export default function CartDrawer({
                     </div>
 
                     <div className="mt-4 grid grid-cols-[1fr_auto] gap-2">
-                      <button onClick={() => setDone(true)} className="rounded-xl bg-accent py-3.5 text-[14px] font-semibold text-on-accent shadow-[0_12px_28px_-14px_var(--accent)] transition hover:brightness-95">
+                      <button onClick={() => (fulfilment === "pickup" ? setStep("reserve") : setDone(true))} className="rounded-xl bg-accent py-3.5 text-[14px] font-semibold text-on-accent shadow-[0_12px_28px_-14px_var(--accent)] transition hover:brightness-95">
                         {fulfilment === "pickup" ? (en ? "Reserve for pickup" : "Rezervă pentru ridicare") : en ? "Order for delivery" : "Comandă cu livrare"}
                       </button>
                       <button onClick={() => setWalletOpen(true)} className="grid w-12 place-items-center rounded-xl border border-ink/20 hover:border-ink" aria-label={en ? "Send to Wallet" : "Trimite în Wallet"}>
@@ -241,7 +290,15 @@ export default function CartDrawer({
           </motion.div>
         )}
       </AnimatePresence>
-      <WalletListModal open={walletOpen} onClose={() => setWalletOpen(false)} quote={quote} title={projectTitle} tenant={tenant} lang={lang} />
+      <WalletListModal
+        open={walletOpen}
+        onClose={() => setWalletOpen(false)}
+        quote={quote}
+        title={projectTitle}
+        tenant={tenant}
+        lang={lang}
+        reservation={reservation ? { code: reservation.code, when: slotLabel(reservation.slot, lang) } : undefined}
+      />
     </>
   );
 }
