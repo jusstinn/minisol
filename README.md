@@ -120,6 +120,7 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 | Offers | `src/domain/offers.ts` | Eligibility by tier, segment, member, validity — targeted offers only with personalisation consent |
 | Layout | `src/domain/layout.ts` | The editable sketch per project (zones, steps, openings, fence corners/gates), validated edit ops, geometry helpers |
 | Look | `src/domain/look.ts` | How the chosen products look in 3D (colour, board width, tile format…) from catalogue specs |
+| Items | `src/domain/items.ts` | Placeable fixtures/lights/furniture: sizes, mounting, product roles; placement lives in `layout.ts` |
 | Sizes | `src/domain/sizes.ts` | Typical sizes, measuring tips and the pace estimator for customers who don't know their measurements |
 | Agent tools | `src/agent/tools.ts` | `get_customer_context`, `calculate_project`, `edit_sketch`, `modify_basket`, `control_view`, `suggest_sizes`, `search_products`, `check_stock`, `get_offers`, `present_plan` |
 | Agent loop | `src/agent/run.ts`, `llm.ts` | Streaming tool-use loop behind a provider-neutral `LlmClient` interface |
@@ -162,6 +163,19 @@ the start screen offers to continue it.
 **Plans.** `tenant.plans`: `"ai"` (demo) lets the model write the step-by-step plan, marked as AI;
 `"approved"` always shows the retailer-reviewed template, with the model's tips in a separate
 AI section.
+
+### Put anything in the sketch
+
+"Pune o toaletă lângă ușă, un lavoar pe peretele din stânga cu o oglindă deasupra și o plafonieră" —
+the assistant (or the customer, from the plan editor's **Adaugă** palette) places fixtures, lights and
+furniture (`src/domain/items.ts`: 23 kinds — WC, washbasin, shower, bathtub, mirror, towel radiator,
+ceiling/wall/floor lights, garden lights, table/garden set, BBQ, lounger, parasol, planter, sofa, bed,
+wardrobe, TV…). A placement solver turns "against the left wall", "in the back-right corner", "next to
+the door / window / gate / steps / sink" (a wall item by a floor item goes *above* it) into
+coordinates, checks indoor/outdoor, wall/ceiling mounting and height-aware collisions, and slides
+items along the wall when a spot is taken. Items the store sells become priced list lines (with
+options); sofas, beds etc. are drawn for context. In the plan editor items can be dragged, rotated
+(↻) and removed (×).
 
 ### The editable sketch
 
