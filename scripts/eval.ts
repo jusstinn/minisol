@@ -31,6 +31,7 @@ const SCENARIOS: Scenario[] = [
   { id: "paint-ro", member: "WL-RO-100231", lang: "ro", message: "Vreau să vopsesc dormitorul: 4 x 3,5 m, înălțime 2,6 m, o ușă și o fereastră.", expectCards: ["project", "quote", "plan"] },
   { id: "fence-ro", member: "WL-RO-204518", lang: "ro", message: "Am nevoie de un gard din panouri de 20 m lungime, 1,8 m înălțime.", expectCards: ["project", "quote", "plan"] },
   { id: "lawn-ro", member: "WL-RO-204518", lang: "ro", message: "Vreau gazon nou pe 80 mp în spatele casei.", expectCards: ["project", "quote", "plan"] },
+  { id: "paving-ro", member: "WL-RO-100231", lang: "ro", message: "Vreau o alee din pavele de 6 x 1,2 m prin grădină, cu borduri pe margini.", expectCards: ["project", "quote", "plan"] },
   { id: "laminate-noconsent", member: "WL-RO-411902", lang: "ro", message: "Vreau parchet laminat în living, 5 x 4 m, pe șapă de beton.", expectCards: ["project", "quote", "plan"] },
   { id: "vague-en", member: "WL-RO-309877", lang: "en", message: "I want to put new floors in my flat", expectText: /\b(dimension|size|m²|metres|meters|how big|length|width)\b/i },
   { id: "electric-ro", member: "WL-RO-100231", lang: "ro", message: "Vreau să mut priza din baie și să trag un circuit nou pentru boiler.", expectText: /(electrician|autorizat|specialist|profesionist)/i },

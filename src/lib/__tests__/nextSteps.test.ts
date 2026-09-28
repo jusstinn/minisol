@@ -101,6 +101,9 @@ describe("every chip does what it says (offline agent)", () => {
     { name: "fence EN", prompt: PROJECT_STARTERS[4].promptEn, lang: "en", member: "WL-RO-309877" },
     { name: "bathroom RO", prompt: PROJECT_STARTERS[3].promptRo, lang: "ro", member: "WL-RO-100231" },
     { name: "drywall EN", prompt: PROJECT_STARTERS[5].promptEn, lang: "en", member: "WL-RO-309877" },
+    { name: "paving path RO", prompt: PROJECT_STARTERS.find((s) => s.id === "paving")!.promptRo, lang: "ro", member: "WL-RO-100231" },
+    { name: "paving path EN", prompt: PROJECT_STARTERS.find((s) => s.id === "paving")!.promptEn, lang: "en", member: "WL-RO-309877" },
+    { name: "paved patio RO", prompt: "Terasă din pavele 4 × 3 m", lang: "ro", member: "WL-RO-204518" },
   ];
 
   it.each(scenarios)("$name", async ({ prompt, lang, member }) => {
@@ -146,6 +149,7 @@ async function expectChipWorks(chip: NextStep, state: SessionState, board: Board
     case "drywall":
     case "laminate":
     case "lawn":
+    case "paving":
       // A shape edit: the sketch changed and a change receipt came back.
       expect(r.cards.map((c) => c.kind), chip.text).toContain("change");
       break;

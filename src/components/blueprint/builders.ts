@@ -687,7 +687,7 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   sx *= k;
   sz *= k;
   // Rectangular pavers go in a running bond; squares in a straight grid.
-  const bond = sx >= 1.5 * sz;
+  const bond = sx >= 1.45 * sz;
 
   l.zones.forEach((z, zi) => {
     const zd = zi * 0.6;
