@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef } from "react";
 import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
 import { roomMessage } from "@/lib/planRead";
@@ -37,6 +38,16 @@ export default function PlanControls({
 }) {
   const en = lang === "en";
   const plan = state.plan;
+  const results = useRef<HTMLDivElement>(null);
+  // Results that arrive while this panel is open are brought into view (the dock can be short on laptops).
+  const read0 = plan?.read;
+  const shown = useRef(read0);
+  useEffect(() => {
+    if (!read0 || read0 === shown.current) return;
+    shown.current = read0;
+    const t = setTimeout(() => results.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 350);
+    return () => clearTimeout(t);
+  }, [read0]);
   if (!plan) return null;
   const cal = plan.cal;
   const calibrated = cal.mpp !== null;
@@ -120,7 +131,7 @@ export default function PlanControls({
           )}
           <AnimatePresence>
             {read && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className={aiAvailable ? "mt-2" : ""}>
+              <motion.div ref={results} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className={aiAvailable ? "mt-2" : ""}>
                 <div className={`flex items-center gap-2 ${monoLabel(dark)}`}>
                   <span className="flex-1">{en ? "Read by AI — check them" : "Citite de AI — verifică-le"}</span>
                   <span className={`rounded-full px-1.5 py-px text-[9px] ${read.confidence === "high" ? "bg-[#2f9e5b]/25" : read.confidence === "medium" ? "bg-[#ffd479]/20" : "bg-[#ff7a70]/20"}`}>

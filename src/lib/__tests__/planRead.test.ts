@@ -44,12 +44,14 @@ describe("plan-read answers", () => {
         { name: "Nothing", widthM: null, depthM: null, areaM2: null },
         { name: "Huge", widthM: 4000, depthM: -2, areaM2: null },
         { name: "<script>x</script>", widthM: 3, depthM: 3, areaM2: null },
+        { name: "DORMITOR MATRIMONIAL", widthM: 4, depthM: 3.5, areaM2: null },
+        { name: "WC", widthM: 1.2, depthM: 1.5, areaM2: null },
       ],
       openings: [{ kind: "door", room: "Baie", widthM: 0.8 }, { kind: "hatch", room: null, widthM: 99 }],
       confidence: "certain",
       note: "Cotele sunt clare.",
     });
-    expect(r?.rooms.map((x) => x.name)).toEqual(["Baie", "Hol", "script x /script"]);
+    expect(r?.rooms.map((x) => x.name)).toEqual(["Baie", "Hol", "script x /script", "Dormitor matrimonial", "WC"]);
     expect(r?.openings).toEqual([
       { kind: "door", room: "Baie", widthM: 0.8 },
       { kind: "opening", room: null, widthM: null },

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Lang } from "@/domain/types";
+import { sanitizePlanRead } from "@/lib/planRead";
 import type { PlanReadResult } from "@/lib/planRead";
 import { defaultCalibration, sanitizeCalibration } from "./calibration";
 import type { ImageSize, PlanCalibration } from "./calibration";
@@ -158,7 +159,7 @@ export class UploadsStore {
       if (blob instanceof Blob && pMeta.img?.w > 0 && pMeta.img?.h > 0 && !this.state.plan && !this.disposed) {
         const img = { w: pMeta.img.w, h: pMeta.img.h };
         const cal = sanitizeCalibration(pMeta.cal, defaultCalibration(img, [0, 0], 4));
-        this.set({ plan: { name: String(pMeta.name ?? "plan"), source: pMeta.source === "pdf" ? "pdf" : "image", blob, url: URL.createObjectURL(blob), img, cal, read: pMeta.read } });
+        this.set({ plan: { name: String(pMeta.name ?? "plan"), source: pMeta.source === "pdf" ? "pdf" : "image", blob, url: URL.createObjectURL(blob), img, cal, read: sanitizePlanRead(pMeta.read) ?? undefined } });
       }
     }
     if (mMeta?.project === project && !this.state.model && ["glb", "gltf", "obj"].includes(mMeta.format)) {

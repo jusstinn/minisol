@@ -136,6 +136,12 @@ const text = (v: unknown, max: number) =>
         .slice(0, max)
     : "";
 
+/** "BAIE" (as lettered on the plan) → "Baie"; names already in mixed case stay as they are. */
+function roomName(v: unknown): string {
+  const t = text(v, 40);
+  return t.length > 3 && t === t.toLocaleUpperCase("ro-RO") && t !== t.toLocaleLowerCase("ro-RO") ? t.charAt(0) + t.slice(1).toLocaleLowerCase("ro-RO") : t;
+}
+
 /** The model's answer, checked and trimmed (never trusted as-is). Null when it isn't usable at all. */
 export function sanitizePlanRead(raw: unknown): PlanReadResult | null {
   if (!raw || typeof raw !== "object") return null;
@@ -145,7 +151,7 @@ export function sanitizePlanRead(raw: unknown): PlanReadResult | null {
     .slice(0, 24)
     .map((x) => {
       const o = (x ?? {}) as Record<string, unknown>;
-      return { name: text(o.name, 40), widthM: clampDim(o.widthM, 0.2, 100), depthM: clampDim(o.depthM, 0.2, 100), areaM2: clampDim(o.areaM2, 0.1, 5000) };
+      return { name: roomName(o.name), widthM: clampDim(o.widthM, 0.2, 100), depthM: clampDim(o.depthM, 0.2, 100), areaM2: clampDim(o.areaM2, 0.1, 5000) };
     })
     .filter((x) => x.name && (x.widthM !== null || x.depthM !== null || x.areaM2 !== null));
   const openings: PlanOpening[] = (Array.isArray(r.openings) ? r.openings : [])
