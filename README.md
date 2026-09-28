@@ -74,9 +74,15 @@ streaming.
    plan. Only what changed builds in 3D (new parts glow, removed ones sink away in red), the list
    is recalculated keeping the products you picked, and a receipt shows every material and the
    price difference (**Anulează** undoes it). Raising the deck swaps in taller pedestals by itself.
-10. Switch to Maria → **"Gazon nou"** (garden ×3 points), James → **"New bathroom"** in English,
+10. **Change anything by talking.** *"Alege varianta din WPC și arată-mi-o în vedere reală"* — the
+    boards switch (re-sized for the project) and the 3D turns grey WPC; *"Arată-mi grinzile"*
+    lifts and highlights the joists; *"Scoate geotextilul"*, *"Adaugă sugestiile"*, *"Mută lista la
+    Berceni"*, *"Plătesc cu puncte"*, *"Anulează"* all work (live AI and offline).
+11. **Don't know the size?** *"Vreau o terasă dar nu știu cât de mare"* → typical sizes to tap and a
+    pace counter (1 pace ≈ 75 cm). Reload the page: the start screen offers **"Continuă proiectul"**.
+12. Switch to Maria → **"Gazon nou"** (garden ×3 points), James → **"New bathroom"** in English,
    Elena → no personalisation consent. Try the mic button (voice, ro-RO / en-GB).
-11. Close with **/pitch?retailer=hornbach** — the ROI calculator and the 6-week pilot plan.
+13. Close with **/pitch?retailer=hornbach** — the ROI calculator and the 6-week pilot plan.
 
 ## How it works
 
@@ -113,7 +119,9 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 | Quote engine | `src/domain/quote.ts` | Line totals, best single offer per line, bundles, basket thresholds, loyalty points (tier + category multipliers), redemption cap, stock at chosen store, alternatives, delivery |
 | Offers | `src/domain/offers.ts` | Eligibility by tier, segment, member, validity — targeted offers only with personalisation consent |
 | Layout | `src/domain/layout.ts` | The editable sketch per project (zones, steps, openings, fence corners/gates), validated edit ops, geometry helpers |
-| Agent tools | `src/agent/tools.ts` | `get_customer_context`, `calculate_project`, `edit_sketch`, `modify_basket`, `search_products`, `check_stock`, `get_offers`, `present_plan` |
+| Look | `src/domain/look.ts` | How the chosen products look in 3D (colour, board width, tile format…) from catalogue specs |
+| Sizes | `src/domain/sizes.ts` | Typical sizes, measuring tips and the pace estimator for customers who don't know their measurements |
+| Agent tools | `src/agent/tools.ts` | `get_customer_context`, `calculate_project`, `edit_sketch`, `modify_basket`, `control_view`, `suggest_sizes`, `search_products`, `check_stock`, `get_offers`, `present_plan` |
 | Agent loop | `src/agent/run.ts`, `llm.ts` | Streaming tool-use loop behind a provider-neutral `LlmClient` interface |
 | Scripted agent | `src/agent/scripted.ts` | Offline RO/EN intent parser + same tools, used as fallback |
 | Verification | `src/agent/verify.ts` | Every lei amount in the model's reply must exist in the quote; failing replies are replaced by the deterministic one |
@@ -122,6 +130,38 @@ dimensions, calls tools, and explains results. Everything with a number comes fr
 Conversation state (basket, store, project) is round-tripped by the client, so the server is
 stateless and horizontally scalable; history and state from the browser are validated before reuse
 (`src/agent/state.ts`).
+
+### The assistant can change everything on screen
+
+The model has the same powers as the customer's fingers, and sees the live list (including hand edits)
+in its instructions:
+
+| Customer says | Tool |
+|---|---|
+| "WPC instead of larch", "fewer screws", "remove the saw", "add the oil", "move it to Berceni" | `modify_basket` — `choose` re-sizes the new option for the project; suggestions live in session state (add / dismiss) |
+| "L-shape", "3 steps at the front", "a gate", "undo" | `edit_sketch` (with layout history) |
+| "show me the joists", "exploded view", "open the cart", "pay with points", "open the plan editor" | `control_view` → a `ui` event the client applies (sketch view/highlight, panels, cart, product sheet) |
+| "I don't know the size" | `suggest_sizes` → typical sizes + pace estimator |
+
+**Fast first answer.** Before the model starts, the server loads the member profile and, when the
+message clearly describes a complete project, calculates it deterministically: the sketch and
+the priced list are on screen in under a second, and both results are handed to the model as
+tool calls it already made — it only writes the plan and the reply (2 requests instead of 3–4).
+If the model fails after that, the turn completes from the template plan and the quote.
+
+**The sketch shows the actual products** (`src/domain/look.ts`): board width/colour, joist
+section, tile format (incl. wood-look planks in running bond), laminate decor, paint colour,
+panel/gate material — straight from catalogue specs. Swapping an option re-draws the sketch
+(same part ids → the change morphs and glows). Why not real 3D models of each SKU: retailers
+rarely have them, image-to-3D isn't dimensionally reliable, and the sketch is mostly boards,
+tiles and panels whose look is fully described by their specs; hero products can get a GLB later.
+
+**Saved sessions.** The project is kept in the customer's browser (per retailer + member, 30 days);
+the start screen offers to continue it.
+
+**Plans.** `tenant.plans`: `"ai"` (demo) lets the model write the step-by-step plan, marked as AI;
+`"approved"` always shows the retailer-reviewed template, with the model's tips in a separate
+AI section.
 
 ### The editable sketch
 
