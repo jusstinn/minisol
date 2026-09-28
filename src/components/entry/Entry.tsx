@@ -29,6 +29,7 @@ export default function Entry({
   tenant,
   members,
   member,
+  fromPass = false,
   lang,
   onLang,
   onSelect,
@@ -37,6 +38,8 @@ export default function Entry({
   tenant: Tenant;
   members: MemberSummary[];
   member?: MemberSummary;
+  /** Product mode: the member arrived through their signed pass link — show only their pass, no demo picker. */
+  fromPass?: boolean;
   lang: Lang;
   onLang: (l: Lang) => void;
   onSelect: (m: MemberSummary) => void;
@@ -78,13 +81,17 @@ export default function Entry({
         <span className="ml-2 hidden rounded-full border border-rule px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 sm:inline-flex">
           {lang === "en" ? "for" : "pentru"}&nbsp;<b className="font-semibold text-ink">{tenant.name}</b>
         </span>
-        <a
-          href={`/pitch?retailer=${tenant.id}&lang=${lang}`}
-          className="ml-auto hidden rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:text-ink sm:inline"
+        {!fromPass && (
+          <a
+            href={`/pitch?retailer=${tenant.id}&lang=${lang}`}
+            className="ml-auto hidden rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:text-ink sm:inline"
+          >
+            {lang === "en" ? "For retailers →" : "Pentru retaileri →"}
+          </a>
+        )}
+        <div
+          className={`flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur ${fromPass ? "ml-auto" : "sm:ml-0 max-sm:ml-auto"}`}
         >
-          {lang === "en" ? "For retailers →" : "Pentru retaileri →"}
-        </a>
-        <div className="flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur sm:ml-0 max-sm:ml-auto">
           {(["ro", "en"] as const).map((l) => (
             <button
               key={l}
@@ -193,12 +200,25 @@ export default function Entry({
             <TitleBlock lang={lang} />
           </div>
 
-          {/* pass stack */}
+          {/* demo: pass stack to pick from · signed pass link: only the member's own pass */}
           <div className="order-first mx-auto w-[min(92%,340px)] lg:absolute lg:-bottom-4 lg:-left-8 lg:order-none lg:mx-0 lg:w-[330px]">
-            <div className="mb-[104px]">
-              <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">{tr("pickPass", lang)} ↓</span>
-            </div>
-            <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
+            {fromPass && member ? (
+              <>
+                <div className="mb-3">
+                  <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">
+                    {lang === "en" ? "Your card" : "Cardul tău"} · {tenant.programName}
+                  </span>
+                </div>
+                <WalletPass member={member} tenant={tenant} lang={lang} />
+              </>
+            ) : (
+              <>
+                <div className="mb-[104px]">
+                  <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">{tr("pickPass", lang)} ↓</span>
+                </div>
+                <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
+              </>
+            )}
           </div>
         </section>
       </main>
