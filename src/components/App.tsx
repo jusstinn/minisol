@@ -7,6 +7,7 @@ import type { Lang } from "@/domain/types";
 import Entry from "./entry/Entry";
 import type { MemberSummary } from "./entry/WalletPass";
 import Workspace from "./workspace/Workspace";
+import { clearSaved, useSavedSummary } from "@/lib/savedSession";
 
 export default function App({
   tenant,
@@ -23,7 +24,8 @@ export default function App({
   const [members, setMembers] = useState<MemberSummary[]>(passMember ? [passMember] : []);
   const [memberId, setMemberId] = useState<string | undefined>(passMember?.memberId ?? initialMember);
   const [lang, setLang] = useState<Lang>(initialLang ?? "ro");
-  const [session, setSession] = useState<{ prompt: string; key: number } | null>(null);
+  const [session, setSession] = useState<{ prompt: string; key: number; resume?: boolean } | null>(null);
+  const saved = useSavedSummary(tenant.id, memberId);
   const fromPass = Boolean(passMember);
 
   useEffect(() => {
@@ -62,6 +64,9 @@ export default function App({
                 setLang(m.language);
               }}
               onStart={(prompt) => setSession({ prompt, key: Date.now() })}
+              saved={saved}
+              onResume={() => setSession({ prompt: "", key: Date.now(), resume: true })}
+              onForget={() => memberId && clearSaved(tenant.id, memberId)}
             />
           </motion.div>
         ) : (
@@ -72,6 +77,7 @@ export default function App({
               lang={lang}
               onLang={setLang}
               initialPrompt={session.prompt}
+              resume={session.resume}
               onExit={() => setSession(null)}
             />
           </motion.div>

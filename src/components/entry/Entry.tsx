@@ -6,9 +6,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { ProjectType } from "@/domain/calculators";
 import type { Lang } from "@/domain/types";
+import { lei } from "@/lib/format";
 import { PROJECT_STARTERS, tr } from "@/lib/i18n";
+import { ago } from "@/lib/savedSession";
+import type { SavedSummary } from "@/lib/savedSession";
 import { buildScene } from "../blueprint/builders";
-import { IconArrow, Logo, PROJECT_ICONS } from "../ui/icons";
+import { IconArrow, IconClose, Logo, PROJECT_ICONS } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Scramble } from "../ui/primitives";
 import type { MemberSummary } from "./WalletPass";
@@ -34,6 +37,9 @@ export default function Entry({
   onLang,
   onSelect,
   onStart,
+  saved,
+  onResume,
+  onForget,
 }: {
   tenant: Tenant;
   members: MemberSummary[];
@@ -44,6 +50,10 @@ export default function Entry({
   onLang: (l: Lang) => void;
   onSelect: (m: MemberSummary) => void;
   onStart: (prompt: string) => void;
+  /** A project saved in this browser for this member. */
+  saved?: SavedSummary | null;
+  onResume?: () => void;
+  onForget?: () => void;
 }) {
   const [wordIdx, setWordIdx] = useState(0);
   const [heroIdx, setHeroIdx] = useState(0);
@@ -120,8 +130,44 @@ export default function Entry({
           </h1>
           <p className="mt-6 max-w-[560px] text-[16.5px] leading-relaxed text-ink-2 sm:text-[18px]">{tr("subhead", lang)}</p>
 
+          {/* a saved project to pick up again */}
+          <AnimatePresence>
+            {saved && member && onResume && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="mt-8 flex max-w-[640px] items-center gap-3 rounded-[18px] border border-ink/15 bg-card p-3 pl-4 shadow-[0_18px_40px_-28px_rgba(20,19,17,0.5)]"
+              >
+                <span className="h-10 w-1 shrink-0 rounded-full bg-accent" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+                    {lang === "en" ? "Your saved project" : "Proiectul tău salvat"} · {ago(saved.savedAt, lang)}
+                  </div>
+                  <div className="truncate text-[15.5px] font-semibold text-ink">{saved.title}</div>
+                  {saved.total !== undefined && (
+                    <div className="font-mono text-[12px] text-ink-2">
+                      {lei(saved.total, lang)} · {saved.lines} {lang === "en" ? "items" : "produse"}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={onResume}
+                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-[12px] bg-ink px-3.5 text-[13.5px] font-semibold text-paper transition hover:bg-accent hover:text-on-accent"
+                >
+                  {lang === "en" ? "Continue" : "Continuă"} <IconArrow size={16} />
+                </button>
+                {onForget && (
+                  <button onClick={onForget} title={lang === "en" ? "Forget this project" : "Șterge proiectul salvat"} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-3 transition hover:bg-ink/5 hover:text-ink">
+                    <IconClose size={14} />
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* prompt */}
-          <div className="group relative mt-8 max-w-[640px]">
+          <div className={`group relative max-w-[640px] ${saved && member ? "mt-4" : "mt-8"}`}>
             <div className="absolute -inset-px rounded-[20px] bg-gradient-to-r from-accent/60 via-accent/10 to-transparent opacity-0 blur transition group-focus-within:opacity-100" />
             <div className="relative flex items-end gap-2 rounded-[18px] border border-ink/15 bg-card p-2 shadow-[0_18px_40px_-24px_rgba(20,19,17,0.5)]">
               <textarea

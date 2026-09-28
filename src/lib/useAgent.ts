@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentEvent, Card, ChoiceGroup, ProductOptionView, QualityOption, SessionState, UiCommand } from "@/agent/types";
 import type { SketchOp } from "@/domain/layout";
 import type { Look } from "@/domain/look";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
+import { readSaved, writeSaved } from "./savedSession";
 
 export interface LogEntry {
   tool: string;
@@ -59,16 +60,25 @@ export interface UiSignal {
   at: number;
 }
 
-export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; forceScripted?: boolean }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [board, setBoard] = useState<Board>({ version: 0 });
+export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; forceScripted?: boolean; restore?: boolean }) {
+  // Pick up a saved project (same browser, same member) instead of starting fresh.
+  const [restored] = useState(() => (opts.restore ? readSaved(opts.tenant, opts.memberId) : null));
+  const [messages, setMessages] = useState<ChatMessage[]>(() => restored?.messages ?? []);
+  const [board, setBoard] = useState<Board>(() => (restored ? { ...restored.board, version: restored.board.version + 1 } : { version: 0 }));
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<{ mode: "live" | "scripted"; reason?: string } | null>(null);
-  const stateRef = useRef<SessionState>({ basket: [] });
-  const historyRef = useRef<unknown[]>([]);
+  const stateRef = useRef<SessionState>(restored?.state ?? { basket: [] });
+  const historyRef = useRef<unknown[]>(restored?.history ?? []);
   const abortRef = useRef<AbortController | null>(null);
   const [pointsDelta, setPointsDelta] = useState<number | null>(null);
   const [ui, setUi] = useState<UiSignal | null>(null);
+
+  // Save after every settled change (debounced; never mid-answer).
+  useEffect(() => {
+    if (busy || !messages.length) return;
+    const t = setTimeout(() => writeSaved(opts.tenant, opts.memberId, { messages, board, state: stateRef.current, history: historyRef.current }), 500);
+    return () => clearTimeout(t);
+  }, [messages, board, busy, opts.tenant, opts.memberId]);
 
   const patchAssistant = useCallback((id: string, fn: (m: ChatMessage) => ChatMessage) => {
     setMessages((ms) => ms.map((m) => (m.id === id ? fn(m) : m)));

@@ -25,6 +25,7 @@ export default function Workspace({
   lang,
   onLang,
   initialPrompt,
+  resume,
   onExit,
 }: {
   tenant: Tenant;
@@ -32,10 +33,12 @@ export default function Workspace({
   lang: Lang;
   onLang: (l: Lang) => void;
   initialPrompt: string;
+  /** Continue the project saved in this browser instead of starting a new one. */
+  resume?: boolean;
   onExit: () => void;
 }) {
   const [offline, setOffline] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo"));
-  const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline });
+  const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline, restore: resume });
   const [highlight, setHighlight] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -45,7 +48,7 @@ export default function Workspace({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    agent.send(initialPrompt);
+    if (initialPrompt) agent.send(initialPrompt);
   }, [agent, initialPrompt]);
 
   const quote = agent.board.quote?.quote;
