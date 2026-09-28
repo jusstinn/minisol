@@ -144,6 +144,13 @@ export interface Product {
   category: CategoryId;
   /** Price in RON incl. VAT, per sales unit. */
   price: number;
+  /**
+   * Lowest price (RON incl. VAT, per sales unit) applied in the 30 days before today —
+   * the only price a reduction may be compared against (Directive 98/6/EC art. 6a, as
+   * amended by the Omnibus Directive 2019/2161). Supplied by the retailer's price
+   * history; absent means the price has not changed in that window.
+   */
+  lowestPrice30d?: number;
   /** What the customer buys, in Romanian: "buc", "găleată", "pachet", "sac", "rolă", "cutie", "set". */
   salesUnit: string;
   /** Which calculator roles this product can satisfy (usually exactly one). */

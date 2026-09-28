@@ -1,6 +1,7 @@
 import catalogJson from "@/data/catalog.json";
 import { CUSTOMER_SEEDS } from "@/data/customers";
 import { OFFERS } from "@/data/offers";
+import { withPriceHistory } from "@/data/priceHistory";
 import { demoStock } from "@/data/stock";
 import { STORES } from "@/data/stores";
 import { chooseLine } from "@/domain/resolve";
@@ -10,7 +11,12 @@ import { MATERIAL_ROLES } from "@/domain/types";
 import type { Tenant } from "@/config/tenant";
 import type { DataSources, ProductQuery } from "./types";
 
-export const DEMO_CATALOG = catalogJson as unknown as Product[];
+/**
+ * Demo catalogue as the retailer feed would deliver it, with each product's 30-day lowest
+ * price attached (seeded demo history; a production adapter takes it from the retailer).
+ * The seeded history is relative to today, so the lowest price does not depend on the date.
+ */
+export const DEMO_CATALOG = (catalogJson as unknown as Product[]).map((p) => withPriceHistory(p));
 const BY_SKU = new Map(DEMO_CATALOG.map((p) => [p.sku, p]));
 
 function buildCustomers(): Customer[] {

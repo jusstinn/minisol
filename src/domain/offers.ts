@@ -18,3 +18,14 @@ export function eligibleOffers(offers: Offer[], customer: Customer, now: Date = 
     return true;
   });
 }
+
+/**
+ * Consumer Rights Directive art. 6(1)(ea) (added by the Omnibus Directive): the member
+ * must be told when a price was personalised on the basis of automated decision-making.
+ * Offers aimed at a tier above the entry tier, a segment or named members are decided by
+ * WalletLoop profiling, so they are personalised; offers open to every member are not.
+ */
+export function isPersonalisedOffer(o: Offer): boolean {
+  const e = o.eligibility;
+  return Boolean((e.minTier && tierRank(e.minTier) > 0) || e.segments?.length || e.memberIds?.length);
+}

@@ -208,6 +208,23 @@ lets the pass backend track or revoke individual links; the app does not keep se
 - Safety rules in the prompt and calculators: electrics, gas, structural walls, work at height
   → licensed professional; hazard notes per project.
 
+### Price display (EU / Romanian consumer law)
+
+The quote engine (`src/domain/quote.ts`) does the maths; the list and cart only render it.
+
+- **Prior price on reductions** (Omnibus, Directive 98/6/EC art. 6a): a crossed-out price is
+  only ever the product's **lowest price of the last 30 days** (`Product.lowestPrice30d`, never
+  above today's price), labelled "Cel mai mic preț din ultimele 30 de zile". If an offer does not
+  beat it, the line shows its price with nothing struck through, and the basket's "you save"
+  (`quote.saving`) is measured from those references. The retailer adapter must supply
+  `lowestPrice30d`; the demo derives it from a seeded history in `src/data/priceHistory.ts`.
+- **Personalised prices** (Consumer Rights Directive art. 6(1)(ea)): tier (above entry), segment
+  and member-targeted offers are personalised (`isPersonalisedOffer`), badged on the line and
+  disclosed in the list and cart footers; offers open to every member are not flagged.
+- **Unit price** per l / kg / m / m² (per piece for multi-packs) next to pack products, from the
+  list price; none when it equals the selling price.
+- **VAT**: all prices include VAT, stated next to the totals.
+
 ## Scripts
 
 ```bash

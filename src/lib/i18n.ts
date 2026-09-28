@@ -87,6 +87,27 @@ const STRINGS = {
     en: "You're talking to an AI assistant. Figures are checked by the pricing engine; sketches and the plan are indicative.",
   },
   noPersonalization: { ro: "Fără personalizare (fără consimțământ)", en: "No personalisation (no consent)" },
+  // Price display (EU/RO consumer law): prior price on reductions, personalised prices, VAT.
+  /** Omnibus (Dir. 98/6/EC art. 6a): the reference for any crossed-out price. */
+  lowest30: { ro: "Cel mai mic preț din ultimele 30 de zile", en: "Lowest price in the last 30 days" },
+  /** Shown instead of the struck price for screen readers. */
+  referencePrice: { ro: "Preț de referință", en: "Reference price" },
+  /** Hint on the basket's struck-through "was" total. */
+  compareAtHint: {
+    ro: "Produsele reduse sunt comparate cu cel mai mic preț al lor din ultimele 30 de zile.",
+    en: "Reduced items are compared with their lowest price in the last 30 days.",
+  },
+  /** CRD art. 6(1)(ea): line badge, "{label} · membru {program}" / "{label} · {program} member". */
+  personalisedPrice: { ro: "Preț personalizat", en: "Personalised price" },
+  personalisedWhy: {
+    ro: "Reducere stabilită automat pe baza profilului tău WalletLoop (nivel, segmente de interes, istoric de cumpărături). Alți clienți pot vedea alt preț.",
+    en: "Discount set automatically from your WalletLoop profile (tier, interest segments, purchase history). Other customers may see a different price.",
+  },
+  personalisedDisclosure: {
+    ro: "Unele prețuri sunt personalizate pentru tine, pe baza prelucrării automate a profilului tău WalletLoop.",
+    en: "Some prices are personalised for you, based on automated processing of your WalletLoop profile.",
+  },
+  vatIncluded: { ro: "Prețurile includ TVA.", en: "Prices include VAT." },
   demoNote: { ro: "Demo · date de catalog și stoc fictive", en: "Demo · fictional catalogue & stock data" },
 } as const;
 
