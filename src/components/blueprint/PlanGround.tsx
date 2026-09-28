@@ -49,7 +49,7 @@ export default function PlanGround({ plan, mode }: { plan: PlanEntry; mode: View
         key={blue ? "blue" : "real"}
         map={blue ? tex.blue : tex.real}
         transparent
-        opacity={blue ? Math.min(1, 0.35 + cal.opacity * 0.6) : cal.opacity * 0.85}
+        opacity={blue ? Math.min(1, 0.45 + cal.opacity * 0.7) : cal.opacity * 0.85}
         depthWrite={false}
         toneMapped={false}
         polygonOffset

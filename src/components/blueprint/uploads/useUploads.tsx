@@ -140,7 +140,7 @@ export function useUploads({
     </>
   );
 
-  const button = (
+  const uploadButton = (
     <button
       onClick={pick}
       disabled={loading}
@@ -153,6 +153,9 @@ export function useUploads({
       <span className={inline ? "sr-only" : "hidden sm:inline"}>{en ? "Upload" : "Încarcă"}</span>
     </button>
   );
+  // Phones: the controls row is already full (it runs into the title), so the button sits
+  // on its own under it, still in the controls column.
+  const button = inline ? null : uploadButton;
 
   const open = state.ui.open;
   const toggle = (slot: "model" | "plan") => store.setUi({ open: open === slot ? null : slot });
@@ -206,6 +209,7 @@ export function useUploads({
   const overlay = (
     <>
       <span ref={anchorRef} hidden />
+      {inline && <div className="absolute right-3 top-[90px] z-10">{uploadButton}</div>}
       <input
         ref={inputRef}
         type="file"
