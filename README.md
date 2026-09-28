@@ -342,6 +342,22 @@ npx tsx --env-file=.env.local scripts/make-pass-link.ts WL-RO-204518 hornbach 24
 Tokens are bearer credentials: they are never logged (only the rejection reason is). The nonce `n`
 lets the pass backend track or revoke individual links; the app does not keep server-side state.
 
+### Two deployments: demo and pilot
+
+Both Vercel projects build `main` on every push:
+
+| Project | URL | Mode |
+| --- | --- | --- |
+| `blueprint-walletloop` | blueprint-walletloop.vercel.app | Open demo (member picker, "Atelier" brand) |
+| `blueprint-pilot` | blueprint-pilot-walletloop.vercel.app | Product mode for HORNBACH: `REQUIRE_PASS_LINK=1`, `TENANT=hornbach` |
+
+The pilot needs two secrets. Add them in *Project → Settings → Environment Variables*, then redeploy:
+
+- `PASS_LINK_SECRET`: generate it with `openssl rand -base64 48`. Share the same value with
+  WalletLoop's pass backend, and put it in your `.env.local` to mint links by hand. Until it is set,
+  the pilot deliberately fails with a configuration error rather than open up.
+- `OPENAI_API_KEY`: optional. Without it the pilot runs the offline agent.
+
 ## Privacy & safety
 
 - **Data minimisation**: the model sees tier, points, home store, city, interests and
