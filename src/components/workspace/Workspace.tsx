@@ -12,6 +12,7 @@ import Board from "../board/Board";
 import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
 import CartDrawer from "../cart/CartDrawer";
+import { ProductSheetProvider } from "../board/ProductSheet";
 import { IconArrowUp, IconBag, IconCheck, IconClose, Logo } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
@@ -49,6 +50,8 @@ export default function Workspace({
   const project = agent.board.project?.project;
 
   return (
+    // Product sheets open from the list, options, cart and search results; stock is shown for the quote's store.
+    <ProductSheetProvider tenantId={tenant.id} lang={lang} storeId={quote?.storeId ?? member.homeStoreId}>
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
       <header className="flex items-center gap-3 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:px-6">
@@ -229,6 +232,7 @@ export default function Workspace({
         />
       )}
     </div>
+    </ProductSheetProvider>
   );
 }
 

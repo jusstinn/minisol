@@ -12,6 +12,7 @@ import { Counter, PanelHeader } from "../ui/primitives";
 import WalletListModal from "./WalletListModal";
 import OptionsStrip from "./OptionsStrip";
 import { ProductArt } from "../ui/ProductArt";
+import { ProductName, ProductThumb } from "./ProductSheet";
 import type { Tenant } from "@/config/tenant";
 
 export const CATEGORY_LABEL: Record<CategoryId, { ro: string; en: string }> = {
@@ -393,11 +394,13 @@ function LineGroup({
               className={`rounded-lg transition-colors ${highlight && highlight === l.role ? "bg-accent/10" : ""}`}
             >
               <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-2.5">
-                <div className="grid h-14 w-14 place-items-center rounded-xl bg-paper-2">
+                <ProductThumb sku={l.sku} context={{ qty: l.qty, basis: l.basis }} className="grid h-14 w-14 place-items-center rounded-xl bg-paper-2">
                   <ProductArt art={l.art} size={50} />
-                </div>
+                </ProductThumb>
                 <div className="min-w-0">
-                  <div className="line-clamp-2 text-[13.5px] leading-snug text-ink">{l.name}</div>
+                  <ProductName sku={l.sku} context={{ qty: l.qty, basis: l.basis }} className="line-clamp-2 text-[13.5px] leading-snug text-ink">
+                    {l.name}
+                  </ProductName>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[10px] text-ink-3">
                     <StockDot status={l.stock.status} lang={lang} />
                     <span>

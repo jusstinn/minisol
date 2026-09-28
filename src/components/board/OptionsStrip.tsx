@@ -7,6 +7,7 @@ import type { Lang } from "@/domain/types";
 import { lei } from "@/lib/format";
 import { IconCheck } from "../ui/icons";
 import { ProductArt } from "../ui/ProductArt";
+import { ProductName, ProductThumb } from "./ProductSheet";
 
 const QUALITY = {
   budget: { ro: "Economic", en: "Budget", cls: "bg-paper-2 text-ink-2" },
@@ -69,9 +70,9 @@ export default function OptionsStrip({
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <div className="grid h-[76px] w-[76px] place-items-center rounded-lg bg-paper-2">
+                  <ProductThumb sku={o.sku} context={{ packLabel: o.packLabel, basis: group.basis }} className="grid h-[76px] w-[76px] place-items-center rounded-lg bg-paper-2">
                     <ProductArt art={o.art} size={70} />
-                  </div>
+                  </ProductThumb>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider ${QUALITY[o.quality].cls}`}>{QUALITY[o.quality][lang]}</span>
                     {o.total === cheapest && !active && (
@@ -80,7 +81,9 @@ export default function OptionsStrip({
                   </div>
                 </div>
                 <div className="mt-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">{o.brand}</div>
-                <div className="line-clamp-2 min-h-[2.6em] text-[12.5px] leading-snug text-ink">{o.name}</div>
+                <ProductName sku={o.sku} context={{ packLabel: o.packLabel, basis: group.basis }} className="line-clamp-2 min-h-[2.6em] text-[12.5px] leading-snug text-ink">
+                  {o.name}
+                </ProductName>
                 <div className="mt-1 space-y-0.5 font-mono text-[9.5px] text-ink-3">
                   {o.highlights.slice(0, 2).map((h) => (
                     <div key={h} className="truncate">

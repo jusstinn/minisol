@@ -10,6 +10,7 @@ import WalletListModal from "../board/WalletListModal";
 import { IconBag, IconCheck, IconClose, IconMinus, IconPin, IconPlus, IconTrash, IconTruck, IconWallet } from "../ui/icons";
 import { Counter } from "../ui/primitives";
 import { ProductArt } from "../ui/ProductArt";
+import { ProductName, ProductThumb } from "../board/ProductSheet";
 
 type Fulfilment = "pickup" | "delivery";
 
@@ -95,12 +96,14 @@ export default function CartDrawer({
                             transition={{ delay: open ? Math.min(i * 0.03, 0.4) : 0, duration: 0.35 }}
                             className="grid grid-cols-[64px_1fr_auto] items-center gap-3 rounded-2xl border border-rule bg-card p-2.5"
                           >
-                            <div className="grid h-16 w-16 place-items-center rounded-xl bg-paper-2">
+                            <ProductThumb sku={l.sku} context={{ qty: l.qty, basis: l.basis }} className="grid h-16 w-16 place-items-center rounded-xl bg-paper-2">
                               <ProductArt art={l.art} size={58} />
-                            </div>
+                            </ProductThumb>
                             <div className="min-w-0">
                               <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">{l.brand}</div>
-                              <div className="line-clamp-2 text-[12.5px] leading-snug text-ink">{l.name}</div>
+                              <ProductName sku={l.sku} context={{ qty: l.qty, basis: l.basis }} className="line-clamp-2 text-[12.5px] leading-snug text-ink">
+                                {l.name}
+                              </ProductName>
                               <div className="mt-1.5 flex items-center gap-2">
                                 <div className="flex items-center rounded-lg border border-rule bg-paper">
                                   <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">

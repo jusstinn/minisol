@@ -200,6 +200,13 @@ export const IconClose = ({ size, ...p }: P) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );
+/** Drafting rule — opens a product's technical sheet. */
+export const IconRuler = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M3.5 16.5l13-13 4 4-13 13z" />
+    <path d="M7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2" />
+  </svg>
+);
 
 /** Blueprint wordmark glyph: a square with dimension ticks. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {

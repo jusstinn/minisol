@@ -9,6 +9,7 @@ import { tr } from "@/lib/i18n";
 import { IconPlus } from "../ui/icons";
 import { PanelHeader } from "../ui/primitives";
 import { ProductArt } from "../ui/ProductArt";
+import { ProductName, ProductThumb } from "./ProductSheet";
 
 const QUALITY = {
   budget: { ro: "Economic", en: "Budget", cls: "bg-paper-2 text-ink-2" },
@@ -30,13 +31,15 @@ export default function ProductsPanel({ query, products, lang, onAdd }: { query:
             className="flex w-[230px] shrink-0 snap-start flex-col rounded-2xl border border-rule bg-paper p-4"
           >
             <div className="flex items-start justify-between">
-              <div className="grid h-20 w-20 place-items-center rounded-xl bg-paper-2">
+              <ProductThumb sku={p.sku} className="grid h-20 w-20 place-items-center rounded-xl bg-paper-2">
                 <ProductArt art={p.art} size={72} />
-              </div>
+              </ProductThumb>
               <span className={`rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-wider ${QUALITY[p.quality].cls}`}>{QUALITY[p.quality][lang]}</span>
             </div>
             <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{p.brand}</span>
-            <div className="mt-2 line-clamp-3 min-h-[3.9em] text-[13.5px] leading-snug text-ink">{p.name}</div>
+            <ProductName sku={p.sku} className="mt-2 line-clamp-3 min-h-[3.9em] text-[13.5px] leading-snug text-ink">
+              {p.name}
+            </ProductName>
             <div className="mt-2 space-y-0.5 font-mono text-[10px] text-ink-3">
               {p.highlights.slice(0, 3).map((h) => (
                 <div key={h} className="truncate">
