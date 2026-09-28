@@ -1,9 +1,10 @@
 import type { ProjectType } from "@/domain/calculators";
-import { ITEMS, itemRole, rotXZ } from "@/domain/items";
+import { ITEMS, isOutdoor, itemRole, rotXZ } from "@/domain/items";
 import type { ItemKind } from "@/domain/items";
 import { defaultLayout, exposedEdges, fenceSegments, itemContainer, SIDES } from "@/domain/layout";
 import type { Layout, Opening, Side, Zone } from "@/domain/layout";
 import { shades } from "@/domain/look";
+import { PAVING_BUILDUP, pavingDepth } from "@/domain/paving";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
@@ -85,6 +86,11 @@ const C = {
   door: "#7a5a3e",
   window: "#bcd8f5",
   profile: "#b8bec6",
+  paver: "#a19d96",
+  gravel: "#8b8781",
+  sand: "#d9c49b",
+  kerb: "#b4b0a8",
+  lawnEdge: "#6d8b58",
 };
 
 const zoneDims = (zones: Zone[], lang: Lang, y = 0): DimLine[] =>
@@ -650,6 +656,118 @@ function lawn(l: Extract<Layout, { type: "lawn" }>, lang: Lang): Build {
   };
 }
 
+// ──────────────────────────── paving ─────────────────────────────
+/**
+ * A cut-away section of the paved surface, bottom-up: geotextile, compacted stone,
+ * sand bed, the pavers in the chosen format and colour, kerbs on their concrete bed
+ * along the outline, and the ground it's dug into. Ids are per zone and per paver
+ * row/column, so an edit or a product swap morphs instead of rebuilding.
+ */
+function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look): Build {
+  const en = lang === "en";
+  const parts: Part[] = [];
+  const top = pavingDepth(l.use);
+  const spec = PAVING_BUILDUP[l.use];
+  // The pavers actually in the basket: format (long side along x), thickness and colour.
+  const pv = look.pavers;
+  let [sx, sz] = pv?.w && pv.l ? [Math.max(pv.w, pv.l), Math.min(pv.w, pv.l)] : [0.2, 0.1];
+  const t = Math.min(0.12, pv?.t ?? spec.paver);
+  const paverColors = shades(pv?.color ?? C.paver, 3, 0.05);
+  const baseColor = look.paving_base?.color ?? C.gravel;
+  const sandColor = look.paving_sand?.color ?? C.sand;
+  const jointColor = look.joint_sand?.color ?? C.sand;
+  const kerbColor = look.paving_edging?.color ?? C.kerb;
+  const kerbT = Math.min(0.2, look.paving_edging?.t ?? 0.05);
+  const kerbH = Math.min(0.4, look.paving_edging?.h ?? 0.2);
+  const sandTop = top - t;
+  const sandBottom = Math.max(0.03, sandTop - spec.sand);
+  // Small formats over a big area would mean thousands of parts: draw them larger, same proportions.
+  const area = l.zones.reduce((s, z) => s + z.w * z.d, 0);
+  const k = Math.max(1, Math.sqrt(area / (sx * sz) / 600));
+  sx *= k;
+  sz *= k;
+  // Rectangular pavers go in a running bond; squares in a straight grid.
+  const bond = sx >= 1.5 * sz;
+
+  l.zones.forEach((z, zi) => {
+    const zd = zi * 0.6;
+    const cx = z.x + z.w / 2;
+    const cz = z.z + z.d / 2;
+    parts.push({ id: `${z.id}-membrane`, layer: "weed_membrane", pos: [cx, 0.003, cz], size: [z.w + 0.1, 0.006, z.d + 0.1], color: C.membrane, delay: zd + 0.2, grow: "fade" });
+    parts.push({ id: `${z.id}-base`, layer: "paving_base", pos: [cx, (0.006 + sandBottom) / 2, cz], size: [z.w, sandBottom - 0.006, z.d], color: baseColor, delay: zd + 0.5, grow: "rise" });
+    parts.push({ id: `${z.id}-sand`, layer: "paving_sand", pos: [cx, (sandBottom + sandTop) / 2, cz], size: [z.w, sandTop - sandBottom, z.d], color: sandColor, delay: zd + 1.1, grow: "slide" });
+    const rows = Math.ceil(z.d / sz - 1e-9);
+    for (let r = 0; r < rows; r++) {
+      const z0 = z.z + r * sz;
+      const z1 = Math.min(z0 + sz, z.z + z.d);
+      if (z1 - z0 < 0.02) continue;
+      const shift = bond && r % 2 ? sx / 2 : 0;
+      const cols = Math.ceil((z.w + shift) / sx - 1e-9);
+      for (let c = 0; c < cols; c++) {
+        const a = Math.max(z.x, z.x - shift + c * sx);
+        const b = Math.min(z.x - shift + (c + 1) * sx, z.x + z.w);
+        if (b - a < 0.02) continue;
+        parts.push({
+          id: `${z.id}-paver-${r}-${c}`,
+          layer: "pavers",
+          pos: [(a + b) / 2, top - t / 2, (z0 + z1) / 2],
+          size: [b - a - 0.004, t, z1 - z0 - 0.004],
+          color: paverColors[(r * 2 + c) % paverColors.length],
+          delay: zd + 1.6 + r * (2 / rows) + Math.min(0.6, c * 0.01),
+          grow: "drop",
+        });
+      }
+    }
+    // Swept into the joints: seen between the pavers, and as its own sheet when exploded.
+    parts.push({ id: `${z.id}-joints`, layer: "joint_sand", pos: [cx, top - 0.015, cz], size: [z.w - 0.01, 0.01, z.d - 0.01], color: jointColor, delay: zd + 4.2, grow: "fade" });
+  });
+
+  // Kerbs just outside the outline on a concrete bed, and the ground the whole thing is dug into.
+  const inside = (x: number, zz: number) => l.zones.some((z) => x > z.x + 1e-6 && x < z.x + z.w - 1e-6 && zz > z.z + 1e-6 && zz < z.z + z.d - 1e-6);
+  const ring = l.edging ? kerbT + 0.05 : 0;
+  const bedH = Math.max(0.05, top + 0.01 - kerbH);
+  exposedEdges(l.zones).forEach((e, i) => {
+    const horizontal = e.side === "n" || e.side === "s";
+    const out = e.side === "n" || e.side === "w" ? -1 : 1;
+    const [lo, hi] = horizontal ? [Math.min(e.x1, e.x2), Math.max(e.x1, e.x2)] : [Math.min(e.z1, e.z2), Math.max(e.z1, e.z2)];
+    const line = (horizontal ? e.z1 : e.x1) + (out * kerbT) / 2;
+    // Close outer corners (the kerb runs on past the end); stop at inner corners of an L.
+    const at = (u: number) => (horizontal ? inside(u, line) : inside(line, u));
+    const a = at(lo - kerbT / 2) ? lo : lo - kerbT;
+    const b = at(hi + kerbT / 2) ? hi : hi + kerbT;
+    const len = b - a;
+    const mid = (a + b) / 2;
+    const key = `${e.side}-${Math.round(e.x1 * 100)}-${Math.round(e.z1 * 100)}`;
+    const box = (off: number, w: number): [number, number, number, number] => (horizontal ? [mid, line + off, len, w] : [line + off, mid, w, len]);
+    if (l.edging) {
+      const [kx, kz, kw, kd] = box(0, kerbT);
+      parts.push({ id: `kerb-${key}`, layer: "paving_edging", pos: [kx, bedH + kerbH / 2, kz], size: [kw, kerbH, kd], color: kerbColor, delay: 3.4 + i * 0.06, grow: "rise" });
+      const [bx, bz, bw, bd] = box((out * 0.03), kerbT + 0.08);
+      parts.push({ id: `bed-${key}`, layer: "kerb_concrete", pos: [bx, (0.006 + bedH) / 2, bz], size: [bw, bedH - 0.006, bd], color: C.concrete, delay: 3.1 + i * 0.06, grow: "rise" });
+    }
+    const [sxp, szp, sw, sd] = box(out * (ring + 0.2 - kerbT / 2), 0.4);
+    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw + 0.8, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35 });
+    parts.push({ id: `turf-${key}`, layer: "structure", pos: [sxp, top - 0.002, szp], size: [sw + 0.8, 0.012, sd], color: C.lawnEdge, delay: 0, grow: "fade", context: true, opacity: 0.6 });
+  });
+
+  return {
+    parts,
+    dims: zoneDims(l.zones, lang, top),
+    extent: extentOf(l.zones, top + 0.3),
+    center: centerOf(l.zones),
+    layers: [
+      { id: "weed_membrane", label: en ? "Geotextile" : "Geotextil", color: C.membrane },
+      { id: "paving_base", label: en ? "Crushed stone base" : "Piatră spartă", color: baseColor },
+      ...(l.edging ? [{ id: "kerb_concrete", label: en ? "Kerb concrete" : "Beton borduri", color: C.concrete }] : []),
+      { id: "paving_sand", label: en ? "Bedding sand" : "Nisip de pozare", color: sandColor },
+      ...(l.edging ? [{ id: "paving_edging", label: en ? "Edging" : "Borduri", color: kerbColor }] : []),
+      { id: "pavers", label: en ? "Pavers" : "Pavele", color: paverColors[0] },
+      { id: "joint_sand", label: en ? "Jointing sand" : "Nisip de rosturi", color: jointColor },
+    ],
+    duration: 5,
+  };
+}
+
 /** Draw a layout, with the look of the products in the basket when known. */
 export function buildLayout(l: Layout, lang: Lang, look: Look = {}): Build {
   const b = buildShape(l, lang, look);
@@ -672,6 +790,8 @@ function buildShape(l: Layout, lang: Lang, look: Look): Build {
       return drywall(l, lang, look);
     case "lawn":
       return lawn(l, lang);
+    case "paving":
+      return paving(l, lang, look);
   }
 }
 
@@ -832,7 +952,7 @@ function itemBoxes(kind: ItemKind, color: string, outdoorSet: boolean): Box[] {
 
 function withItems(b: Build, l: Layout, lang: Lang, look: Look): Build {
   const parts = [...b.parts];
-  const outdoor = l.type === "deck" || l.type === "lawn" || l.type === "fence";
+  const outdoor = isOutdoor(l.type);
   const layers = new Map<string, { label: string; color: string }>();
   (l.items ?? []).forEach((it, i) => {
     const spec = ITEMS[it.kind];

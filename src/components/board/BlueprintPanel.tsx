@@ -564,6 +564,20 @@ function QuickControls({ layout, lang, dark, busy, onCommit }: { layout: Layout;
           ))}
         </>,
       );
+    case "paving":
+      return row(
+        <>
+          {(["path", "patio", "driveway"] as const).map((u) => (
+            <button key={u} disabled={busy} className={chip(layout.use === u)} onClick={() => set("use", u)}>
+              {u === "path" ? (en ? "Path" : "Alee") : u === "patio" ? (en ? "Patio" : "Terasă") : en ? "Driveway" : "Auto"}
+            </button>
+          ))}
+          <span className="mx-1 h-3 w-px bg-current opacity-20" />
+          <button disabled={busy} className={chip(layout.edging)} onClick={() => set("edging", !layout.edging)}>
+            {en ? "Edging" : "Borduri"} {layout.edging ? "✓" : "—"}
+          </button>
+        </>,
+      );
   }
 }
 
@@ -648,6 +662,7 @@ function outlinePaths(l: Layout): string[] {
     case "deck":
     case "laminate_floor":
     case "lawn":
+    case "paving":
       segs = exposedEdges(l.zones).map((e) => [e.x1, e.z1, e.x2, e.z2]);
       break;
     case "paint_room":

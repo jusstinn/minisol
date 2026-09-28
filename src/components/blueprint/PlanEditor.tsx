@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { ITEMS, itemRect, paletteFor } from "@/domain/items";
 import type { Item } from "@/domain/items";
-import { applyOps, bbox, exposedEdges, fenceSegments, SIDES } from "@/domain/layout";
+import { applyOps, bbox, exposedEdges, fenceSegments, isZoned, SIDES } from "@/domain/layout";
 import type { Layout, Opening, Side, SketchOp, Zone } from "@/domain/layout";
 import type { Lang } from "@/domain/types";
 import { dec } from "@/lib/format";
@@ -32,7 +32,8 @@ function extentOf(l: Layout) {
   switch (l.type) {
     case "deck":
     case "laminate_floor":
-    case "lawn": {
+    case "lawn":
+    case "paving": {
       const b = bbox(l.zones);
       const pad = l.type === "deck" && l.steps.length ? 1 : 0;
       return { minX: b.minX - pad, maxX: b.maxX + pad, minZ: b.minZ - pad, maxZ: b.maxZ + pad };
@@ -273,11 +274,19 @@ export default function PlanEditor({ layout, lang, dark, busy, onPreview, onComm
 
   const els: React.ReactNode[] = [];
 
-  // ─────────── zones (deck, floor, lawn) ───────────
-  if (shown.type === "deck" || shown.type === "laminate_floor" || shown.type === "lawn") {
+  // ─────────── zones (deck, floor, lawn, paving) ───────────
+  if (isZoned(shown)) {
     const l = shown;
     for (const z of l.zones) {
       els.push(<rect key={`z-${z.id}`} x={X(z.x)} y={Z(z.z)} width={z.w * f.sc} height={z.d * f.sc} fill={fill} stroke="none" />);
+      if (l.type === "paving") {
+        // paver rows, dashed (the real format is in the 3D sketch)
+        const n = Math.min(40, Math.ceil(z.d / 0.4));
+        for (let i = 1; i < n; i++) {
+          const zz = Z(z.z + (i / n) * z.d);
+          els.push(<line key={`pv-${z.id}-${i}`} x1={X(z.x)} x2={X(z.x + z.w)} y1={zz} y2={zz} stroke={soft} strokeWidth={0.5} strokeDasharray="4 3" />);
+        }
+      }
       if (l.type === "deck") {
         // board direction hatching
         const n = Math.min(40, Math.ceil((l.direction === "x" ? z.d : z.w) / 0.3));
