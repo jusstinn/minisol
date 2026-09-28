@@ -688,9 +688,36 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
     }
   }
 
+  reconcileItems(l, say);
   // Coordinates stay put across edits (the scene centres the drawing itself), so
   // unchanged parts keep their exact position and only real changes animate.
   return { layout: l, changes };
+}
+
+/**
+ * After the shape changed (room shrunk, zone removed…), pull items that ended up
+ * outside back in; if one no longer fits anywhere near, take it out and say so.
+ */
+function reconcileItems(l: Layout, say: (ro: string, en: string) => void) {
+  if (!l.items?.length) return;
+  const kept: Item[] = [];
+  for (const it of l.items) {
+    const zoneGone = it.zone && "zones" in l && !l.zones.some((z) => z.id === it.zone);
+    const c = itemContainer(l, zoneGone ? undefined : it.zone, zoneGone ? undefined : { x: it.x, z: it.z });
+    const r = itemRect(it);
+    const inside = r.minX >= c.rect.minX - 0.01 && r.maxX <= c.rect.maxX + 0.01 && r.minZ >= c.rect.minZ - 0.01 && r.maxZ <= c.rect.maxZ + 0.01;
+    if (inside && !zoneGone) {
+      kept.push(it);
+      continue;
+    }
+    try {
+      const p = placeItem(l, it.kind, { x: it.x, z: it.z, rot: it.rot, zone: zoneGone ? null : it.zone }, kept);
+      kept.push({ ...it, x: p.x, z: p.z, rot: p.rot, zone: p.zone });
+    } catch {
+      say(`Am scos ${lowerFirst(ITEMS[it.kind].label)} — nu mai încape`, `Removed the ${lowerFirst(ITEMS[it.kind].labelEn)} — it no longer fits`);
+    }
+  }
+  l.items = kept;
 }
 
 const describeItems = (l: Layout) => (l.items?.length ? { items: l.items.map((i) => ({ id: i.id, item: i.kind, x: i.x, z: i.z, rot: i.rot })) } : {});

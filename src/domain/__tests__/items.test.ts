@@ -106,3 +106,31 @@ describe("placing items where the customer says", () => {
     expect(b.layers.some((x) => x.id === "items")).toBe(true);
   });
 });
+
+describe("items follow the shape", () => {
+  it("shrinking the room pulls items back in; an item that no longer fits is removed with a note", () => {
+    let l = applyOps(bath(), [
+      { op: "add_item", item: "bathtub", wall: "n" },
+      { op: "add_item", item: "sink", wall: "e" },
+    ]).layout;
+    const r = applyOps(l, [{ op: "resize", w: 1.9, d: 1.6 }], "ro");
+    l = r.layout;
+    for (const it of items(l)) {
+      const rr = itemRect(it);
+      expect(rr.minX).toBeGreaterThanOrEqual(-0.96);
+      expect(rr.maxX).toBeLessThanOrEqual(0.96);
+    }
+    const tiny = applyOps(l, [{ op: "resize", w: 1, d: 0.9 }], "ro");
+    expect(tiny.changes.some((c) => /nu mai încape/.test(c))).toBe(true);
+  });
+
+  it("removing a deck zone moves its furniture to the remaining deck", () => {
+    let l = defaultLayout("deck", { lengthM: 4, widthM: 3 });
+    l = applyOps(l, [{ op: "add_zone", zone: "A", side: "e", w: 3, d: 3 }]).layout;
+    const bZone = l.type === "deck" ? l.zones[1] : undefined;
+    l = applyOps(l, [{ op: "add_item", item: "lounger", x: bZone!.x + 1.5, z: bZone!.z + 1.5 }]).layout;
+    expect(items(l)[0].zone).toBe("B");
+    l = applyOps(l, [{ op: "remove_zone", zone: "B" }]).layout;
+    expect(items(l)[0].zone).toBe("A");
+  });
+});
