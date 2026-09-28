@@ -152,7 +152,13 @@ export function chooseLine(req: Requirement, catalog: Product[], quality: Qualit
     const pref = all.find((p) => p.sku === preferSku);
     if (pref) {
       const key = productLineKey(pref);
-      return all.filter((p) => productLineKey(p) === key);
+      const line = all.filter((p) => productLineKey(p) === key);
+      // Keep the customer's pick only while it still fits the job (e.g. after the deck
+      // was raised, 60–100 mm pedestals no longer do — choose afresh).
+      const fits = (p: Product) => matchesSpecs(p, req.match) && fitsRange(p, req.fitRange);
+      const lineFits = line.filter(fits);
+      if (lineFits.length) return lineFits;
+      if (!all.some(fits)) return line;
     }
   }
   const pool = narrow(all, req, false);

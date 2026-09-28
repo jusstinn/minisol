@@ -39,6 +39,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   let turnText = "";
   let lastQuote: Extract<Card, { kind: "quote" }> | undefined;
+  let lastChange: Extract<Card, { kind: "change" }> | undefined;
 
   for (let step = 0; step < maxSteps; step++) {
     const instructions = systemPrompt({ today: now.toISOString().slice(0, 10), lang, state, tenant: opts.tenant });
@@ -73,6 +74,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       }
       for (const card of result.cards ?? []) {
         if (card.kind === "quote") lastQuote = card;
+        if (card.kind === "change") lastChange = card;
         yield { type: "card", card };
       }
       input.push(opts.llm.toolOutput(call.callId, JSON.stringify(result.forModel)));
@@ -92,6 +94,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // Option prices and the differences between them ("save 1.870 lei with pine").
     ...(lastQuote?.choices ?? []).flatMap((g) => g.options.flatMap((o) => [o.total, ...g.options.map((x) => Math.round(Math.abs(o.total - x.total) * 100) / 100)])),
     Math.round(opts.customer.points * LOYALTY.pointValueRon * 100) / 100,
+    // A sketch edit: the total before it and the differences (whole and per line).
+    ...(lastChange ? [lastChange.change.totalBefore, Math.abs(lastChange.change.delta), ...lastChange.change.lines.map((l) => Math.abs(l.deltaRon))] : []),
   ];
   const check = verifyReply(turnText, lastQuote?.quote, extra);
   if (!check.ok && turnText) {

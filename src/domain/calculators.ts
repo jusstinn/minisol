@@ -450,10 +450,15 @@ function deck(p: Params, lang: Lang): CalculationResult {
   if (base === "soil") {
     b.assume("Pe pământ: nivelează și compactează, apoi pune dale/plăci sub suporturi.", "On soil: level and compact, then put paving slabs under the supports.");
   }
-  if (pedestalMm > 190) {
+  if (pedestalMm > 500) {
     b.assume(
-      "Peste ~30 cm înălțime structura are nevoie de stâlpi și fundații — nu sunt incluse în calcul.",
-      "Above ~30 cm the frame needs posts and footings — not included in this calculation.",
+      "Peste ~60 cm înălțime structura are nevoie de stâlpi și fundații — nu sunt incluse în calcul.",
+      "Above ~60 cm the frame needs posts and footings — not included in this calculation.",
+    );
+  } else if (pedestalMm > 190) {
+    b.assume(
+      "Suporturile înalte (peste 20 cm) se așază doar pe bază stabilă — dale sau beton — și se verifică la nivel.",
+      "Tall supports (over 20 cm) must stand on a firm base — paving slabs or concrete — and be checked for level.",
     );
   }
   b.safety(

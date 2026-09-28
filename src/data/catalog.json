@@ -7025,7 +7025,7 @@
     },
     "quality": "budget",
     "specs": {
-      "widthM": 1.0,
+      "widthM": 1,
       "heightM": 1.8,
       "material": "pin tratat",
       "hardware": "balamale + zăvor incluse"
@@ -7053,7 +7053,7 @@
     },
     "quality": "premium",
     "specs": {
-      "widthM": 1.0,
+      "widthM": 1,
       "heightM": 1.8,
       "material": "WPC compozit",
       "hardware": "balamale inox + încuietoare"
@@ -7081,7 +7081,7 @@
     },
     "quality": "standard",
     "specs": {
-      "widthM": 3.0,
+      "widthM": 3,
       "heightM": 1.8,
       "material": "pin tratat",
       "hardware": "balamale + opritor + zăvor"
@@ -7109,7 +7109,7 @@
     },
     "quality": "budget",
     "specs": {
-      "widthM": 1.0,
+      "widthM": 1,
       "heightM": 1.2,
       "material": "pin tratat",
       "hardware": "balamale + zăvor incluse"
@@ -7119,5 +7119,57 @@
     "rating": 4.1,
     "isTool": false,
     "bulky": true
+  },
+  {
+    "sku": "15038214",
+    "name": "Plot reglabil terasă Kronwald 200–320 mm",
+    "nameEn": "Kronwald adjustable deck pedestal 200–320 mm",
+    "brand": "Kronwald",
+    "category": "wood",
+    "price": 29.9,
+    "salesUnit": "buc",
+    "roles": [
+      "deck_support"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "heightRangeMm": "200-320",
+      "maxLoadKg": 600,
+      "selfLevellingHead": true
+    },
+    "description": "Plot reglabil înalt cu extensie, pentru terase ridicate pe placă de beton sau dale; cap autonivelant.",
+    "descriptionEn": "Tall adjustable pedestal with extension ring for raised decks on a slab or paving; self-levelling head.",
+    "rating": 4.4,
+    "isTool": false
+  },
+  {
+    "sku": "15038227",
+    "name": "Plot reglabil terasă Kronwald 320–500 mm",
+    "nameEn": "Kronwald adjustable deck pedestal 320–500 mm",
+    "brand": "Kronwald",
+    "category": "wood",
+    "price": 44.9,
+    "salesUnit": "buc",
+    "roles": [
+      "deck_support"
+    ],
+    "content": {
+      "amount": 1,
+      "unit": "buc"
+    },
+    "quality": "standard",
+    "specs": {
+      "heightRangeMm": "320-500",
+      "maxLoadKg": 500,
+      "selfLevellingHead": true
+    },
+    "description": "Plot reglabil foarte înalt cu două extensii, pentru terase ridicate; se montează doar pe suprafață stabilă (beton/dale).",
+    "descriptionEn": "Extra-tall adjustable pedestal with two extension rings for raised decks; stable base only (concrete/paving).",
+    "rating": 4.3,
+    "isTool": false
   }
 ]

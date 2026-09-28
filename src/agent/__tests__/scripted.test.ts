@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getDataSources } from "@/adapters";
 import { getTenant } from "@/config/tenant";
+import { productLineKey } from "@/domain/resolve";
 import { parseIntent, runScriptedAgent } from "../scripted";
 import { PROJECT_STARTERS } from "@/lib/i18n";
 import type { AgentEvent } from "../types";
@@ -63,5 +64,51 @@ describe("runScriptedAgent", () => {
     const total = quote.card.kind === "quote" ? quote.card.quote.total : 0;
     expect(text).toContain(total.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     expect(events.at(-1)?.type).toBe("done");
+  }, 20000);
+});
+
+describe("sketch edits", () => {
+  const deckState = { basket: [], project: { type: "deck" as const, title: "", inputs: {}, measurements: [], assumptions: [], estimate: { hoursMin: 1, hoursMax: 2, difficulty: 1 as const, people: 1 as const }, safetyNotes: [] } };
+
+  it("parses edits in Romanian and English", () => {
+    expect(parseIntent("Adaugă 3 trepte în față", deckState)).toMatchObject({ kind: "sketch", edits: [{ op: "add_steps", side: "s", count: 3 }] });
+    expect(parseIntent("Make it an L with a 2 x 2 m wing on the right", deckState)).toMatchObject({ kind: "sketch", edits: [{ op: "add_zone", side: "e", w: 2, d: 2 }] });
+    expect(parseIntent("Terasa ridicată la 50 cm, cu trepte", deckState)).toMatchObject({ kind: "sketch", edits: [{ op: "set_height", value: 0.5 }, { op: "add_steps" }] });
+    const fence = { ...deckState, project: { ...deckState.project, type: "fence" as const } };
+    expect(parseIntent("Pune o poartă de mașină la gard", fence)).toMatchObject({ kind: "sketch", edits: [{ op: "add_opening", kind: "gate", width: 3 }] });
+    const bath = { ...deckState, project: { ...deckState.project, type: "tiling" as const } };
+    expect(parseIntent("Faianță doar până la 1,2 m", bath)).toMatchObject({ kind: "sketch", edits: [{ op: "set_wall_tiles", wall: "all", value: 1.2 }] });
+    // a quality follow-up is still a quality follow-up
+    expect(parseIntent("Variantă mai ieftină", deckState)).toEqual({ kind: "requality", quality: "budget" });
+  });
+
+  it("edits the sketch, keeps the chosen products and reports a verified price delta", async () => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    const run = async (message: string, state: Parameters<typeof runScriptedAgent>[0]["state"]) => {
+      const events: AgentEvent[] = [];
+      for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state, lang: "ro" })) events.push(ev);
+      const last = events.filter((e) => e.type === "state").at(-1) as Extract<AgentEvent, { type: "state" }> | undefined;
+      return { events, state: last?.state ?? state };
+    };
+    const first = await run("Vreau o terasă de 4 x 3 m pe pământ", empty);
+    const boards0 = first.state.basket.find((b) => b.role === "deck_board")!;
+    // the customer swaps the boards for another option → that pick must survive the edit
+    const second = await run("Adaugă 3 trepte în față și ridic-o la 50 cm de la sol", first.state);
+    const change = second.events.find((e) => e.type === "card" && e.card.kind === "change") as Extract<AgentEvent, { type: "card" }> | undefined;
+    expect(change).toBeTruthy();
+    if (change?.card.kind !== "change") return;
+    expect(change.card.change.delta).toBeGreaterThan(0);
+    expect(change.card.change.lines.some((l) => l.role === "deck_board" && l.after > l.before)).toBe(true);
+    expect(second.state.project?.layout?.type === "deck" && second.state.project.layout.steps).toHaveLength(1);
+    // same product line (the board length may change to suit the new runs)
+    const [p0, p1] = await sources.catalog.getMany([boards0.sku, second.state.basket.find((b) => b.role === "deck_board")!.sku]);
+    expect(productLineKey(p1 ?? p0)).toBe(productLineKey(p0));
+    // raised to 50 cm → supports that actually reach ~400 mm
+    const sup = (await sources.catalog.getMany([second.state.basket.find((b) => b.role === "deck_support")!.sku]))[0];
+    expect(sup.specs.heightRangeMm).toBe("320-500");
+    const verified = second.events.find((e) => e.type === "verified") as Extract<AgentEvent, { type: "verified" }> | undefined;
+    expect(verified?.ok).toBe(true);
   }, 20000);
 });

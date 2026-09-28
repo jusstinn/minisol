@@ -144,7 +144,7 @@ if (!Array.isArray(catalog)) {
   console.error("catalog.json is not an array");
   process.exit(1);
 }
-if (catalog.length < 200 || catalog.length > 260) fail(null, `catalog has ${catalog.length} products; expected 200–260`);
+if (catalog.length < 200 || catalog.length > 300) fail(null, `catalog has ${catalog.length} products; expected 200–300`);
 
 const skus = new Set<string>();
 const PRODUCT_KEYS = new Set([

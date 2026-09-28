@@ -4,6 +4,7 @@ import type { ProjectType } from "@/domain/calculators";
 import type { Quote } from "@/domain/quote";
 import { fold } from "@/domain/search";
 import type { Customer, Lang, QualityTier } from "@/domain/types";
+import type { SketchOp, Side } from "@/domain/layout";
 import { lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
 import { TOOL_STATUS, executeTool } from "./tools";
@@ -20,6 +21,7 @@ import { verifyReply } from "./verify";
 
 type Intent =
   | { kind: "project"; type: ProjectType; params: Record<string, unknown>; quality?: QualityTier; missing?: string }
+  | { kind: "sketch"; edits: Partial<SketchOp>[] }
   | { kind: "requality"; quality: QualityTier }
   | { kind: "offers" }
   | { kind: "stock" }
@@ -48,6 +50,75 @@ const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
   ["paint_room", /\b(vops\w*|zugrav\w*|paint\w*|repaint)\b/],
 ];
 
+const SIDE_WORDS: [Side, RegExp][] = [
+  ["s", /\b(in fata|din fata|la fata|fata casei|front|sud|south)\b/],
+  ["n", /\b(in spate|din spate|spate|back|nord|north)\b/],
+  ["w", /\b(stanga|left|vest|west)\b/],
+  ["e", /\b(dreapta|right|est|east)\b/],
+];
+const sideIn = (t: string) => SIDE_WORDS.find(([, re]) => re.test(t))?.[0];
+const WORD_NUM: Record<string, number> = { o: 1, un: 1, una: 1, one: 1, a: 1, doua: 2, two: 2, trei: 3, three: 3, patru: 4, four: 4 };
+
+/**
+ * Sketch edits in plain words ("add 2 steps at the front", "fă-o în L cu 2×2 m în dreapta",
+ * "o poartă de mașină", "faianță doar până la 1,2 m"). Returns null if it isn't an edit.
+ */
+export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>[] | null {
+  const dims = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters)?\\s*(?:x|×|\\*|pe|by)\\s*${NUM}`));
+  const side = sideIn(t);
+  const removing = /\b(fara|scoate\w*|elimina\w*|sterge\w*|remove|delete|without|no more)\b/.test(t);
+  const cm = t.match(new RegExp(`${NUM}\\s*cm\\b`));
+  const metres = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters|metres)\\b`));
+  const countWord = (re: RegExp) => {
+    const m = t.match(re);
+    return m ? (/^\d+$/.test(m[1]) ? Number(m[1]) : WORD_NUM[m[1]]) : undefined;
+  };
+  const edits: Partial<SketchOp>[] = [];
+
+  if (type === "deck") {
+    const raised = /\b(ridicat\w*|inaltat\w*|inaltime|raised?|high|above ground|de la sol|deasupra)\b/.test(t);
+    if (raised && (cm || metres)) edits.push({ op: "set_height", value: cm ? num(cm[1]) / 100 : num(metres![1]) });
+    if (/\b(trepte|treapta|scari|scara|steps?|stairs?)\b/.test(t)) {
+      if (removing) edits.push({ op: "remove_steps" });
+      else edits.push({ op: "add_steps", zone: "A", side: side ?? "s", count: countWord(/\b(\d+|o|una|doua|trei|patru|one|two|three|four)\s+(?:trepte|treapta|steps?|stairs?)\b/) ?? null });
+    }
+  }
+  if (type === "deck" || type === "laminate_floor" || type === "lawn") {
+    if (/\b(in l|forma de l|l[- ]shape\w*|extinde\w*|extensie|extension|extend|aripa|wing|inca o zona|another (area|section))\b/.test(t) && dims) {
+      edits.push({ op: "add_zone", zone: "A", side: side ?? "e", w: num(dims[1]), d: num(dims[2]), align: "end" });
+    } else if (dims && /\b(fa|make|mareste|micsoreaza|bigger|smaller|mai mare|mai mica|mai mic|de fapt|actually|resize|schimba|instead)\b/.test(t)) {
+      edits.push({ op: "resize", zone: "A", w: num(dims[1]), d: num(dims[2]) });
+    }
+  }
+  if (type === "paint_room" || type === "tiling") {
+    if (dims && /\b(fa|make|mareste|micsoreaza|bigger|smaller|mai mare|mai mica|mai mic|de fapt|actually|resize|schimba|instead)\b/.test(t)) edits.push({ op: "resize", w: num(dims[1]), d: num(dims[2]) });
+  }
+  if (type === "fence") {
+    if (/\b(poarta|portita|gate)\b/.test(t)) {
+      if (removing) edits.push({ op: "remove_opening", kind: "gate" });
+      else {
+        const wide = /\b(dubla|auto|masina|masini|driveway|double|car)\b/.test(t) || /\b3\s*m\b/.test(t);
+        const pos = /\b(inceput\w*|start|capat\w*)\b/.test(t) ? 0.15 : /\b(sfarsit\w*|end)\b/.test(t) ? 0.85 : 0.5;
+        edits.push({ op: "add_opening", kind: "gate", segment: 0, width: wide ? 3 : 1, pos });
+      }
+    }
+    if (/\b(colt|corner|coteste|cotit\w*|turns?|intoarce\w*|pe latura|along the side)\b/.test(t) && metres) {
+      edits.push({ op: "add_fence_segment", length: num(metres[1]), turn: side === "w" ? "left" : "right" });
+    }
+    if (/\b(inalt|inaltime|height|high|tall)\b/.test(t) && metres && !edits.length) edits.push({ op: "set_height", value: num(metres[1]) });
+  }
+  if (type === "paint_room" || type === "tiling" || type === "drywall_partition" || type === "laminate_floor") {
+    if (/\b(usa|usi|door|doors)\b/.test(t)) edits.push(removing ? { op: "remove_opening", kind: "door" } : { op: "add_opening", kind: "door", wall: side ?? null });
+    if (type === "paint_room" && /\b(fereastra|ferestre|geam|window|windows)\b/.test(t))
+      edits.push(removing ? { op: "remove_opening", kind: "window" } : { op: "add_opening", kind: "window", wall: side ?? null });
+  }
+  if (type === "tiling" && /\b(faianta|wall tiles?|pe pereti|on the walls?)\b/.test(t)) {
+    const h = cm ? num(cm[1]) / 100 : metres ? num(metres[1]) : removing ? 0 : undefined;
+    if (h !== undefined) edits.push({ op: "set_wall_tiles", wall: side ?? "all", value: h });
+  }
+  return edits.length ? edits : null;
+}
+
 export function parseIntent(raw: string, state: SessionState): Intent {
   const t = fold(raw);
   const quality: QualityTier | undefined = /\b(ieftin\w*|cheap\w*|budget|economic\w*)\b/.test(t)
@@ -58,6 +129,12 @@ export function parseIntent(raw: string, state: SessionState): Intent {
   const unsafe = UNSAFE.find(([, re]) => re.test(t));
   if (unsafe) return { kind: "unsafe", topic: unsafe[0] };
   const type = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
+
+  // Reshaping the current project ("add steps", "a gate in the middle") is an edit, not a new project.
+  if (state.project && (!type || type === state.project.type)) {
+    const edits = parseSketchEdit(t, state.project.type);
+    if (edits) return { kind: "sketch", edits };
+  }
 
   if (!type && state.project) {
     if (quality) return { kind: "requality", quality };
@@ -267,7 +344,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     }
     const r = yield* runTool(
       "calculate_project",
-      { projectType: intent.type, params: intent.params, quality: intent.quality ?? null, storeId: null, includeOptional: null },
+      { projectType: intent.type, params: intent.params, quality: intent.quality ?? null, storeId: null, includeOptional: null, keepSketch: null },
       650,
     );
     const quoteCard = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
@@ -281,11 +358,30 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     }
   } else if (intent.kind === "project") {
     reply = askFor(intent.missing!, intent.type, lang);
+  } else if (intent.kind === "sketch" && state.project) {
+    const blank: Omit<SketchOp, "op"> = {
+      zone: null, w: null, d: null, h: null, side: null, align: null, width: null, count: null, value: null,
+      kind: null, wall: null, pos: null, id: null, segment: null, length: null, turn: null, key: null,
+    };
+    const r = yield* runTool("edit_sketch", { edits: intent.edits.map((e) => ({ ...blank, option: null, ...e })) }, 700);
+    const ch = r.cards?.find((c): c is Extract<Card, { kind: "change" }> => c.kind === "change")?.change;
+    if (!ch) {
+      const err = (r.forModel as { error?: string }).error ?? "";
+      reply = lang === "en" ? `I couldn't change the sketch that way (${err}). Try another size or side?` : `Nu am putut modifica schița așa (${err}). Încercăm altă dimensiune sau latură?`;
+    } else {
+      extraAmounts.push(ch.totalBefore, Math.abs(ch.delta), ...ch.lines.map((l) => Math.abs(l.deltaRon)));
+      const sign = ch.delta > 0 ? "+" : ch.delta < 0 ? "−" : "±";
+      const what = ch.edits.join("; ");
+      reply =
+        lang === "en"
+          ? `Done — ${what.charAt(0).toLowerCase() + what.slice(1)}. I redrew the sketch and recalculated the list, keeping the products you picked: new total **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`
+          : `Gata — ${what.charAt(0).toLowerCase() + what.slice(1)}. Am redesenat schița și am recalculat lista, păstrând produsele alese: total nou **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`;
+    }
   } else if (intent.kind === "requality" && state.project) {
     const before = state.basket.length ? (await executeTool("modify_basket", JSON.stringify({ operations: [], storeId: null }), ctx())).cards?.find((c) => c.kind === "quote") : undefined;
     const r = yield* runTool(
       "calculate_project",
-      { projectType: state.project.type, params: state.project.inputs, quality: intent.quality, storeId: state.storeId ?? null, includeOptional: null },
+      { projectType: state.project.type, params: state.project.inputs, quality: intent.quality, storeId: state.storeId ?? null, includeOptional: null, keepSketch: true },
       650,
     );
     const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
@@ -321,7 +417,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   } else if (intent.kind === "add_suggestions" && state.project) {
     const r = yield* runTool(
       "calculate_project",
-      { projectType: state.project.type, params: state.project.inputs, quality: state.quality ?? null, storeId: state.storeId ?? null, includeOptional: true },
+      { projectType: state.project.type, params: state.project.inputs, quality: state.quality ?? null, storeId: state.storeId ?? null, includeOptional: true, keepSketch: true },
       600,
     );
     const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");

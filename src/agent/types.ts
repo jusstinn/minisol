@@ -1,6 +1,7 @@
 import type { CalculationResult, ProjectType } from "@/domain/calculators";
 import type { BasketItem, Quote } from "@/domain/quote";
 import type { ArtSpec } from "@/domain/art";
+import type { Layout } from "@/domain/layout";
 import type { MaterialRole, Offer, QualityTier } from "@/domain/types";
 
 /** Conversation state the client round-trips with every request (server stays stateless). */
@@ -19,6 +20,36 @@ export interface ProjectSnapshot {
   assumptions: string[];
   estimate: CalculationResult["estimate"];
   safetyNotes: string[];
+  /** The editable sketch the quantities were computed from. */
+  layout?: Layout;
+  /** The customer opened the sketch (on-demand tenants only draw it when asked). */
+  sketched?: boolean;
+  /** Bumps on every sketch edit. */
+  revision?: number;
+}
+
+/** What one sketch edit did to the shopping list and the price. */
+export interface SketchChange {
+  /** Readable list of the geometry edits ("Added a 2 × 2 m wing on the east side"). */
+  edits: string[];
+  lines: {
+    role: MaterialRole;
+    label: string;
+    /** Product after the edit (or the removed one). */
+    name: string;
+    /** Set when the edit switched the product (e.g. taller pedestals, other board length). */
+    beforeName?: string;
+    /** Amounts in the material's own unit (m of board, l of paint, pieces…), so different pack sizes compare. */
+    unit: string;
+    before: number;
+    after: number;
+    /** Net price difference for this line (with offers). */
+    deltaRon: number;
+  }[];
+  totalBefore: number;
+  totalAfter: number;
+  delta: number;
+  source: "agent" | "editor";
 }
 
 export interface SuggestionView {
@@ -132,7 +163,8 @@ export type Card =
   | { kind: "stock"; id: string; stores: StockStoreView[] }
   | { kind: "offers"; id: string; offers: OfferView[] }
   | { kind: "products"; id: string; query: string; products: ProductView[] }
-  | { kind: "plan"; id: string; plan: PlanView };
+  | { kind: "plan"; id: string; plan: PlanView }
+  | { kind: "change"; id: string; change: SketchChange };
 
 export type AgentEvent =
   | { type: "mode"; mode: "live" | "scripted"; reason?: string }

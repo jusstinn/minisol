@@ -1,7 +1,9 @@
 import type { DataSources } from "@/adapters/types";
 import { AISLES } from "@/data/stores";
 import { CalculatorInputError, PROJECT_PARAM_DOCS, PROJECT_TYPES, calculateProject } from "@/domain/calculators";
-import type { ProjectType } from "@/domain/calculators";
+import type { CalculationResult, ProjectType } from "@/domain/calculators";
+import { SIDES, SketchEditError, applyOps, defaultLayout, describeLayout, layoutParams } from "@/domain/layout";
+import type { Layout, SketchOp } from "@/domain/layout";
 import { distanceKm } from "@/domain/geo";
 import { LOYALTY } from "@/domain/loyalty";
 import { eligibleOffers } from "@/domain/offers";
@@ -13,7 +15,7 @@ import { lineOptions, resolveRequirements } from "@/domain/resolve";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
-import type { Card, ChoiceGroup, OwnedToolView, QualityOption, SessionState, StockStoreView, SuggestionView } from "./types";
+import type { Card, ChoiceGroup, OwnedToolView, ProjectSnapshot, QualityOption, SessionState, SketchChange, StockStoreView, SuggestionView } from "./types";
 
 export interface ToolContext {
   sources: DataSources;
@@ -106,8 +108,62 @@ export const TOOL_DEFINITIONS = [
         quality: { type: ["string", "null"], enum: [...QUALITIES, null], description: "Product quality tier. Default standard." },
         storeId: { type: ["string", "null"], description: "Store to price/check stock for. Default: member's home store." },
         includeOptional: { type: ["boolean", "null"], description: "Also add optional items (primer, oil, ladder…) instead of only suggesting them." },
+        keepSketch: {
+          type: ["boolean", "null"],
+          description: "true when re-running the SAME project only to change quality tier, store or optional items: keeps the customer's edited sketch (L-shapes, steps, gates…) and ignores params.",
+        },
       },
-      required: ["projectType", "params", "quality", "storeId", "includeOptional"],
+      required: ["projectType", "params", "quality", "storeId", "includeOptional", "keepSketch"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function" as const,
+    name: "edit_sketch",
+    description:
+      "Change the shape of the current project's sketch — the materials, quantities and price are recalculated from it, keeping the products the customer already chose. " +
+      "Use for: resizing (resize), L/U shapes (add_zone attaches a rectangle to a side of an existing zone; remove_zone), deck height (set_height, metres) and steps (add_steps / remove_steps; count defaults to height ÷ 17 cm), " +
+      "doors/windows/gates (add_opening / move_opening / remove_opening; fence gates: width 1 = pedestrian, 3 = driveway, on a segment index), fence corners (add_fence_segment with turn left/right/straight; set_segment_length; remove_fence_segment), " +
+      "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (set_option key/value: base, direction, pattern, subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode). " +
+      "Sides/walls: n = back, s = front, e = right, w = left as seen in the sketch. Zone ids and segment indexes are in the state section of your instructions. Set unused fields to null. Several edits can be sent at once.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: {
+        edits: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              op: {
+                type: "string",
+                enum: ["resize", "add_zone", "remove_zone", "add_steps", "remove_steps", "set_height", "add_opening", "remove_opening", "move_opening", "set_wall_tiles", "add_fence_segment", "set_segment_length", "remove_fence_segment", "set_option"],
+              },
+              zone: { type: ["string", "null"], description: "Zone id (A, B…). resize/add_zone/add_steps/remove_zone; null = first zone" },
+              w: { type: ["number", "null"], description: "Width in m (east–west). resize, add_zone; for walls/fences: total length" },
+              d: { type: ["number", "null"], description: "Depth in m (north–south). resize, add_zone" },
+              h: { type: ["number", "null"], description: "Room/wall height in m (resize)" },
+              side: { type: ["string", "null"], enum: [...SIDES, null], description: "Side of the zone for add_zone / add_steps" },
+              align: { type: ["string", "null"], enum: ["start", "center", "end", null], description: "add_zone: where along that side (start = north/west end)" },
+              width: { type: ["number", "null"], description: "Width in m of steps, door, window or gate" },
+              count: { type: ["integer", "null"], description: "Number of steps" },
+              value: { type: ["number", "null"], description: "set_height (m above ground for decks; m for rooms/walls/fences), set_wall_tiles (m)" },
+              option: { type: ["string", "null"], description: "set_option value, e.g. \"gravel\", \"diagonal\", \"true\", \"3\"" },
+              kind: { type: ["string", "null"], enum: ["door", "window", "gate", null] },
+              wall: { type: ["string", "null"], description: "Wall n/e/s/w (or 'all' for set_wall_tiles)" },
+              pos: { type: ["number", "null"], description: "Position along the wall/segment, 0..1 (0.5 = middle)" },
+              id: { type: ["string", "null"], description: "Opening/gate id for move/remove (null = the last one of that kind)" },
+              segment: { type: ["integer", "null"], description: "Fence segment index (0 = first)" },
+              length: { type: ["number", "null"], description: "Fence segment length in m" },
+              turn: { type: ["string", "null"], enum: ["left", "right", "straight", null] },
+              key: { type: ["string", "null"], description: "set_option key" },
+            },
+            required: ["op", "zone", "w", "d", "h", "side", "align", "width", "count", "value", "option", "kind", "wall", "pos", "id", "segment", "length", "turn", "key"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["edits"],
       additionalProperties: false,
     },
   },
@@ -217,6 +273,7 @@ export const TOOL_DEFINITIONS = [
 export const TOOL_STATUS: Record<string, { ro: string; en: string }> = {
   get_customer_context: { ro: "Citesc profilul tău WalletLoop", en: "Reading your WalletLoop profile" },
   calculate_project: { ro: "Calculez materialele și prețul", en: "Calculating materials and price" },
+  edit_sketch: { ro: "Redesenez schița și recalculez", en: "Redrawing the sketch and recalculating" },
   modify_basket: { ro: "Actualizez lista de cumpărături", en: "Updating your shopping list" },
   search_products: { ro: "Caut în catalog", en: "Searching the catalogue" },
   check_stock: { ro: "Verific stocul în magazine", en: "Checking stock in stores" },
@@ -390,6 +447,234 @@ async function storeIdOrDefault(ctx: ToolContext, requested: unknown): Promise<{
   return hit ? { id: hit.id } : { id: fallback, error: `Unknown store "${requested}". Valid ids: ${stores.map((s) => s.id).join(", ")}` };
 }
 
+// ───────────────────────── project pricing ─────────────────────────
+
+interface ProjectRunOptions {
+  quality: QualityTier;
+  storeId: string;
+  includeOptional: boolean;
+  layout: Layout;
+  revision: number;
+  sketched?: boolean;
+  /** Keep these products for their roles (the customer's picks survive a sketch edit). */
+  preferSkus?: Partial<Record<MaterialRole, string>>;
+  /** Roles the customer removed from the list — don't bring them back. */
+  excludeRoles?: MaterialRole[];
+  /** Optional roles the customer added — keep them in the basket, re-sized. */
+  keepOptional?: Set<MaterialRole>;
+  /** Hand-added lines unrelated to the calculation, carried over unchanged. */
+  carry?: BasketItem[];
+}
+
+/** Resolve products, price every tier, build the options drawer — shared by calculate_project and edit_sketch. */
+async function priceProject(ctx: ToolContext, calc: CalculationResult, o: ProjectRunOptions) {
+  const roles = [...new Set(calc.requirements.map((r) => r.role))];
+  const [catalog, owned] = await Promise.all([ctx.sources.catalog.byRoles(roles), ownedTools(ctx)]);
+  const offers = eligibleOffers(await ctx.sources.loyalty.getOffers(ctx.customer.memberId), ctx.customer, ctx.now);
+  const basketFor = (tier: QualityTier) => {
+    const res = resolveRequirements(calc.requirements, catalog, {
+      quality: tier,
+      owned,
+      includeOptional: o.includeOptional,
+      excludeRoles: o.excludeRoles,
+      preferSkus: tier === o.quality ? o.preferSkus : undefined,
+    });
+    const items: BasketItem[] = res.lines.map((l) => ({ sku: l.sku, qty: l.qty, role: l.role, basis: l.basis, isTool: l.isTool }));
+    const take = (i: number) => {
+      const sg = res.suggestions.splice(i, 1)[0];
+      items.push({ sku: sg.sku, qty: sg.qty, role: sg.role, basis: sg.basis, isTool: sg.isTool });
+    };
+    for (let i = res.suggestions.length - 1; i >= 0; i--) if (o.keepOptional?.has(res.suggestions[i].role)) take(i);
+    // If a WalletLoop bundle makes an optional item free, include it — the member would want it.
+    for (const of of offers) {
+      if (of.kind !== "bundle_free_role" || !of.bundle) continue;
+      const units = items.filter((b) => b.role === of.bundle!.requiresRole).reduce((s, b) => s + b.qty, 0);
+      const idx = res.suggestions.findIndex((sg) => sg.role === of.bundle!.freeRole);
+      if (units >= of.bundle.requiresQty && idx >= 0) take(idx);
+    }
+    return { resolved: res, basket: mergeBasket([...items, ...(o.carry ?? [])]) };
+  };
+  const { resolved, basket } = basketFor(o.quality);
+  const quote = await priceBasket(ctx, basket, o.storeId);
+  // Price the other quality tiers too, so the customer can compare and switch instantly.
+  const tiers: QualityOption[] = await Promise.all(
+    QUALITIES.map(async (tier) => {
+      if (tier === o.quality) return { quality: tier, total: quote.total, basket };
+      const alt = basketFor(tier).basket;
+      return { quality: tier, total: (await priceBasket(ctx, alt, o.storeId)).total, basket: alt };
+    }),
+  );
+  const bySku = new Map(catalog.map((p) => [p.sku, p]));
+  const choices = await projectChoices(ctx, calc.requirements, basket, catalog, offers, o.storeId);
+  const suggestions: SuggestionView[] = resolved.suggestions.map((sg) => {
+    const p = bySku.get(sg.sku)!;
+    return { sku: sg.sku, name: pn(p, ctx.lang), qty: sg.qty, unitPrice: p.price, total: Math.round(p.price * sg.qty * 100) / 100, basis: sg.basis, isTool: sg.isTool };
+  });
+  const ownedProducts = await ctx.sources.catalog.getMany(resolved.skipped.filter((x) => x.ownedSku).map((x) => x.ownedSku!));
+  const ownedViews: OwnedToolView[] = resolved.skipped
+    .filter((x) => x.reason === "owned")
+    .map((x) => {
+      const op = ownedProducts.find((p) => p.sku === x.ownedSku);
+      return { roleLabel: t(ctx.lang, MATERIAL_ROLES[x.role].label, MATERIAL_ROLES[x.role].labelEn), productName: op ? pn(op, ctx.lang) : "", date: x.ownedDate ?? "" };
+    });
+  const project: ProjectSnapshot = {
+    type: calc.projectType,
+    title: calc.title,
+    inputs: calc.inputs,
+    measurements: calc.measurements,
+    assumptions: calc.assumptions,
+    estimate: calc.estimate,
+    safetyNotes: calc.safetyNotes,
+    layout: o.layout,
+    sketched: o.sketched,
+    revision: o.revision,
+  };
+  const state: SessionState = { ...ctx.state, basket, storeId: o.storeId, quality: o.quality, project };
+  return {
+    state,
+    project,
+    basket,
+    quote,
+    tiers,
+    choices,
+    suggestions,
+    owned: ownedViews,
+    ownedRoles: new Set(owned.keys()),
+    unavailable: resolved.skipped.filter((x) => x.reason === "no_product").map((x) => x.role),
+  };
+}
+
+const signedLei = (v: number, lang: Lang) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${lei(Math.abs(v), lang)}`;
+
+/**
+ * Apply sketch edits (from the agent or the plan editor), recompute the materials
+ * from the new geometry and re-price — keeping the products the customer picked,
+ * leaving out what they removed. Returns the updated cards plus a change card
+ * with the per-line and total price difference.
+ */
+export async function applySketchEdit(ctx: ToolContext, edits: SketchOp[], source: SketchChange["source"]): Promise<ToolResult & { error?: string }> {
+  const prev = ctx.state.project;
+  if (!prev) return { error: "no_project", forModel: { error: "There is no project yet — call calculate_project first." } };
+  const layout0 = prev.layout ?? defaultLayout(prev.type, prev.inputs);
+  if (!edits.length) return { error: "no_edits", forModel: { error: "No edits given.", sketch: describeLayout(layout0) } };
+
+  let edited: ReturnType<typeof applyOps>;
+  let calc: CalculationResult;
+  try {
+    edited = applyOps(layout0, edits, ctx.lang);
+    calc = calculateProject(prev.type, { ...prev.inputs, ...layoutParams(edited.layout) }, ctx.lang);
+  } catch (e) {
+    if (e instanceof SketchEditError || e instanceof CalculatorInputError) {
+      return { error: e.message, forModel: { error: e.message, sketch: describeLayout(layout0), hint: "Nothing was changed. Fix the edit or ask the customer." } };
+    }
+    throw e;
+  }
+
+  // What the customer has now — their picks and removals should survive the edit.
+  const basket0 = ctx.state.basket;
+  let prevReqs: CalculationResult["requirements"] = [];
+  try {
+    prevReqs = calculateProject(prev.type, { ...prev.inputs, ...layoutParams(layout0) }, ctx.lang).requirements;
+  } catch {
+    /* previous geometry no longer valid — treat everything as fresh */
+  }
+  const inBasket = new Set(basket0.map((b) => b.role).filter(Boolean) as MaterialRole[]);
+  const projectRoles = new Set([...prevReqs, ...calc.requirements].map((r) => r.role));
+  const preferSkus: Partial<Record<MaterialRole, string>> = {};
+  for (const b of basket0) if (b.role && !preferSkus[b.role]) preferSkus[b.role] = b.sku;
+  const owned = await ownedTools(ctx);
+  const removedByCustomer = prevReqs.filter((r) => !r.optional && !inBasket.has(r.role) && !owned.has(r.role)).map((r) => r.role);
+  const keepOptional = new Set(prevReqs.filter((r) => r.optional && inBasket.has(r.role)).map((r) => r.role));
+  const carry = basket0.filter((b) => !b.role || !projectRoles.has(b.role));
+
+  const storeId = ctx.state.storeId ?? ctx.customer.homeStoreId;
+  const quality = ctx.state.quality ?? "standard";
+  const [quote0, r] = await Promise.all([
+    priceBasket(ctx, basket0, storeId),
+    priceProject(ctx, calc, {
+      quality,
+      storeId,
+      includeOptional: false,
+      layout: edited.layout,
+      revision: (prev.revision ?? 0) + 1,
+      sketched: true,
+      preferSkus,
+      excludeRoles: removedByCustomer,
+      keepOptional,
+      carry,
+    }),
+  ]);
+
+  // Per-role difference in the material's own unit (metres of board, litres…), so a switch
+  // from 3 m to 4 m boards still reads naturally, with the net price change.
+  const products = new Map((await ctx.sources.catalog.getMany([...quote0.lines, ...r.quote.lines].map((l) => l.sku))).map((p) => [p.sku, p]));
+  const byRole = (q: Quote) => {
+    const m = new Map<string, { amount: number; net: number; names: Set<string>; unit: string; role?: MaterialRole }>();
+    for (const l of q.lines) {
+      const p = products.get(l.sku);
+      const k = l.role ?? l.sku;
+      const piece = !p || (p.content.unit === "buc" && p.content.amount === 1);
+      const cur = m.get(k) ?? { amount: 0, net: 0, names: new Set<string>(), unit: piece ? l.salesUnit : p!.content.unit, role: l.role };
+      cur.amount += piece ? l.qty : l.qty * p!.content.amount;
+      cur.net += l.netTotal;
+      cur.names.add(l.name);
+      m.set(k, cur);
+    }
+    return m;
+  };
+  const a = byRole(quote0);
+  const b = byRole(r.quote);
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const lines: SketchChange["lines"] = [];
+  for (const k of new Set([...a.keys(), ...b.keys()])) {
+    const x = a.get(k);
+    const y = b.get(k);
+    const deltaRon = r2((y?.net ?? 0) - (x?.net ?? 0));
+    const sameProducts = x && y && [...x.names].join("|") === [...y.names].join("|");
+    if (sameProducts && r2(x.amount) === r2(y.amount) && Math.abs(deltaRon) < 0.01) continue;
+    const role = (y?.role ?? x?.role) as MaterialRole;
+    const name = [...(y ?? x)!.names][0];
+    lines.push({
+      role,
+      label: role && MATERIAL_ROLES[role] ? t(ctx.lang, MATERIAL_ROLES[role].label, MATERIAL_ROLES[role].labelEn) : name,
+      name,
+      beforeName: x && y && !sameProducts ? [...x.names][0] : undefined,
+      unit: (y ?? x)!.unit,
+      before: r2(x?.amount ?? 0),
+      after: r2(y?.amount ?? 0),
+      deltaRon,
+    });
+  }
+  lines.sort((p, q) => Math.abs(q.deltaRon) - Math.abs(p.deltaRon));
+  const change: SketchChange = {
+    edits: edited.changes,
+    lines,
+    totalBefore: quote0.total,
+    totalAfter: r.quote.total,
+    delta: Math.round((r.quote.total - quote0.total) * 100) / 100,
+    source,
+  };
+
+  return {
+    state: r.state,
+    cards: [
+      { kind: "project", id: cardId("project"), project: r.project },
+      { kind: "quote", id: cardId("quote"), quote: r.quote, suggestions: r.suggestions, owned: r.owned, tiers: r.tiers, quality, choices: r.choices },
+      { kind: "change", id: cardId("change"), change },
+    ],
+    forModel: {
+      applied: edited.changes,
+      sketch: describeLayout(edited.layout),
+      project: { title: calc.title, measurements: calc.measurements, safetyNotes: calc.safetyNotes },
+      display: { totalBefore: lei(quote0.total, ctx.lang), totalAfter: lei(r.quote.total, ctx.lang), difference: signedLei(change.delta, ctx.lang) },
+      materialChanges: lines.map((l) => ({ what: l.label, product: l.name, switchedFrom: l.beforeName, from: l.before, to: l.after, unit: l.unit, price: signedLei(l.deltaRon, ctx.lang) })),
+      quote: quoteForModel(r.quote, ctx.lang),
+      uiNote:
+        "The sketch redrew itself (new parts glow) and a change card shows every material and price difference. Reply in 1–2 sentences: what changed and display.difference / display.totalAfter verbatim. Mention a safety note only if it is new (e.g. railings above 60 cm).",
+    },
+  };
+}
+
 // ───────────────────────────── handlers ─────────────────────────────
 
 const handlers: Record<string, Handler> = {
@@ -426,90 +711,64 @@ const handlers: Record<string, Handler> = {
   async calculate_project(args, ctx) {
     const type = args.projectType as ProjectType;
     const quality = (QUALITIES.includes(args.quality as QualityTier) ? args.quality : ctx.state.quality ?? "standard") as QualityTier;
-    let calc;
+    let calc: CalculationResult;
+    let layout: Layout;
+    const prev = ctx.state.project;
+    const keep = args.keepSketch === true && prev?.type === type && prev.layout ? prev : undefined;
     try {
-      calc = calculateProject(type, cleanParams(args.params), ctx.lang);
+      if (keep) {
+        layout = keep.layout!;
+        calc = calculateProject(type, { ...keep.inputs, ...layoutParams(layout) }, ctx.lang);
+      } else {
+        // Validate/default the plain inputs, derive the editable sketch, then compute from the sketch
+        // so the quantities and the drawing come from the very same geometry.
+        const first = calculateProject(type, cleanParams(args.params), ctx.lang);
+        layout = defaultLayout(type, first.inputs);
+        calc = calculateProject(type, { ...first.inputs, ...layoutParams(layout) }, ctx.lang);
+      }
     } catch (e) {
       if (e instanceof CalculatorInputError) return { forModel: { error: e.message, hint: "Ask the customer for the missing/invalid dimension." } };
       throw e;
     }
     const store = await storeIdOrDefault(ctx, args.storeId);
-    const roles = [...new Set(calc.requirements.map((r) => r.role))];
-    const [catalog, owned] = await Promise.all([ctx.sources.catalog.byRoles(roles), ownedTools(ctx)]);
-    const offers = eligibleOffers(await ctx.sources.loyalty.getOffers(ctx.customer.memberId), ctx.customer, ctx.now);
-    const basketFor = (tier: QualityTier) => {
-      const res = resolveRequirements(calc.requirements, catalog, { quality: tier, owned, includeOptional: args.includeOptional === true });
-      const items: BasketItem[] = res.lines.map((l) => ({ sku: l.sku, qty: l.qty, role: l.role, basis: l.basis, isTool: l.isTool }));
-      // If a WalletLoop bundle makes an optional item free, include it — the member would want it.
-      for (const o of offers) {
-        if (o.kind !== "bundle_free_role" || !o.bundle) continue;
-        const units = items.filter((b) => b.role === o.bundle!.requiresRole).reduce((s, b) => s + b.qty, 0);
-        const idx = res.suggestions.findIndex((s) => s.role === o.bundle!.freeRole);
-        if (units >= o.bundle.requiresQty && idx >= 0) {
-          const s = res.suggestions.splice(idx, 1)[0];
-          items.push({ sku: s.sku, qty: s.qty, role: s.role, basis: s.basis, isTool: s.isTool });
-        }
-      }
-      return { resolved: res, basket: items };
-    };
-    const { resolved, basket } = basketFor(quality);
-    const quote = await priceBasket(ctx, basket, store.id);
-    // Price the other quality tiers too, so the customer can compare and switch instantly.
-    const tiers: QualityOption[] = await Promise.all(
-      QUALITIES.map(async (tier) => {
-        if (tier === quality) return { quality: tier, total: quote.total, basket };
-        const alt = basketFor(tier).basket;
-        return { quality: tier, total: (await priceBasket(ctx, alt, store.id)).total, basket: alt };
-      }),
-    );
-    const bySku = new Map(catalog.map((p) => [p.sku, p]));
-    const choices = await projectChoices(ctx, calc.requirements, basket, catalog, offers, store.id);
-
-    const suggestions: SuggestionView[] = resolved.suggestions.map((s) => {
-      const p = bySku.get(s.sku)!;
-      return { sku: s.sku, name: pn(p, ctx.lang), qty: s.qty, unitPrice: p.price, total: Math.round(p.price * s.qty * 100) / 100, basis: s.basis, isTool: s.isTool };
+    const r = await priceProject(ctx, calc, {
+      quality,
+      storeId: store.id,
+      includeOptional: args.includeOptional === true,
+      layout,
+      revision: keep ? (keep.revision ?? 0) : 0,
+      sketched: keep?.sketched,
     });
-    const ownedProducts = await ctx.sources.catalog.getMany(resolved.skipped.filter((s) => s.ownedSku).map((s) => s.ownedSku!));
-    const ownedViews: OwnedToolView[] = resolved.skipped
-      .filter((s) => s.reason === "owned")
-      .map((s) => ({
-        roleLabel: t(ctx.lang, MATERIAL_ROLES[s.role].label, MATERIAL_ROLES[s.role].labelEn),
-        productName: (() => { const op = ownedProducts.find((p) => p.sku === s.ownedSku); return op ? pn(op, ctx.lang) : ""; })(),
-        date: s.ownedDate ?? "",
-      }));
-
-    const project = {
-      type,
-      title: calc.title,
-      inputs: calc.inputs,
-      measurements: calc.measurements,
-      assumptions: calc.assumptions,
-      estimate: calc.estimate,
-      safetyNotes: calc.safetyNotes,
-    };
-    const state: SessionState = { ...ctx.state, basket, storeId: store.id, quality, project };
     return {
-      state,
+      state: r.state,
       cards: [
-        { kind: "project", id: cardId("project"), project },
-        { kind: "quote", id: cardId("quote"), quote, suggestions, owned: ownedViews, tiers, quality, choices },
+        { kind: "project", id: cardId("project"), project: r.project },
+        { kind: "quote", id: cardId("quote"), quote: r.quote, suggestions: r.suggestions, owned: r.owned, tiers: r.tiers, quality, choices: r.choices },
       ],
       forModel: {
         storeWarning: store.error,
         project: { title: calc.title, inputsUsed: calc.inputs, measurements: calc.measurements, assumptions: calc.assumptions, estimate: calc.estimate, safetyNotes: calc.safetyNotes },
+        sketch: describeLayout(layout),
         quality,
-        quote: quoteForModel(quote, ctx.lang),
-        ownedToolsSkipped: ownedViews.map((o) => `${o.roleLabel} (${o.productName}, bought ${o.date})`),
-        optionalSuggestions: suggestions.map((s) => ({ sku: s.sku, name: s.name, qty: s.qty, total: s.total, why: s.basis })),
+        quote: quoteForModel(r.quote, ctx.lang),
+        ownedToolsSkipped: r.owned.map((o) => `${o.roleLabel} (${o.productName}, bought ${o.date})`),
+        optionalSuggestions: r.suggestions.map((s) => ({ sku: s.sku, name: s.name, qty: s.qty, total: s.total, why: s.basis })),
         // The customer can browse these in the "options" drawer on each line; mention a notable saving/upgrade if useful.
-        productOptions: choices.map((g) => ({
+        productOptions: r.choices.map((g) => ({
           for: g.label,
           options: g.options.map((o) => ({ name: o.name, quality: o.quality, total: o.total, inStock: o.inStock, items: o.items })),
         })),
-        unavailableRoles: resolved.skipped.filter((s) => s.reason === "no_product").map((s) => s.role),
-        uiNote: "The customer now sees a 3D blueprint + measurements card and the full priced shopping list card. Do not repeat the list in text.",
+        unavailableRoles: r.unavailable,
+        uiNote: "The customer now sees the project card (3D sketch + measurements) and the full priced shopping list card. Do not repeat the list in text. The sketch can be reshaped with edit_sketch.",
       },
     };
+  },
+
+  async edit_sketch(args, ctx) {
+    const edits = (Array.isArray(args.edits) ? (args.edits as Record<string, unknown>[]) : []).map((e) =>
+      e.op === "set_option" && e.option != null ? { ...e, value: e.option } : e,
+    ) as unknown as SketchOp[];
+    return applySketchEdit(ctx, edits, "agent");
   },
 
   async modify_basket(args, ctx) {

@@ -243,7 +243,9 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
     }
     case "fence": {
       const len = num(i.lengthM, 20);
-      return { type, points: [{ x: -len / 2, z: 0 }, { x: len / 2, z: 0 }], heightM: num(i.heightM, 1.8), gates: [] };
+      const h = num(i.heightM, 1.8);
+      const heightM = [0.9, 1.2, 1.8].reduce((a, c) => (Math.abs(c - h) < Math.abs(a - h) ? c : a), 1.8);
+      return { type, points: [{ x: -len / 2, z: 0 }, { x: len / 2, z: 0 }], heightM, gates: [] };
     }
     case "drywall_partition": {
       const doors = typeof i.doors === "number" ? i.doors : 0;
@@ -638,4 +640,106 @@ export function describeLayout(l: Layout): unknown {
     default:
       return l;
   }
+}
+
+// ───────────────────────────── validation ─────────────────────────────
+
+const fin = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+const str = (v: unknown, max = 24) => typeof v === "string" && v.length > 0 && v.length <= max;
+
+function okZones(v: unknown): v is Zone[] {
+  return (
+    Array.isArray(v) &&
+    v.length >= 1 &&
+    v.length <= 6 &&
+    v.every((z) => z && str(z.id, 4) && fin(z.x, -200, 200) && fin(z.z, -200, 200) && fin(z.w, 0.5, 30) && fin(z.d, 0.5, 30))
+  );
+}
+
+function okOpenings(v: unknown, max: number): v is Opening[] {
+  return (
+    Array.isArray(v) &&
+    v.length <= max &&
+    v.every(
+      (o) =>
+        o &&
+        str(o.id) &&
+        ["door", "window", "gate"].includes(o.kind) &&
+        str(o.wall, 4) &&
+        (o.zone === undefined || str(o.zone, 4)) &&
+        fin(o.pos, 0, 1) &&
+        fin(o.width, 0.3, 3.5) &&
+        fin(o.height, 0.3, 3),
+    )
+  );
+}
+
+/**
+ * Layouts round-trip through the browser, so treat them as untrusted: return the
+ * layout only if it is well-formed and within the editor's limits, else null.
+ */
+export function checkLayout(raw: unknown, type: ProjectType): Layout | null {
+  const l = raw as Record<string, unknown> | null;
+  if (!l || typeof l !== "object" || l.type !== type) return null;
+  const ok = (() => {
+    switch (type) {
+      case "deck":
+        return (
+          okZones(l.zones) &&
+          fin(l.heightM, 0.1, 1.2) &&
+          ["x", "z"].includes(l.direction as string) &&
+          ["soil", "gravel", "concrete_slab"].includes(l.base as string) &&
+          Array.isArray(l.steps) &&
+          l.steps.length <= 4 &&
+          (l.steps as Steps[]).every((s) => s && str(s.id) && str(s.zone, 4) && SIDES.includes(s.side) && fin(s.width, 0.5, 30) && fin(s.count, 1, 6))
+        );
+      case "laminate_floor":
+        return okZones(l.zones) && okOpenings(l.openings, 8) && ["straight", "diagonal"].includes(l.pattern as string) && ["concrete", "wood", "old_tiles"].includes(l.subfloor as string);
+      case "lawn":
+        return okZones(l.zones) && ["new", "overseed"].includes(l.mode as string);
+      case "paint_room":
+        return (
+          fin(l.w, 0.8, 20) &&
+          fin(l.d, 0.8, 20) &&
+          fin(l.h, 2, 5) &&
+          okOpenings(l.openings, 8) &&
+          typeof l.ceiling === "boolean" &&
+          fin(l.coats, 1, 4) &&
+          ["fresh_plaster", "repaint", "dark_to_light"].includes(l.surface as string)
+        );
+      case "tiling": {
+        const wh = l.wallHeights as Record<string, unknown> | undefined;
+        return (
+          fin(l.w, 0.8, 20) &&
+          fin(l.d, 0.8, 20) &&
+          ["bathroom", "kitchen", "other"].includes(l.roomType as string) &&
+          typeof l.floor === "boolean" &&
+          typeof l.largeFormat === "boolean" &&
+          !!wh &&
+          SIDES.every((s) => fin(wh[s], 0, 3)) &&
+          okOpenings(l.openings, 8)
+        );
+      }
+      case "fence":
+        return (
+          Array.isArray(l.points) &&
+          l.points.length >= 2 &&
+          l.points.length <= 7 &&
+          (l.points as Point[]).every((p) => p && fin(p.x, -400, 400) && fin(p.z, -400, 400)) &&
+          fenceSegments(l.points as Point[]).every((s) => s.length >= 0.5) &&
+          [0.9, 1.2, 1.8].includes(l.heightM as number) &&
+          okOpenings(l.gates, 4)
+        );
+      case "drywall_partition":
+        return (
+          fin(l.length, 0.6, 20) &&
+          fin(l.heightM, 2, 5) &&
+          okOpenings(l.openings, 8) &&
+          typeof l.insulation === "boolean" &&
+          typeof l.doubleLayer === "boolean" &&
+          typeof l.wetRoom === "boolean"
+        );
+    }
+  })();
+  return ok ? (structuredClone(l) as unknown as Layout) : null;
 }
