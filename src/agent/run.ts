@@ -132,7 +132,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     console.warn("[agent] model unavailable after prefill, finishing deterministically:", (e as Error).message);
     yield { type: "mode", mode: "scripted", reason: (e as Error).message.slice(0, 160) };
     yield { type: "card", card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined } } };
-    const text = projectReply(lastQuote.quote, lastQuote, state.project.title, lang);
+    const text = projectReply(lastQuote.quote, lastQuote, state.project.title, lang, state.suggestions);
     turnText = text;
     yield { type: "text", delta: text };
     input.push({ role: "assistant", content: text });
@@ -156,7 +156,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     console.warn("[agent] reply failed verification", { invented: check.invented, garbage: check.garbage });
     const safe =
       lastQuote && state.project
-        ? projectReply(lastQuote.quote, lastQuote, state.project.title, lang)
+        ? projectReply(lastQuote.quote, lastQuote, state.project.title, lang, state.suggestions)
         : lang === "en"
           ? "Here's your updated plan — all figures are in the cards on the right."
           : "Iată planul actualizat — toate cifrele sunt în cardurile din dreapta.";

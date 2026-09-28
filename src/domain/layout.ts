@@ -372,12 +372,21 @@ export interface SketchOp {
   z?: number | null;
 }
 
-export class SketchEditError extends Error {}
+/**
+ * A refused edit. `message` is technical English (what the model reads, and a stable
+ * code for the UI); `ro` is the same thing said to a Romanian-speaking customer.
+ */
+export class SketchEditError extends Error {
+  constructor(
+    message: string,
+    public ro?: string,
+  ) {
+    super(message);
+  }
+}
 
-/** Language of the edit being applied, so refusals read naturally in the customer's language. */
-let MSG_LANG: Lang = "ro";
 function fail(ro: string, en: string): never {
-  throw new SketchEditError(MSG_LANG === "en" ? en : ro);
+  throw new SketchEditError(en, ro);
 }
 
 const SIDE_NAMES: Record<Side, { ro: string; en: string }> = {
@@ -395,7 +404,7 @@ function need<T>(v: T | null | undefined, name: string): T {
 
 function dim(v: number | null | undefined, name: string, lo: number, hi: number): number {
   const n = Number(need(v, name));
-  if (!Number.isFinite(n) || n < lo || n > hi) fail(`„${name}” trebuie să fie între ${lo} și ${hi} m`, `"${name}" must be between ${lo} and ${hi} m`);
+  if (!Number.isFinite(n) || n < lo || n > hi) fail(`dimensiunea trebuie să fie între ${fmt(lo, "ro")} și ${fmt(hi, "ro")} m`, `"${name}" must be between ${lo} and ${hi} m`);
   return r2(n);
 }
 
@@ -433,7 +442,6 @@ function overlaps(a: Zone, b: Zone): boolean {
  */
 export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { layout: Layout; changes: string[] } {
   const en = lang === "en";
-  MSG_LANG = lang;
   const l: Layout = structuredClone(layout);
   const changes: string[] = [];
   const say = (ro: string, e: string) => changes.push(en ? e : ro);

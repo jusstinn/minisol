@@ -280,4 +280,9 @@ export interface Requirement {
   scaleBySpec?: { key: string; reference: number };
   /** Prefer products whose "min-max" range spec contains this value (e.g. pedestal height). */
   fitRange?: { key: string; value: number };
+  /**
+   * Structural members cut from linear stock (joists, studs): `count` pieces of `lengthM` each. An offcut
+   * shorter than a member is waste, so 11 joists of 3 m need 11 bars of 4 m, not 34.65 m ÷ 4 = 9 bars.
+   */
+  members?: { count: number; lengthM: number }[];
 }

@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import type { Card } from "@/agent/types";
 import type { Lang } from "@/domain/types";
-import { dec, int, lei } from "@/lib/format";
+import { dec, int, lei, unitText } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { Board } from "@/lib/useAgent";
 import { signed } from "../board/ChangeCard";
@@ -58,7 +58,7 @@ function view(card: ChipCard, board: Board, lang: Lang): ChipView {
         tile: "bp-sheet text-[#dce9ff]",
         title: p.title,
         meta: [
-          main && `${dec(main.value, lang, main.unit === "buc" || main.unit === "rânduri" ? 0 : 2)} ${main.unit}`,
+          main && `${dec(main.value, lang, main.unit === "buc" || main.unit === "rânduri" ? 0 : 2)} ${unitText(main.unit, lang)}`,
           `${p.estimate.hoursMin}–${p.estimate.hoursMax} ${tr("hours", lang)}`,
           (p.revision ?? 0) > 0 && `rev. ${p.revision}`,
         ]

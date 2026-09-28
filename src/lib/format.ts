@@ -15,6 +15,22 @@ export const money = (n: number, lang: Lang = "ro") => fmt(lang, 2).format(n);
 export const lei = (n: number, lang: Lang = "ro") => `${money(n, lang)} lei`;
 export const int = (n: number, lang: Lang = "ro") => fmt(lang, 0).format(Math.round(n));
 export const dec = (n: number, lang: Lang = "ro", digits = 2) => fmt(lang, digits).format(n);
+/** Calculator measurement units are Romanian ("buc", "rânduri"); show them in the reader's language. */
+export const unitText = (unit: string, lang: Lang = "ro") => (lang === "en" ? (({ buc: "pcs", rânduri: "rows" }) as Record<string, string>)[unit] ?? unit : unit);
+/** Points multipliers: "×1,5" (ro) / "×1.5" (en). */
+export const times = (n: number, lang: Lang = "ro") => `×${dec(n, lang, Number.isInteger(n) ? 0 : 1)}`;
+/**
+ * A store's name without the retailer prefix every store shares ("Brico Nord București Berceni" →
+ * "București Berceni"; dropping just the first word left "Nord București Berceni").
+ */
+export function storeLabel(name: string, allNames: string[]): string {
+  const words = name.split(" ");
+  let n = 0;
+  while (n < words.length - 1 && allNames.length > 1 && allNames.every((s) => s.split(" ")[n] === words[n])) n++;
+  return words.slice(n).join(" ");
+}
+/** Store distances: "9,9 km" (ro) / "9.9 km" (en), whole numbers without decimals. */
+export const km = (n: number, lang: Lang = "ro") => `${dec(n, lang, Number.isInteger(n) ? 0 : 1)} km`;
 
 export function monthYear(iso: string, lang: Lang = "ro") {
   const d = new Date(iso);

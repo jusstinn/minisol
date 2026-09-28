@@ -19,6 +19,7 @@ import type { Look } from "@/domain/look";
 import { specHighlights } from "@/domain/specs";
 import { lineOptions, productLineKey, resolveRequirements } from "@/domain/resolve";
 import { fold } from "@/domain/search";
+import { explainEditError } from "@/lib/editErrors";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
@@ -694,7 +695,11 @@ const signedLei = (v: number, lang: Lang) => `${v > 0 ? "+" : v < 0 ? "−" : "�
  * leaving out what they removed. Returns the updated cards plus a change card
  * with the per-line and total price difference.
  */
-export async function applySketchEdit(ctx: ToolContext, edits: EditOp[], source: SketchChange["source"]): Promise<ToolResult & { error?: string }> {
+export async function applySketchEdit(
+  ctx: ToolContext,
+  edits: EditOp[],
+  source: SketchChange["source"],
+): Promise<ToolResult & { error?: string; /** The refusal in the customer's language. */ errorText?: string }> {
   const prev = ctx.state.project;
   if (!prev) return { error: "no_project", forModel: { error: "There is no project yet — call calculate_project first." } };
   const layout0 = prev.layout ?? defaultLayout(prev.type, prev.inputs);
@@ -715,7 +720,12 @@ export async function applySketchEdit(ctx: ToolContext, edits: EditOp[], source:
     calc = calculateProject(prev.type, { ...prev.inputs, ...layoutParams(edited.layout) }, ctx.lang);
   } catch (e) {
     if (e instanceof SketchEditError || e instanceof CalculatorInputError) {
-      return { error: e.message, forModel: { error: e.message, sketch: describeLayout(layout0), hint: "Nothing was changed. Fix the edit or ask the customer." } };
+      const errorText = ctx.lang === "ro" && e instanceof SketchEditError && e.ro ? e.ro : explainEditError(e.message, ctx.lang);
+      return {
+        error: e.message,
+        errorText,
+        forModel: { error: e.message, customerText: errorText, sketch: describeLayout(layout0), hint: "Nothing was changed. Fix the edit or ask the customer." },
+      };
     }
     throw e;
   }

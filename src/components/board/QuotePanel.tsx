@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import type { CategoryId, Lang, QualityTier } from "@/domain/types";
-import { dec, int, lei, monthYear } from "@/lib/format";
+import { dec, int, km, lei, monthYear, storeLabel, times } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
 import { Counter, PanelHeader } from "../ui/primitives";
@@ -129,7 +129,7 @@ export default function QuotePanel({
               +<Counter value={quote.points.earned} lang={lang} decimals={0} />
             </div>
             <div className="mt-1 font-mono text-[10px] text-paper/60">
-              {tr("points", lang)} · ×{quote.points.tierMultiplier} tier
+              {tr("points", lang)} · {times(quote.points.tierMultiplier, lang)} {lang === "en" ? "tier" : "nivel"}
               {quote.points.bonusNotes.length > 0 && <span className="text-accent"> · bonus</span>}
             </div>
           </div>
@@ -332,7 +332,7 @@ export default function QuotePanel({
               {tr("missingAt", lang)} {quote.storeName}: {quote.availability.missing.map((m) => m.name.split(" ").slice(0, 3).join(" ")).join(", ")}
               {best && (
                 <button onClick={() => onMoveStore(best.storeId)} className="rounded-full bg-ink px-2.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-paper hover:bg-accent hover:text-on-accent">
-                  {tr("moveTo", lang)} {best.name.split(" ").slice(1).join(" ")} · {best.distanceKm} km
+                  {tr("moveTo", lang)} {storeLabel(best.name, quote.availability.alternatives.map((a) => a.name))} · {km(best.distanceKm, lang)}
                 </button>
               )}
             </span>
@@ -433,11 +433,11 @@ function LineGroup({
                   <LowestPriceNote line={l} lang={lang} className="mt-0.5" />
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg border border-rule bg-paper">
-                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="−">
+                      <button onClick={() => onQty(l.sku, -1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One less" : "Unul mai puțin"}: ${l.name}`}>
                         <IconMinus size={12} />
                       </button>
                       <span className="num w-7 text-center text-[12.5px] font-semibold">{l.qty}</span>
-                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label="+">
+                      <button onClick={() => onQty(l.sku, 1)} className="grid h-6 w-6 place-items-center text-ink-3 hover:text-ink" aria-label={`${lang === "en" ? "One more" : "Încă unul"}: ${l.name}`}>
                         <IconPlus size={12} />
                       </button>
                     </div>

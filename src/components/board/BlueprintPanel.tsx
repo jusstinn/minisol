@@ -251,8 +251,8 @@ function SketchView({
           />
         </div>
 
-        {/* title block */}
-        <div className="pointer-events-none absolute left-4 top-4 max-w-[70%] sm:left-6 sm:top-5">
+        {/* title block — kept clear of the controls column on the right (≈7.5 rem on phones, ≈18 rem with labels from sm) */}
+        <div className="pointer-events-none absolute left-4 right-[9.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
           <div className={`flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
             <span>{en ? "Indicative sketch" : "Schiță orientativă"}</span>
             <span

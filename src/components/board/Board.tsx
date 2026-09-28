@@ -18,6 +18,14 @@ import QuotePanel from "./QuotePanel";
 import StockPanel from "./StockPanel";
 import WeatherPanel from "./WeatherPanel";
 
+/**
+ * Whether the latest update belongs to the sketch panel (scroll it into view on desktop). A sketch edit
+ * from the chat ends on its change receipt, which lives in that panel; hand edits are already in view.
+ */
+export function sketchInFocus(board: Pick<BoardState, "last" | "change">): boolean {
+  return board.last === "project" || (board.last === "change" && board.change?.change.source === "agent");
+}
+
 interface Props {
   board: BoardState;
   tenant: Tenant;
@@ -126,7 +134,7 @@ export default function Board(props: Props) {
       {empty && <EmptyBoard lang={lang} />}
       {board.project && (
         <div data-panel="sketch">
-          <Flash on={board.last === "project"} v={board.version}>
+          <Flash on={sketchInFocus(board)} v={board.version}>
             {renderCard(board.project)}
           </Flash>
         </div>

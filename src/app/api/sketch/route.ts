@@ -3,6 +3,7 @@ import { sanitizeState } from "@/agent/state";
 import { applySketchEdit } from "@/agent/tools";
 import type { EditOp } from "@/agent/tools";
 import { getTenant } from "@/config/tenant";
+import { explainEditError } from "@/lib/editErrors";
 import { requirePassLink } from "@/lib/passToken";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { memberFromRequest } from "@/lib/session";
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
   const lang = body.lang === "en" ? "en" : body.lang === "ro" ? "ro" : customer.language;
 
   const r = await applySketchEdit({ sources, customer, state, lang, now: new Date() }, edits, "editor");
-  if (r.error || !r.state) return Response.json({ error: r.error ?? "Edit failed" }, { status: 422 });
+  // The plan editor shows `error` to the customer: say it in their language (`code` keeps the technical one).
+  if (r.error || !r.state) return Response.json({ error: r.errorText ?? explainEditError(r.error ?? "Edit failed", lang), code: r.error ?? "edit_failed" }, { status: 422 });
   return Response.json({ state: r.state, cards: r.cards ?? [] });
 }

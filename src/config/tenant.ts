@@ -69,7 +69,9 @@ export const TENANTS: Record<string, Tenant> = {
   },
 };
 
-export function getTenant(id?: string | null): Tenant {
-  const key = (id ?? process.env.TENANT ?? process.env.NEXT_PUBLIC_TENANT ?? "demo").toLowerCase();
-  return TENANTS[key] ?? TENANTS.demo;
+export function getTenant(id?: unknown): Tenant {
+  // `id` comes from URLs and request bodies: anything that isn't a string means "not given".
+  const key = (typeof id === "string" ? id : (process.env.TENANT ?? process.env.NEXT_PUBLIC_TENANT ?? "demo")).toLowerCase();
+  // Own keys only: ?retailer=constructor or "__proto__" must not resolve to Object.prototype members.
+  return Object.prototype.hasOwnProperty.call(TENANTS, key) ? TENANTS[key] : TENANTS.demo;
 }

@@ -8,7 +8,8 @@ import { MATERIAL_ROLES } from "@/domain/types";
 import { lowerFirst } from "@/domain/items";
 import type { ItemKind } from "@/domain/items";
 import type { SketchOp, Side } from "@/domain/layout";
-import { lei, int } from "@/lib/format";
+import { explainEditError } from "@/lib/editErrors";
+import { dec, km, lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
 import { TOOL_STATUS, executeTool, priceBasket } from "./tools";
 import type { ToolContext } from "./tools";
@@ -33,7 +34,8 @@ type Intent =
   | { kind: "requality"; quality: QualityTier }
   | { kind: "offers" }
   | { kind: "stock" }
-  | { kind: "add_suggestions" }
+  /** `text`: "adaugă uleiul" adds only the suggestions it names. */
+  | { kind: "add_suggestions"; text?: string }
   | { kind: "unsafe"; topic: "electrical" | "gas" | "structural" | "roof" | "asbestos" }
   | { kind: "unknown" };
 
@@ -47,9 +49,53 @@ const UNSAFE: [Extract<Intent, { kind: "unsafe" }>["topic"], RegExp][] = [
 
 const NUM = String.raw`(\d+(?:[.,]\d+)?)`;
 const num = (s: string) => Number(s.replace(",", "."));
+const UNIT_M = String.raw`(?:m|metri|metre|metres|meters)`;
+const HEIGHT_WORD = String.raw`(?:inaltim\w*|inalt\w*|height|high|tall)`;
+const LENGTH_WORD = String.raw`(?:lungime\w*|lung|lunga|lungi|long|length)`;
+const WIDTH_WORD = String.raw`(?:latime\w*|lat|lata|late|wide|width)`;
+/** "ridic-o", "ridică terasa", "înalț-o", "raise it", "la 50 cm de la sol". */
+const RAISE = /\b(ridic\w*|inalt\w*|rais\w*|high|above ground|de la sol|deasupra)\b/;
+
+interface Span {
+  at: number;
+  end: number;
+}
+interface Found {
+  value: number;
+  /** Index of the number in the text. */
+  at: number;
+}
+
+/** "4 x 3", "4,5 m pe 3", "4 metri pe 3 metri", "400 x 300 cm" → metres. */
+export function findDims(t: string): (Span & { a: number; b: number }) | null {
+  const m = t.match(new RegExp(`${NUM}\\s*(cm|${UNIT_M})?\\s*(?:x|×|\\*|pe|by)\\s*${NUM}(\\s*cm\\b)?`));
+  if (!m || m.index === undefined) return null;
+  const k = m[2] === "cm" || m[4] ? 100 : 1;
+  return { a: num(m[1]) / k, b: num(m[3]) / k, at: m.index, end: m.index + m[0].length };
+}
+
+/**
+ * A number tagged by a word, after it ("1,8 m înălțime", "20 m long") or before it ("înălțime 2,6",
+ * "lung de 30 m"); cm become metres. Numbers inside `skip` (the "4 x 3" dims) are not candidates, and
+ * the tag must be adjacent: in "2,7 m high, 2 doors" the height is 2,7, not 2.
+ */
+function tagged(t: string, word: string, skip?: Span | null): Found | null {
+  const inSkip = (i: number) => !!skip && i >= skip.at && i < skip.end;
+  for (const m of t.matchAll(new RegExp(`${NUM}\\s*(?:de\\s+)?(cm|${UNIT_M})?\\s*${word}\\b`, "g"))) {
+    if (!inSkip(m.index)) return { value: num(m[1]) / (m[2] === "cm" ? 100 : 1), at: m.index };
+  }
+  const m = t.match(new RegExp(`\\b${word}\\s*(?:de|of|:|=)?\\s*${NUM}(\\s*cm\\b)?`));
+  if (m && m.index !== undefined) return { value: num(m[1]) / (m[2] ? 100 : 1), at: m.index + m[0].search(/\d/) };
+  return null;
+}
+
+/** Every "N m" / "N metri" / "N de metri" (not mm or mp), in order. */
+function metresIn(t: string): Found[] {
+  return [...t.matchAll(new RegExp(`${NUM}\\s*(?:de\\s+)?${UNIT_M}\\b`, "g"))].map((m) => ({ value: num(m[1]), at: m.index }));
+}
 
 const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
-  ["tiling", /\b(baie|baia|bathroom|gresie|faianta|tile|tiles|tiling|placare)\b/],
+  ["tiling", /\b(baie|baia|bathroom|gresie|faianta|(re)?til(e|es|ed|ing)|placare)\b/],
   ["fence", /\b(gard|gardul|fence|fencing)\b/],
   ["deck", /\b(terasa|terasă|deck|decking|terrace|patio)\b/],
   ["laminate_floor", /\b(parchet|laminat|laminate|flooring|floors?|pardosea\w*)\b/],
@@ -58,10 +104,19 @@ const PROJECT_KEYWORDS: [ProjectType, RegExp][] = [
   ["paint_room", /\b(vops\w*|zugrav\w*|paint\w*|repaint)\b/],
 ];
 
-/** Words that never identify a product/store in "remove X" / "choose X" / "move to X". */
+/** Words that never identify a product/store in "remove X" / "choose X" / "move to X" / "add X". */
 const STOP_WORDS = new Set(
-  "scoate scot elimina sterge remove drop fara vreau nu mai din lista cos coșul alege schimba schimb foloseste inlocuieste loc instead switch use choose prefer prefera varianta variant option optiunea the and with pentru mea meu mele muta move mut lista magazin magazinul store la in pe de cu un una doua sau".split(" "),
+  "scoate scot elimina sterge remove drop fara vreau nu mai din lista cos coșul alege schimba schimb foloseste inlocuieste loc instead switch use choose prefer prefera varianta variant option optiunea the and with pentru mea meu mele muta move mut lista magazin magazinul store la in pe de cu un una doua sau adauga adaug add also too si".split(" "),
 );
+
+/** Content words of a request, lightly stemmed for Romanian articles/plurals: "geotextilul" → "geotextil", "grinzile" → "grinz". */
+function contentWords(text: string, { numbers = false } = {}): string[] {
+  const stem = (w: string) => (w.length >= 6 ? w.replace(/(urile|ului|elor|ilor|ele|ile|ul|ii|le|a|e|i)$/, "") : w);
+  return text
+    .split(/[^a-z0-9]+/)
+    .filter((w) => (w.length >= 3 || (numbers && /^\d+$/.test(w))) && !STOP_WORDS.has(w))
+    .map(stem);
+}
 
 const SIDE_WORDS: [Side, RegExp][] = [
   ["s", /\b(in fata|din fata|la fata|fata casei|front|sud|south)\b/],
@@ -70,7 +125,8 @@ const SIDE_WORDS: [Side, RegExp][] = [
   ["e", /\b(dreapta|right|est|east)\b/],
 ];
 const sideIn = (t: string) => SIDE_WORDS.find(([, re]) => re.test(t))?.[0];
-const WORD_NUM: Record<string, number> = { o: 1, un: 1, una: 1, one: 1, a: 1, doua: 2, two: 2, trei: 3, three: 3, patru: 4, four: 4 };
+const WORD_NUM: Record<string, number> = { o: 1, un: 1, una: 1, one: 1, a: 1, doua: 2, doi: 2, two: 2, trei: 3, three: 3, patru: 4, four: 4 };
+const RESIZE = /\b(fa|make|mareste|micsoreaza|bigger|smaller|mai mare|mai mica|mai mic|de fapt|actually|resize|schimba|instead)\b/;
 
 /**
  * Sketch edits in plain words ("add 2 steps at the front", "fă-o în L cu 2×2 m în dreapta",
@@ -166,11 +222,13 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
   // Placed items first, so "lângă ușă" doesn't read as "add a door".
   const items = parseItems(t, type);
   if (items) return items;
-  const dims = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters)?\\s*(?:x|×|\\*|pe|by)\\s*${NUM}`));
+  const dims = findDims(t);
   const side = sideIn(t);
   const removing = /\b(fara|scoate\w*|elimina\w*|sterge\w*|remove|delete|without|no more)\b/.test(t);
   const cm = t.match(new RegExp(`${NUM}\\s*cm\\b`));
-  const metres = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters|metres)\\b`));
+  const metres = metresIn(t)[0];
+  /** "50 cm" or "0,5 m" as metres. */
+  const size = cm ? num(cm[1]) / 100 : metres?.value;
   const countWord = (re: RegExp) => {
     const m = t.match(re);
     return m ? (/^\d+$/.test(m[1]) ? Number(m[1]) : WORD_NUM[m[1]]) : undefined;
@@ -178,22 +236,37 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
   const edits: Partial<SketchOp>[] = [];
 
   if (type === "deck") {
-    const raised = /\b(ridicat\w*|inaltat\w*|inaltime|raised?|high|above ground|de la sol|deasupra)\b/.test(t);
-    if (raised && (cm || metres)) edits.push({ op: "set_height", value: cm ? num(cm[1]) / 100 : num(metres![1]) });
-    if (/\b(trepte|treapta|scari|scara|steps?|stairs?)\b/.test(t)) {
+    const steps = /\b(trept\w*|treapt\w*|scari|scara|scarile|steps?|stairs?)\b/.test(t);
+    // "ridic-o la 50 cm" — but "3 trepte de 17 cm" is about the steps, not the deck.
+    if (RAISE.test(t) && size !== undefined && !(steps && !/\b(ridic\w*|rais\w*)\b/.test(t))) edits.push({ op: "set_height", value: size });
+    if (steps) {
       if (removing) edits.push({ op: "remove_steps" });
-      else edits.push({ op: "add_steps", zone: "A", side: side ?? "s", count: countWord(/\b(\d+|o|una|doua|trei|patru|one|two|three|four)\s+(?:trepte|treapta|steps?|stairs?)\b/) ?? null });
+      else edits.push({ op: "add_steps", zone: "A", side: side ?? "s", count: countWord(/\b(\d+|o|una|doua|trei|patru|one|two|three|four)\s+(?:trept\w*|treapt\w*|steps?|stairs?)\b/) ?? null });
     }
+    const base = /\b(pe|on)\s+(beton|placa|concrete|slab)\b/.test(t) ? "concrete_slab" : /\b(pe|on)\s+(pietris|gravel)\b/.test(t) ? "gravel" : /\b(pe|on)\s+(pamant|soil|earth)\b/.test(t) ? "soil" : undefined;
+    if (base) edits.push({ op: "set_option", key: "base", value: base });
   }
   if (type === "deck" || type === "laminate_floor" || type === "lawn") {
-    if (/\b(in l|forma de l|l[- ]shape\w*|extinde\w*|extensie|extension|extend|aripa|wing|inca o zona|another (area|section))\b/.test(t) && dims) {
-      edits.push({ op: "add_zone", zone: "A", side: side ?? "e", w: num(dims[1]), d: num(dims[2]), align: "end" });
-    } else if (dims && /\b(fa|make|mareste|micsoreaza|bigger|smaller|mai mare|mai mica|mai mic|de fapt|actually|resize|schimba|instead)\b/.test(t)) {
-      edits.push({ op: "resize", zone: "A", w: num(dims[1]), d: num(dims[2]) });
+    const addZone =
+      /\b(in l|forma de l|l[- ]shape\w*|extinde\w*|extensie|extension|extend|aripa|wing|another (area|section))\b/.test(t) ||
+      (/\b(zon\w*|area|section)\b/.test(t) && /\b(adaug\w*|add|inca|noua|alta)\b/.test(t));
+    if (addZone && dims) {
+      edits.push({ op: "add_zone", zone: "A", side: side ?? "e", w: dims.a, d: dims.b, align: "end" });
+    } else if (dims && RESIZE.test(t)) {
+      edits.push({ op: "resize", zone: "A", w: dims.a, d: dims.b });
     }
   }
+  if (type === "laminate_floor" && /\b(diagonal\w*)\b/.test(t)) edits.push({ op: "set_option", key: "pattern", value: removing || /\b(drept|straight)\b/.test(t) ? "straight" : "diagonal" });
   if (type === "paint_room" || type === "tiling") {
-    if (dims && /\b(fa|make|mareste|micsoreaza|bigger|smaller|mai mare|mai mica|mai mic|de fapt|actually|resize|schimba|instead)\b/.test(t)) edits.push({ op: "resize", w: num(dims[1]), d: num(dims[2]) });
+    const h = type === "paint_room" ? tagged(t, HEIGHT_WORD, dims)?.value : undefined;
+    if (dims && RESIZE.test(t)) edits.push({ op: "resize", w: dims.a, d: dims.b, ...(h ? { h } : {}) });
+  }
+  if (type === "paint_room" && /\b(tavan\w*|ceiling)\b/.test(t)) edits.push({ op: "set_option", key: "ceiling", value: !/\b(fara|without|no|nu|scoate\w*|exclude\w*)\b/.test(t) });
+  if ((type === "paint_room" || type === "drywall_partition") && new RegExp(`\\b${HEIGHT_WORD}`).test(t) && size !== undefined && !dims) {
+    edits.push({ op: "set_height", value: size });
+  }
+  if (type === "drywall_partition" && !edits.length && (dims || metres) && (RESIZE.test(t) || new RegExp(`\\b${LENGTH_WORD}\\b`).test(t))) {
+    edits.push(dims ? { op: "resize", w: dims.a, h: dims.b } : { op: "resize", w: metres!.value });
   }
   if (type === "fence") {
     if (/\b(poarta|portita|gate)\b/.test(t)) {
@@ -205,9 +278,12 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
       }
     }
     if (/\b(colt|corner|coteste|cotit\w*|turns?|intoarce\w*|pe latura|along the side)\b/.test(t) && metres) {
-      edits.push({ op: "add_fence_segment", length: num(metres[1]), turn: side === "w" ? "left" : "right" });
+      edits.push({ op: "add_fence_segment", length: metres.value, turn: side === "w" ? "left" : "right" });
     }
-    if (/\b(inalt|inaltime|height|high|tall)\b/.test(t) && metres && !edits.length) edits.push({ op: "set_height", value: num(metres[1]) });
+    const high = new RegExp(`\\b${HEIGHT_WORD}`).test(t);
+    if (high && size !== undefined && !edits.length) edits.push({ op: "set_height", value: size });
+    // "fă-l de 30 m" / "de fapt are 25 m" → the whole fence's length.
+    if (!high && metres && !edits.length && (RESIZE.test(t) || new RegExp(`\\b${LENGTH_WORD}\\b`).test(t))) edits.push({ op: "resize", w: metres.value });
   }
   if (type === "paint_room" || type === "tiling" || type === "drywall_partition" || type === "laminate_floor") {
     if (/\b(usa|usi|door|doors)\b/.test(t)) edits.push(removing ? { op: "remove_opening", kind: "door" } : { op: "add_opening", kind: "door", wall: side ?? null });
@@ -215,10 +291,13 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
       edits.push(removing ? { op: "remove_opening", kind: "window" } : { op: "add_opening", kind: "window", wall: side ?? null });
   }
   if (type === "tiling" && /\b(faianta|wall tiles?|pe pereti|on the walls?)\b/.test(t)) {
-    const h = cm ? num(cm[1]) / 100 : metres ? num(metres[1]) : removing ? 0 : undefined;
+    const h = size ?? (removing ? 0 : undefined);
     if (h !== undefined) edits.push({ op: "set_wall_tiles", wall: side ?? "all", value: h });
   }
-  return edits.length ? edits : null;
+  if (type === "tiling" && /\b(gresie|floor tiles?)\b/.test(t) && /\b(fara|without|no|nu|scoate\w*)\b/.test(t)) edits.push({ op: "set_option", key: "floor", value: false });
+  // New dimensions without "make it…" are a new request ("Vreau o terasă de 5 x 4 pe beton"), not a settings tweak.
+  const kept = dims && !edits.some((e) => e.op === "resize" || e.op === "add_zone") ? edits.filter((e) => e.op !== "set_option") : edits;
+  return kept.length ? kept : null;
 }
 
 /** Words for materials the customer may ask to see ("show me the joists"). */
@@ -263,11 +342,31 @@ export function parseView(t: string): UiCommand | null {
   return Object.keys(c).length ? c : null;
 }
 
+/**
+ * "Da" / "yes please" answering the question that ended the previous reply: "…vrei să adaug și X?" adds the
+ * suggestions, "…la **Berceni** (9,9 km) e tot — mut lista acolo?" moves the list. Whichever was asked last wins.
+ */
+export function answerToQuestion(raw: string, history: unknown[] | undefined): Intent | null {
+  const t = fold(raw).trim();
+  if (t.length > 40 || !/^(da|yes|yep|yeah|sure|ok|okay|sigur|desigur|bine|hai|go ahead|do it|please)\b/.test(t) || /\b(nu|no|not)\b/.test(t)) return null;
+  const last = [...(history ?? [])]
+    .reverse()
+    .find((m): m is { role: string; content: string } => !!m && typeof m === "object" && (m as { role?: unknown }).role === "assistant" && typeof (m as { content?: unknown }).content === "string");
+  if (!last) return null;
+  const c = fold(last.content);
+  const add = Math.max(c.lastIndexOf("vrei sa adaug"), c.lastIndexOf("want me to add"), c.lastIndexOf("le adaug"));
+  const move = last.content.match(/\*\*([^*]+)\*\*\s*\([^)]*\)\s*(?:e tot|has everything)/);
+  const moveAt = Math.max(c.lastIndexOf("mut lista acolo"), c.lastIndexOf("move your list there"));
+  if (add >= 0 && add > moveAt) return { kind: "add_suggestions" };
+  if (move && moveAt >= 0) return { kind: "move", text: fold(move[1]) };
+  return null;
+}
+
 /** The project type mentioned in the latest earlier user message, if any. */
 function projectTypeFromHistory(history: unknown[] | undefined): ProjectType | undefined {
   for (const it of [...(history ?? [])].reverse()) {
-    const m = it as { role?: string; content?: unknown };
-    if (m.role !== "user" || typeof m.content !== "string") continue;
+    const m = it as { role?: string; content?: unknown } | null;
+    if (!m || typeof m !== "object" || m.role !== "user" || typeof m.content !== "string") continue;
     const t = fold(m.content);
     const found = PROJECT_KEYWORDS.find(([, re]) => re.test(t))?.[0];
     if (found) return found;
@@ -310,41 +409,47 @@ export function parseIntent(raw: string, state: SessionState): Intent {
     if (/\b(ofert\w*|offer\w*|reducer\w*|discount\w*|cupon\w*)\b/.test(t)) return { kind: "offers" };
     if (/\b(muta\w*|move|transfer\w*|schimba magazinul|other store|alt magazin)\b/.test(t)) return { kind: "move", text: t };
     if (/\b(stoc\w*|stock|unde|where|magazin\w*|store\w*)\b/.test(t)) return { kind: "stock" };
-    if (/\b(sugest\w*|suggest\w*|extra\w*)\b/.test(t) || /^\s*(adauga|add)\s*(le|them|tot|all)?\s*[.!]?\s*$/.test(t)) return { kind: "add_suggestions" };
+    if (/\b(sugest\w*|suggest\w*|extra\w*)\b/.test(t) || /^\s*(adauga|add)[\s-]*(le|them|tot|all)?(\s+pe toate)?\s*[.!]?\s*$/.test(t)) return { kind: "add_suggestions" };
     if (/\b(scoate\w*|elimina\w*|sterge\w*|remove|drop|nu mai vreau|fara)\b/.test(t)) return { kind: "remove", text: t };
     if (/\b(alege\w*|schimba\w*|foloseste|inlocuieste|in loc de|instead|switch|use|choose|prefer\w*)\b/.test(t)) return { kind: "choose", text: t };
-    if (/\b(adaug\w*|add)\b/.test(t)) return { kind: "add_suggestions" };
+    // "o vreau din WPC", "made of larch"
+    if (/\b(din|made of|in)\s+(pin|larice|wpc|compozit\w*|brad|pine|larch|composite)\b/.test(t)) return { kind: "choose", text: t };
+    if (/\b(adaug\w*|add)\b/.test(t)) return { kind: "add_suggestions", text: t };
   }
   if (!type) return { kind: "unknown" };
 
   const params: Record<string, unknown> = {};
-  const dims = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters)?\\s*(?:x|×|\\*|pe|by)\\s*${NUM}`));
-  const height =
-    t.match(new RegExp(`(?:inaltime|inalt|height|high|tall)\\D{0,12}${NUM}`)) ?? t.match(new RegExp(`${NUM}\\s*m?\\s*(?:inaltime|inalt|high|tall|height)`));
-  const area = t.match(new RegExp(`${NUM}\\s*(?:mp|m2|m²|sqm|square)`));
-  const length = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters|metres)\\b`));
+  const dims = findDims(t);
+  const height = tagged(t, HEIGHT_WORD, dims);
+  const area = t.match(new RegExp(`${NUM}\\s*(?:de\\s+)?(?:mp|m2|m²|sqm|square|metri patrati|m patrati)`));
+  const lengthTag = tagged(t, LENGTH_WORD, dims);
+  const widthTag = tagged(t, WIDTH_WORD, dims);
+  // A plain "20 m" that isn't the height ("gard înalt de 1,2 m, lung de 30 m").
+  const plainLength = lengthTag ?? metresIn(t).find((f) => f.at !== height?.at && !(dims && f.at >= dims.at && f.at < dims.end));
+  const side = (a: number) => Math.round(Math.sqrt(a) * 100) / 100;
   if (dims) {
-    params.lengthM = num(dims[1]);
-    params.widthM = num(dims[2]);
+    params.lengthM = dims.a;
+    params.widthM = dims.b;
+  } else if (lengthTag && widthTag) {
+    // "4 m lungime și 3 m lățime", "4 m long and 3 m wide"
+    params.lengthM = lengthTag.value;
+    params.widthM = widthTag.value;
   }
-  if (height) params.heightM = num(height[1]);
-  const countOf = (re: RegExp) => {
-    const m = t.match(re);
+  if (height) params.heightM = height.value;
+  const countOf = (nouns: string) => {
+    if (new RegExp(`\\b(?:fara|no|without|zero)\\s+(?:${nouns})\\b`).test(t)) return 0;
+    const m = t.match(new RegExp(`\\b(\\d+|o|un|una|one|a|doua|doi|two|trei|three|patru|four)\\s+(?:${nouns})\\b`));
     if (!m) return undefined;
-    const w = m[1];
-    return /^\d+$/.test(w) ? Number(w) : /^(doua|two|2)$/.test(w) ? 2 : 1;
+    return /^\d+$/.test(m[1]) ? Number(m[1]) : WORD_NUM[m[1]];
   };
-  const doors = countOf(/\b(\d+|o|un|una|one|a|doua|two)\s+(?:usi|usa|door|doors)\b/);
-  const windows = countOf(/\b(\d+|o|un|una|one|a|doua|two)\s+(?:ferestre|fereastra|window|windows)\b/);
+  const doors = countOf("usi|usa|door|doors");
+  const windows = countOf("ferestre|fereastra|geamuri|window|windows");
   if (doors !== undefined) params.doors = doors;
   if (windows !== undefined) params.windows = windows;
 
   switch (type) {
     case "fence":
-      if (!params.lengthM) {
-        const l = t.match(new RegExp(`${NUM}\\s*(?:m|metri|meters)\\s*(?:lungime|long|de gard|lung)?`));
-        if (l) params.lengthM = num(l[1]);
-      }
+      if (!params.lengthM && plainLength) params.lengthM = plainLength.value;
       if (params.widthM) delete params.widthM;
       break;
     case "lawn":
@@ -353,33 +458,43 @@ export function parseIntent(raw: string, state: SessionState): Intent {
       if (/\b(refac\w*|overseed\w*|suprains\w*)\b/.test(t)) params.mode = "overseed";
       break;
     case "drywall_partition":
-      if (!params.lengthM && length) params.lengthM = num(length[1]);
+      if (!params.lengthM && plainLength) params.lengthM = plainLength.value;
       if (params.widthM && !params.heightM) params.heightM = params.widthM;
       delete params.widthM;
       params.doors = doors ?? 0;
       break;
-    case "tiling":
+    case "tiling": {
       params.roomType = /\b(bucatari\w*|kitchen)\b/.test(t) ? "kitchen" : /\b(baie|baia|bathroom)\b/.test(t) ? "bathroom" : "other";
-      if (!params.lengthM && area) {
-        params.lengthM = Math.sqrt(num(area[1]));
-        params.widthM = Math.sqrt(num(area[1]));
-      }
+      if (!params.lengthM && area) params.lengthM = params.widthM = side(num(area[1]));
+      // "Faianță" = wall tiles: outside bathrooms the calculator tiles no walls unless told to.
+      const wallTiles = /\b(faianta|wall tiles?|pe pereti|on the walls?|backsplash)\b/.test(t);
+      const floorTiles = /\b(gresie|floor tiles?|pe jos|on the floor|pardoseala)\b/.test(t);
+      const upTo = t.match(new RegExp(`\\b(?:pana la|up to)\\s*${NUM}\\s*(cm)?`));
+      if (upTo) params.wallTileHeightM = num(upTo[1]) / (upTo[2] ? 100 : 1);
+      else if (/\b(doar|numai|only|just)\s+(gresie|floor)\b/.test(t)) params.wallTileHeightM = 0;
+      else if (wallTiles && params.roomType !== "bathroom") params.wallTileHeightM = 0.6;
+      if (/\b(doar|numai|only|just)\s+(faianta|wall)\b/.test(t) || (wallTiles && !floorTiles && params.roomType !== "bathroom")) params.tileFloor = false;
+      delete params.heightM;
       break;
+    }
     case "laminate_floor":
       params.subfloor = /\b(beton|sapa|concrete|screed)\b/.test(t) ? "concrete" : /\b(lemn|wood\w*)\b/.test(t) ? "wood" : /\b(gresie veche|old tiles)\b/.test(t) ? "old_tiles" : "concrete";
-      if (!params.lengthM && area) {
-        params.lengthM = Math.sqrt(num(area[1]));
-        params.widthM = Math.sqrt(num(area[1]));
-      }
+      if (!params.lengthM && area) params.lengthM = params.widthM = side(num(area[1]));
+      if (/\bdiagonal\w*\b/.test(t)) params.pattern = "diagonal";
+      delete params.heightM;
       break;
     case "deck":
       params.base = /\b(beton|placa|concrete|slab)\b/.test(t) ? "concrete_slab" : /\b(pietris|gravel)\b/.test(t) ? "gravel" : "soil";
-      if (!params.lengthM && area) {
-        params.lengthM = Math.sqrt(num(area[1]));
-        params.widthM = Math.sqrt(num(area[1]));
+      if (!params.lengthM && area) params.lengthM = params.widthM = side(num(area[1]));
+      // "ridicată la 50 cm", "la 40 cm de la sol"
+      if (!params.heightM && RAISE.test(t)) {
+        const cm = t.match(new RegExp(`${NUM}\\s*cm\\b`));
+        if (cm) params.heightM = num(cm[1]) / 100;
       }
       break;
     case "paint_room":
+      // "camera de 12 mp" (floor area, not the walls') → a square room of that area.
+      if (!params.lengthM && area && !/\b(pereti|walls?)\b/.test(t)) params.lengthM = params.widthM = side(num(area[1]));
       if (/\b(fara tavan|without (the )?ceiling|no ceiling)\b/.test(t)) params.paintCeiling = false;
       if (/\b(glet nou|tencuiala noua|fresh plaster|new plaster)\b/.test(t)) params.surface = "fresh_plaster";
       if (/\b(inchis|dark)\b/.test(t)) params.surface = "dark_to_light";
@@ -395,6 +510,9 @@ export function parseIntent(raw: string, state: SessionState): Intent {
         : needsLW && !(params.lengthM && params.widthM)
           ? "dims"
           : undefined;
+  // Naming the current project without new dimensions ("terasa mea e pe pământ") is a follow-up we
+  // didn't understand, not a new project: don't throw the sketch away for the sizes card.
+  if (missing && state.project?.type === type) return { kind: "unknown" };
   return { kind: "project", type, params, quality, missing };
 }
 
@@ -408,34 +526,58 @@ async function* streamText(text: string): AsyncGenerator<AgentEvent> {
   }
 }
 
+/** Words a short product name must not end on ("Genunchiere Protekt cu gel" → "genunchiere Protekt"). */
+const DANGLING = new Set("cu din de pentru si și la pe in în fara fără sau with for and of in on".split(" "));
+
 /** "Plot reglabil terasă Kronwald 60–100 mm" → "plot reglabil terasă" (generic words only, brands keep their case). */
-function shortName(name: string): string {
+export function shortName(name: string): string {
   const words = name.split(",")[0].split(" ").slice(0, 3);
+  while (words.length > 1 && DANGLING.has(words[words.length - 1].toLowerCase())) words.pop();
   return words.map((w, i) => (i === 0 ? w.charAt(0).toLowerCase() + w.slice(1) : w)).join(" ");
+}
+
+/**
+ * How a reply names a product. Romanian names start with what it is ("Plot reglabil terasă Kronwald…");
+ * English ones start with the brand ("Kronwald adjustable deck support…" → "kronwald adjustable deck"),
+ * so in English say the job it does ("adjustable deck support").
+ */
+export function itemName(name: string, role: MaterialRole | undefined, lang: Lang): string {
+  const label = lang === "en" && role ? MATERIAL_ROLES[role]?.labelEn : undefined;
+  if (!label) return shortName(name);
+  return /^[A-Z]{2}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
 function stockSentence(q: Quote, lang: Lang): string {
   if (q.availability.allInStock) return lang === "en" ? `Everything is in stock at ${q.storeName}.` : `Totul e pe stoc la ${q.storeName}.`;
-  const missing = q.availability.missing.map((m) => shortName(m.name));
+  const missing = [...new Set(q.availability.missing.map((m) => itemName(m.name, q.lines.find((l) => l.sku === m.sku)?.role, lang)))];
   const list = missing.slice(0, 3).join(", ");
   const best = q.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
   if (best) {
     return lang === "en"
-      ? `At ${q.storeName} we're short on ${list}; **${best.name}** (${best.distanceKm} km) has everything — shall I move your list there?`
-      : `La ${q.storeName} nu ajunge stocul pentru ${list}; la **${best.name}** (${best.distanceKm} km) e tot — mut lista acolo?`;
+      ? `At ${q.storeName} we're short on ${list}; **${best.name}** (${km(best.distanceKm, lang)}) has everything — shall I move your list there?`
+      : `La ${q.storeName} nu ajunge stocul pentru ${list}; la **${best.name}** (${km(best.distanceKm, lang)}) e tot — mut lista acolo?`;
   }
   return lang === "en"
     ? `At ${q.storeName} we're short on ${list} — I can swap them for in-stock alternatives or arrange home delivery.`
     : `La ${q.storeName} nu ajunge stocul pentru ${list} — pot găsi alternative pe stoc sau livrare la domiciliu.`;
 }
 
-export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, title: string, lang: Lang): string {
+export function projectReply(
+  q: Quote,
+  card: Extract<Card, { kind: "quote" }>,
+  title: string,
+  lang: Lang,
+  /** The session's suggestions (they carry the role the reply names them by). */
+  suggested: { sku: string; role: MaterialRole }[] = [],
+): string {
   const en = lang === "en";
   const parts: string[] = [];
+  // A tier picked earlier carries over to the next project: say so, or "premium bathroom" looks like the normal price.
+  const tier = card.quality === "budget" ? (en ? " (budget version)" : " (varianta economică)") : card.quality === "premium" ? (en ? " (premium version)" : " (varianta premium)") : "";
   parts.push(
     en
-      ? `Done — ${title.toLowerCase()} comes to **${lei(q.total, lang)}**${q.saving > 0 ? `, including **${lei(q.saving, lang)}** off from your offers` : ""}.`
-      : `Gata — ${title.toLowerCase()} costă **${lei(q.total, lang)}**${q.saving > 0 ? `, cu **${lei(q.saving, lang)}** reducere din ofertele tale` : ""}.`,
+      ? `Done — ${title.toLowerCase()}${tier} comes to **${lei(q.total, lang)}**${q.saving > 0 ? `, including **${lei(q.saving, lang)}** off from your offers` : ""}.`
+      : `Gata — ${title.toLowerCase()}${tier} costă **${lei(q.total, lang)}**${q.saving > 0 ? `, cu **${lei(q.saving, lang)}** reducere din ofertele tale` : ""}.`,
   );
   parts.push(
     en
@@ -448,8 +590,8 @@ export function projectReply(q: Quote, card: Extract<Card, { kind: "quote" }>, t
   }
   parts.push(stockSentence(q, lang));
   if (card.suggestions.length) {
-    const s = [...new Set(card.suggestions.map((x) => shortName(x.name)))].slice(0, 2);
-    parts.push(en ? `Optional: ${s.join(" and ")} — want me to add them?` : `Opțional: ${s.join(" și ")} — le adaug?`);
+    const s = [...new Set(card.suggestions.map((x) => itemName(x.name, suggested.find((g) => g.sku === x.sku)?.role, lang)))].slice(0, 2);
+    parts.push(en ? `Optional: want me to add the ${s.join(" and ")} too?` : `Opțional: vrei să adaug și ${s.join(" și ")}?`);
   }
   return parts.join(" ");
 }
@@ -465,6 +607,17 @@ function askFor(missing: string, type: ProjectType, lang: Lang): string {
     ? "Great project! What are the room/area dimensions — length × width in metres (e.g. 4 × 3 m)?"
     : "Super proiect! Ce dimensiuni are — lungime × lățime în metri (ex. 4 × 3 m)?";
 }
+
+/** Follow-ups the offline agent understands, per project (shown when a message isn't understood). */
+const EDIT_EXAMPLES: Record<ProjectType, [string, string]> = {
+  deck: ["„fă-o 5 × 4 m”, „adaugă 2 trepte în față”, „ridic-o la 40 cm”", "“make it 5 × 4 m”, “add 2 steps at the front”, “raise it to 40 cm”"],
+  fence: ["„pune o poartă de mașină”, „fă un colț la dreapta de 6 m”, „fă-l de 1,2 m înălțime”", "“add a driveway gate”, “turn right for 6 m”, “make it 1.2 m high”"],
+  paint_room: ["„adaugă o fereastră”, „fără tavan”, „fă-o 5 × 4 m”", "“add a window”, “no ceiling”, “make it 5 × 4 m”"],
+  tiling: ["„faianță doar până la 1,2 m”, „adaugă o ușă”, „fă-o 3 × 2 m”", "“wall tiles only up to 1.2 m”, “add a door”, “make it 3 × 2 m”"],
+  laminate_floor: ["„fă-o în L cu 2 × 2 m în dreapta”, „montaj diagonal”, „adaugă o ușă”", "“make it L-shaped with 2 × 2 m on the right”, “diagonal laying”, “add a door”"],
+  drywall_partition: ["„fă-l de 4 m”, „adaugă o ușă”, „fă-l de 2,8 m înălțime”", "“make it 4 m long”, “add a door”, “make it 2.8 m high”"],
+  lawn: ["„fă-o 10 × 8 m”, „adaugă o zonă de 3 × 3 m în spate”", "“make it 10 × 8 m”, “add another area of 3 × 3 m at the back”"],
+};
 
 export interface ScriptedOptions {
   sources: DataSources;
@@ -490,7 +643,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
   const status = (tool: string): AgentEvent => ({ type: "status", tool, label: TOOL_STATUS[tool]?.[lang] ?? tool });
 
   yield { type: "mode", mode: "scripted", reason: opts.reason };
-  const intent = parseIntent(opts.message, state);
+  const intent = (state.project && answerToQuestion(opts.message, opts.history)) || parseIntent(opts.message, state);
   let reply = "";
   let lastQuote: Quote | undefined;
   const extraAmounts: number[] = [];
@@ -511,6 +664,18 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     return r;
   };
 
+  /** The session's suggestions named in the text ("adaugă uleiul" → the decking oil). */
+  const namedSuggestions = async (text: string) => {
+    const words = contentWords(text);
+    if (!words.length || !state.suggestions?.length) return [];
+    const products = new Map((await opts.sources.catalog.getMany(state.suggestions.map((sg) => sg.sku))).map((p) => [p.sku, p]));
+    return state.suggestions.filter((sg) => {
+      const p = products.get(sg.sku);
+      const hay = fold(`${p?.name ?? ""} ${p?.nameEn ?? ""} ${MATERIAL_ROLES[sg.role]?.label ?? ""} ${MATERIAL_ROLES[sg.role]?.labelEn ?? ""}`);
+      return words.some((w) => hay.includes(w));
+    });
+  };
+
   if (intent.kind === "project" && !intent.missing) {
     if (!state.project) {
       yield status("get_customer_context");
@@ -523,7 +688,14 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     );
     const quoteCard = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
     if (!quoteCard || !state.project) {
-      reply = lang === "en" ? "I couldn't calculate that — could you give me the dimensions again?" : "Nu am putut calcula — îmi mai dai o dată dimensiunile?";
+      const max = String((r.forModel as { error?: string }).error ?? "").match(/max is (\d+(?:\.\d+)?)/)?.[1];
+      reply = max
+        ? lang === "en"
+          ? `That looks too big for one project — I can calculate up to ${max} m (or m²) here. Could you check the dimensions?`
+          : `Pare prea mare pentru un singur proiect — pot calcula până la ${dec(Number(max), lang, 0)} m (sau m²) aici. Verifici te rog dimensiunile?`
+        : lang === "en"
+          ? "I couldn't calculate that — could you give me the dimensions again?"
+          : "Nu am putut calcula — îmi mai dai o dată dimensiunile?";
     } else {
       yield status("present_plan");
       await sleep(700);
@@ -535,7 +707,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
           plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined },
         },
       };
-      reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang);
+      reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang, state.suggestions);
     }
   } else if (intent.kind === "project") {
     yield* runTool("suggest_sizes", { projectType: intent.type }, 250);
@@ -559,8 +731,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     const r = yield* runTool("edit_sketch", { edits: intent.edits.map((e) => ({ ...blank, option: null, ...e })) }, 700);
     const ch = r.cards?.find((c): c is Extract<Card, { kind: "change" }> => c.kind === "change")?.change;
     if (!ch) {
-      const err = (r.forModel as { error?: string }).error ?? "";
-      reply = lang === "en" ? `I couldn't change the sketch that way (${err}). Try another size or side?` : `Nu am putut modifica schița așa (${err}). Încercăm altă dimensiune sau latură?`;
+      const err = (r as { errorText?: string }).errorText ?? explainEditError((r.forModel as { error?: string }).error ?? "", lang);
+      reply = lang === "en" ? `I couldn't change the sketch that way: ${err}. Try another size or side?` : `Nu am putut modifica schița așa: ${err}. Încercăm altă dimensiune sau latură?`;
     } else {
       extraAmounts.push(ch.totalBefore, Math.abs(ch.delta), ...ch.lines.map((l) => Math.abs(l.deltaRon)));
       const sign = ch.delta > 0 ? "+" : ch.delta < 0 ? "−" : "±";
@@ -587,6 +759,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         lang === "en"
           ? `${label} comes to **${lei(q.quote.total, lang)}**${prev !== undefined ? ` (${diff < 0 ? "−" : "+"}${lei(Math.abs(diff), lang)} vs. before)` : ""}. ${stockSentence(q.quote, lang)}`
           : `${label} costă **${lei(q.quote.total, lang)}**${prev !== undefined ? ` (${diff < 0 ? "−" : "+"}${lei(Math.abs(diff), lang)} față de înainte)` : ""}. ${stockSentence(q.quote, lang)}`;
+    } else {
+      reply = lang === "en" ? "I couldn't recalculate the project in that version — could you tell me the dimensions again?" : "Nu am putut recalcula proiectul în varianta asta — îmi mai spui o dată dimensiunile?";
     }
   } else if (intent.kind === "offers") {
     const r = yield* runTool("get_offers", {}, 550);
@@ -624,7 +798,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     const what = c.highlight && MATERIAL_ROLES[c.highlight as MaterialRole];
     const en = lang === "en";
     reply = [
-      what ? (en ? `Here are the **${what.labelEn.toLowerCase()}** — highlighted in the sketch and in your list.` : `Uite **${what.label.toLowerCase()}** — evidențiate pe schiță și în listă.`) : "",
+      what ? (en ? `Highlighted in the sketch and in your list: **${what.labelEn.toLowerCase()}**.` : `Am evidențiat pe schiță și în listă: **${what.label.toLowerCase()}**.`) : "",
       c.view === "exploded" && !what ? (en ? "Exploded view: every layer lifted apart, in build order." : "Vedere explodată: fiecare strat ridicat separat, în ordinea montajului.") : "",
       c.view === "real" ? (en ? "Here's the realistic view, with the materials' colours." : "Iată vederea realistă, cu culorile materialelor.") : "",
       c.editor ? (en ? "The plan editor is open — drag an edge or tap + to change the shape; the list follows every change." : "Am deschis editorul de plan — trage de o margine sau apasă + ca să schimbi forma; lista se actualizează la fiecare modificare.") : "",
@@ -638,19 +812,20 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       .join(" ");
   } else if ((intent.kind === "choose" || intent.kind === "remove" || intent.kind === "move") && state.project) {
     const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
-    // Light stemming for Romanian articles/plurals: "geotextilul" → "geotextil", "grinzile" → "grinz".
-    const stem = (w: string) => (w.length >= 6 ? w.replace(/(urile|ului|elor|ilor|ele|ile|ul|ii|le|a|e|i)$/, "") : w);
-    const words = intent.text
-      .split(/[^a-z0-9]+/)
-      .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
-      .map(stem);
+    const words = contentWords(intent.text);
     const hit = (name: string) => words.filter((w) => fold(name).includes(w)).length;
     let op: Record<string, unknown> | null = null;
     let storeId: string | null = null;
     let label = "";
     if (intent.kind === "move") {
+      // Numbers count here: "Timișoara 2" is not "Timișoara 1" (whole words, so "2" doesn't match "20").
+      const storeWords = contentWords(intent.text, { numbers: true });
+      const storeHit = (name: string) => storeWords.filter((w) => new RegExp(`\\b${w}`).test(fold(name))).length;
+      const current = state.storeId ?? opts.customer.homeStoreId;
       const stores = await opts.sources.stores.list();
-      const best = stores.map((st) => ({ st, n: hit(`${st.name} ${st.city}`) })).sort((a, b) => b.n - a.n)[0];
+      const best = stores
+        .map((st) => ({ st, n: storeHit(`${st.name} ${st.city}`) }))
+        .sort((a, b) => b.n - a.n || Number(a.st.id === current) - Number(b.st.id === current))[0];
       if (best?.n) {
         storeId = best.st.id;
         label = best.st.name;
@@ -708,14 +883,25 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         const en = lang === "en";
         reply =
           intent.kind === "move"
-            ? `${en ? `Moved your list to **${label}**` : `Am mutat lista la **${label}**`}. ${stockSentence(q.quote, lang)}`
+            ? `${storeId === before.storeId ? (en ? `Your list is already at **${label}**` : `Lista e deja la **${label}**`) : en ? `Moved your list to **${label}**` : `Am mutat lista la **${label}**`}. ${stockSentence(q.quote, lang)}`
             : intent.kind === "remove"
               ? en ? `Removed ${label} — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am scos ${label} — total nou **${lei(q.quote.total, lang)}**${delta}.`
               : en ? `Switched to ${label}, sized for your project — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am trecut la ${label}, calculat pentru proiectul tău — total nou **${lei(q.quote.total, lang)}**${delta}.`;
       }
     }
+  } else if (intent.kind === "add_suggestions" && intent.text && state.project && !(await namedSuggestions(intent.text)).length) {
+    // "Adaugă o bancă": not something we suggested — don't add every extra instead.
+    const names = (await opts.sources.catalog.getMany((state.suggestions ?? []).map((sg) => sg.sku))).map((p) => (lang === "en" ? p.nameEn : p.name).split(",")[0]);
+    reply = names.length
+      ? lang === "en"
+        ? `I can add the suggested extras: ${names.slice(0, 3).join("; ")}. Which one? For other products, open the options on a line of the list.`
+        : `Pot adăuga extra-urile sugerate: ${names.slice(0, 3).join("; ")}. Pe care? Pentru alte produse, deschide opțiunile de pe o linie din listă.`
+      : lang === "en"
+        ? "I didn't find that among this project's materials — you can change products from the options on each line of the list."
+        : "Nu am găsit asta printre materialele proiectului — poți schimba produsele din opțiunile de pe fiecare linie a listei.";
   } else if (intent.kind === "add_suggestions" && state.project && state.suggestions?.length) {
-    const added = state.suggestions.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
+    const chosen = intent.text ? await namedSuggestions(intent.text) : state.suggestions;
+    const added = chosen.map((sg) => ({ op: "add", sku: sg.sku, qty: null, withSku: null }));
     const before = await priceBasket(ctx(), state.basket, state.storeId ?? opts.customer.homeStoreId);
     const r = yield* runTool("modify_basket", { operations: added, storeId: null }, 500);
     const q = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
@@ -738,7 +924,9 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       ? lang === "en"
         ? `Added the extras — new total **${lei(q.quote.total, lang)}**, and **${int(q.quote.points.earned, lang)} points** to earn.`
         : `Am adăugat extra-urile — total nou **${lei(q.quote.total, lang)}** și **${int(q.quote.points.earned, lang)} puncte** de câștigat.`
-      : "";
+      : lang === "en"
+        ? "I couldn't add the extras right now — you can add them from the list."
+        : "Nu am putut adăuga extra-urile acum — le poți adăuga din listă.";
   } else if (intent.kind === "unsafe") {
     const pro = {
       electrical: { ro: "un electrician autorizat ANRE", en: "a licensed electrician" },
@@ -751,6 +939,12 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       lang === "en"
         ? `For safety this one needs **${pro.en}** — it's not a DIY job, and ${opts.tenant.name} can recommend an installer. I can still plan everything around it: the finishing materials, tools and a shopping list for the parts you can do yourself.`
         : `Din motive de siguranță, aici ai nevoie de **${pro.ro}** — nu e o lucrare de făcut singur, iar ${opts.tenant.name} îți poate recomanda un instalator. Pot planifica în schimb tot ce ține de finisaje, sculele și lista pentru partea pe care o faci tu.`;
+  } else if (state.project) {
+    const ex = EDIT_EXAMPLES[state.project.type][lang === "en" ? 1 : 0];
+    reply =
+      lang === "en"
+        ? `I didn't catch what to change. You can say, for example: ${ex}, “cheaper option” — or tap **Edit sketch**.`
+        : `Nu am înțeles ce să schimb. Poți să-mi spui, de exemplu: ${ex}, „variantă mai ieftină” — sau apasă **Modifică** pe schiță.`;
   } else {
     reply =
       lang === "en"

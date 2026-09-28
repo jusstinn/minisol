@@ -36,7 +36,9 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const message = (body.message ?? "").trim().slice(0, 2000);
+  // Valid JSON is not necessarily an object ("null", "[]", 5): never let a TypeError become a 500.
+  if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "Expected a JSON object" }, { status: 400 });
+  const message = (typeof body.message === "string" ? body.message : "").trim().slice(0, 2000);
   if (!message) return Response.json({ error: "message is required" }, { status: 400 });
 
   const tenant = getTenant(body.tenant);
@@ -68,8 +70,10 @@ export async function POST(req: Request) {
   // Session state comes from the browser: validate it before any tool sees it.
   const stores = await sources.stores.list();
   const state = sanitizeState(body.state, stores.map((s) => s.id));
-  const history = Array.isArray(body.history) ? body.history : [];
-  const lang = body.lang ?? customer.language;
+  // The scripted agent echoes history back: keep it as bounded as the live client's sanitiser does.
+  const history = Array.isArray(body.history) ? body.history.slice(-120) : [];
+  const bodyLang = body.lang === "ro" || body.lang === "en" ? body.lang : undefined;
+  const lang = bodyLang ?? customer.language;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -85,7 +89,7 @@ export async function POST(req: Request) {
         let streamed = false;
         try {
           send({ type: "mode", mode: "live" });
-          for await (const ev of runAgent({ llm, sources, tenant, customer, message, history, state, lang: body.lang, signal: req.signal })) {
+          for await (const ev of runAgent({ llm, sources, tenant, customer, message, history, state, lang: bodyLang, signal: req.signal })) {
             // Status lines alone (e.g. the prefilled profile lookup) don't commit us to the live agent.
             if (ev.type !== "status" && ev.type !== "mode") streamed = true;
             send(ev);

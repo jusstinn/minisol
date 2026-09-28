@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const stores = await sources.stores.list();
   const storeId = stores.some((s) => s.id === body.storeId) ? body.storeId! : customer.homeStoreId;
   const [quote, look] = await Promise.all([
-    priceBasket({ sources, customer, state: { basket: items, storeId }, lang: body.lang ?? customer.language, now: new Date() }, items, storeId),
+    priceBasket({ sources, customer, state: { basket: items, storeId }, lang: body.lang === "en" || body.lang === "ro" ? body.lang : customer.language, now: new Date() }, items, storeId),
     // So swapping an option re-draws the sketch with the new product.
     basketLook({ sources }, items),
   ]);

@@ -7,7 +7,7 @@ import type { ChoiceGroup, ProductOptionView, ProjectSnapshot, QualityOption } f
 import type { Tenant } from "@/config/tenant";
 import type { BasketItem } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
-import { dec, int } from "@/lib/format";
+import { dec, int, unitText } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { Board, ChatMessage, UiSignal } from "@/lib/useAgent";
 import { useLiteGraphics } from "@/lib/useLiteGraphics";
@@ -128,7 +128,7 @@ export function MobileTabBar({ tabs, board, lang, busy }: { tabs: MobileTabs; bo
   const main = board.project?.project.measurements[0];
   const meta: Partial<Record<TabId, string>> = {
     chat: busy ? (en ? "typing…" : "scrie…") : undefined,
-    sketch: main ? `${dec(main.value, lang, main.unit === "buc" || main.unit === "rânduri" ? 0 : Number.isInteger(main.value) ? 0 : 1)} ${main.unit}` : undefined,
+    sketch: main ? `${dec(main.value, lang, main.unit === "buc" || main.unit === "rânduri" ? 0 : Number.isInteger(main.value) ? 0 : 1)} ${unitText(main.unit, lang)}` : undefined,
     list: quote ? `${int(quote.total, lang)} lei` : undefined,
     stores: quote ? (quote.availability.allInStock ? (en ? "in stock" : "pe stoc") : `${quote.availability.missing.length} ${en ? "missing" : "lipsă"}`) : undefined,
     plan: board.plan ? `${board.plan.plan.steps.length} ${en ? "steps" : "pași"}` : undefined,
@@ -365,7 +365,7 @@ function ProjectFacts({ project, lang }: { project: ProjectSnapshot; lang: Lang 
           <div key={m.label} className="min-w-0 border-b border-dashed border-rule pb-1.5">
             <dt className="truncate font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">{m.label}</dt>
             <dd className="num text-[15px] font-semibold text-ink">
-              {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} <span className="text-[12px] font-normal text-ink-3">{m.unit}</span>
+              {dec(m.value, lang, m.unit === "buc" || m.unit === "rânduri" ? 0 : 2)} <span className="text-[12px] font-normal text-ink-3">{unitText(m.unit, lang)}</span>
             </dd>
           </div>
         ))}

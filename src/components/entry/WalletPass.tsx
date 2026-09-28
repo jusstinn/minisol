@@ -120,7 +120,7 @@ export function WalletPass({
           </div>
           <div className="display text-[clamp(22px,3.3vw,36px)] leading-[0.95]">{member.firstName}</div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
-            <Field k="Tier" v={member.tier} sub={s.sub} />
+            <Field k={lang === "en" ? "Tier" : "Nivel"} v={member.tier} sub={s.sub} />
             <Field k={tr("since", lang)} v={member.memberSince.slice(0, 4)} sub={s.sub} />
             <Field k={tr("homeStore", lang)} v={member.homeStore.replace(`${tenant.storePrefix} `, "")} sub={s.sub} />
           </div>
