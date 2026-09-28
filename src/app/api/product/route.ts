@@ -3,6 +3,7 @@ import { getTenant } from "@/config/tenant";
 import { AISLES } from "@/data/stores";
 import { productDetail } from "@/domain/detail";
 import type { StockAtStore } from "@/domain/detail";
+import { sessionFromRequest } from "@/lib/session";
 
 /**
  * Product sheet ("fișă tehnică"): names and description in the reader's language,
@@ -12,6 +13,11 @@ import type { StockAtStore } from "@/domain/detail";
  */
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
+  const tenant = getTenant(q.get("tenant"));
+  // Product mode: only customers who arrived through a signed pass link (no member data here, just the gate).
+  const auth = sessionFromRequest(req, tenant.id);
+  if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status });
+
   const sku = (q.get("sku") ?? "").trim();
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(sku)) return Response.json({ error: "sku is required (letters, digits, - or _)" }, { status: 400 });
   const langParam = q.get("lang");
@@ -19,7 +25,6 @@ export async function GET(req: Request) {
   const storeParam = q.get("storeId");
   if (storeParam !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(storeParam)) return Response.json({ error: "invalid storeId" }, { status: 400 });
 
-  const tenant = getTenant(q.get("tenant"));
   const sources = getDataSources(tenant.id);
   const product = await sources.catalog.get(sku);
   if (!product) return Response.json({ error: "Unknown product" }, { status: 404 });

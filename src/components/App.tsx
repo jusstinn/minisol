@@ -8,13 +8,26 @@ import Entry from "./entry/Entry";
 import type { MemberSummary } from "./entry/WalletPass";
 import Workspace from "./workspace/Workspace";
 
-export default function App({ tenant, initialMember }: { tenant: Tenant; initialMember?: string }) {
-  const [members, setMembers] = useState<MemberSummary[]>([]);
-  const [memberId, setMemberId] = useState<string | undefined>(initialMember);
-  const [lang, setLang] = useState<Lang>("ro");
+export default function App({
+  tenant,
+  initialMember,
+  passMember,
+  initialLang,
+}: {
+  tenant: Tenant;
+  initialMember?: string;
+  /** Product mode: the member from the signed pass-link session (no demo picker). */
+  passMember?: MemberSummary;
+  initialLang?: Lang;
+}) {
+  const [members, setMembers] = useState<MemberSummary[]>(passMember ? [passMember] : []);
+  const [memberId, setMemberId] = useState<string | undefined>(passMember?.memberId ?? initialMember);
+  const [lang, setLang] = useState<Lang>(initialLang ?? "ro");
   const [session, setSession] = useState<{ prompt: string; key: number } | null>(null);
+  const fromPass = Boolean(passMember);
 
   useEffect(() => {
+    if (fromPass) return;
     fetch(`/api/members?tenant=${tenant.id}`)
       .then((r) => r.json())
       .then((d: { members: MemberSummary[] }) => {
@@ -26,7 +39,7 @@ export default function App({ tenant, initialMember }: { tenant: Tenant; initial
         }
       })
       .catch(() => {});
-  }, [tenant.id, initialMember]);
+  }, [tenant.id, initialMember, fromPass]);
 
   const member = useMemo(() => members.find((m) => m.memberId === memberId), [members, memberId]);
 
@@ -41,6 +54,7 @@ export default function App({ tenant, initialMember }: { tenant: Tenant; initial
               tenant={tenant}
               members={members}
               member={member}
+              fromPass={fromPass}
               lang={lang}
               onLang={setLang}
               onSelect={(m) => {

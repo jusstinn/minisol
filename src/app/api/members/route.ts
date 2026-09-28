@@ -2,28 +2,29 @@ import { getDataSources } from "@/adapters";
 import { personaOf } from "@/adapters/demo";
 import { getTenant } from "@/config/tenant";
 import { LOYALTY } from "@/domain/loyalty";
+import { memberSummary, sessionFromRequest } from "@/lib/session";
 
-/** Demo member picker (simulates arriving from a wallet-pass deep link). */
+/**
+ * Demo: the member picker (simulates arriving from a wallet-pass deep link).
+ * Product mode (REQUIRE_PASS_LINK=1): only the member of the signed pass-link session, 401 without one.
+ */
 export async function GET(req: Request) {
   const tenant = getTenant(new URL(req.url).searchParams.get("tenant"));
   const sources = getDataSources(tenant.id);
+  const loyalty = { tierThresholds: LOYALTY.tierThresholds, pointValueRon: LOYALTY.pointValueRon };
+
+  const auth = sessionFromRequest(req, tenant.id);
+  if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status });
+  if (auth.session) {
+    const [customer, stores] = await Promise.all([sources.loyalty.getMember(auth.session.memberId), sources.stores.list()]);
+    if (!customer) return Response.json({ error: "Unknown member" }, { status: 404 });
+    return Response.json({ tenant, loyalty, members: [memberSummary(customer, stores)] }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
   const [members, stores] = await Promise.all([sources.loyalty.listDemoMembers(), sources.stores.list()]);
   return Response.json({
     tenant,
-    loyalty: { tierThresholds: LOYALTY.tierThresholds, pointValueRon: LOYALTY.pointValueRon },
-    members: members.map((m) => ({
-      memberId: m.memberId,
-      firstName: m.firstName,
-      tier: m.tier,
-      points: m.points,
-      language: m.language,
-      city: m.location.city,
-      homeStore: stores.find((s) => s.id === m.homeStoreId)?.name ?? m.homeStoreId,
-      homeStoreId: m.homeStoreId,
-      memberSince: m.memberSince,
-      platform: m.walletPass.platform,
-      personalization: m.consent.personalization,
-      ...personaOf(m.memberId),
-    })),
+    loyalty,
+    members: members.map((m) => ({ ...memberSummary(m, stores), ...personaOf(m.memberId) })),
   });
 }
