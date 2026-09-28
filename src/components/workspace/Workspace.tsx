@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Tenant } from "@/config/tenant";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
@@ -13,10 +13,14 @@ import type { MemberSummary } from "../entry/WalletPass";
 import { WalletPass } from "../entry/WalletPass";
 import CartDrawer from "../cart/CartDrawer";
 import { ProductSheetProvider, useProductSheet } from "../board/ProductSheet";
+import type { UiCommand } from "@/agent/types";
 import type { UiSignal } from "@/lib/useAgent";
-import { IconArrowUp, IconBag, IconCheck, IconClose, Logo } from "../ui/icons";
+import { IconArrowUp, IconBag, IconCheck, Logo } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
 import { Counter, RevealText, Spinner } from "../ui/primitives";
+import CardChips from "./CardChips";
+import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
+import type { PanelTarget } from "./MobileTabs";
 
 export default function Workspace({
   tenant,
@@ -36,10 +40,15 @@ export default function Workspace({
   const [offline, setOffline] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo"));
   const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline });
   const [highlight, setHighlight] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const started = useRef(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)", true);
+  // Phones: the board lives in tabs under the conversation (see MobileTabs).
+  const tabs = useMobileTabs(agent.board, agent.messages);
+  const typing = useRef(false);
+  const onTyping = useCallback((t: boolean) => {
+    typing.current = t;
+  }, []);
 
   useEffect(() => {
     if (started.current) return;
@@ -50,10 +59,31 @@ export default function Workspace({
   const quote = agent.board.quote?.quote;
   const project = agent.board.project?.project;
 
+  /** The assistant asked to show a panel: scroll to it on desktop, open its tab on phones. */
+  const showPanel = (target: PanelTarget | null, c: UiCommand) => {
+    if (isDesktop) {
+      if (!target) return;
+      const els = document.querySelectorAll(`[data-panel="${target}"]`);
+      els[els.length - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const to = target ?? (c.replay ? "sketch" : null);
+    if (!to) {
+      // "Pay with points" changes the list's total.
+      if (typeof c.redeemPoints === "boolean") tabs.notify("list");
+      return;
+    }
+    const tab = TAB_OF[to];
+    if (!tabs.available[tab]) return;
+    // Never pull the customer away from a message they're writing: flag the tab instead.
+    if (typing.current) tabs.notify(tab);
+    else tabs.select(tab, to);
+  };
+
   return (
     // Product sheets open from the list, options, cart and search results; stock is shown for the quote's store.
     <ProductSheetProvider tenantId={tenant.id} lang={lang} storeId={quote?.storeId ?? member.homeStoreId}>
-    <UiBridge ui={agent.ui} onHighlight={setHighlight} onCart={() => setCartOpen(true)} />
+    <UiBridge ui={agent.ui} onHighlight={setHighlight} onCart={() => setCartOpen(true)} onPanel={showPanel} />
     <div className="flex h-dvh flex-col bg-paper">
       {/* header */}
       <header className="flex items-center gap-3 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:px-6">
@@ -126,27 +156,30 @@ export default function Workspace({
           busy={agent.busy}
           onSend={agent.send}
           hasQuote={Boolean(quote)}
+          hidden={!isDesktop && tabs.tab !== "chat"}
+          onTyping={onTyping}
           renderInlineBoard={(m) =>
-            isDesktop ? null : (
-              <Board
-                board={agent.board}
-                onlyCards={m.cards}
-                tenant={tenant}
-                lang={lang}
-                highlight={highlight}
-                onHighlight={setHighlight}
-                onQty={agent.changeQty}
-                onAdd={agent.addItem}
-                onMoveStore={agent.moveStore}
-                onTier={agent.applyTier}
-                onChoose={agent.chooseOption}
-                sketch={agent.sketch}
-                ui={agent.ui}
-                inline
-              />
-            )
+            // Phones: one-line summaries that open the tab with the full panel.
+            isDesktop ? null : <CardChips cards={m.cards} board={agent.board} lang={lang} onOpen={(target) => tabs.select(TAB_OF[target], target)} />
           }
         />
+        {!isDesktop && (
+          <MobilePanels
+            tabs={tabs}
+            board={agent.board}
+            tenant={tenant}
+            lang={lang}
+            highlight={highlight}
+            onHighlight={setHighlight}
+            onQty={agent.changeQty}
+            onAdd={agent.addItem}
+            onMoveStore={agent.moveStore}
+            onTier={agent.applyTier}
+            onChoose={agent.chooseOption}
+            sketch={agent.sketch}
+            ui={agent.ui}
+          />
+        )}
         {isDesktop && (
         <div className="min-h-0 overflow-y-auto border-l border-rule thin-scroll">
           <Board
@@ -167,59 +200,7 @@ export default function Workspace({
         )}
       </div>
 
-      {/* mobile total bar */}
-      <AnimatePresence>
-        {quote && !isDesktop && (
-          <motion.button
-            initial={{ y: 80 }}
-            animate={{ y: 0 }}
-            exit={{ y: 80 }}
-            onClick={() => setCartOpen(true)}
-            className="fixed inset-x-3 bottom-[86px] z-30 flex items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-paper shadow-2xl lg:hidden"
-          >
-            <IconBag size={18} />
-            <div className="text-left">
-              <div className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-paper/60">{tr("total", lang)}</div>
-              <div className="display-cond text-[20px] leading-none">
-                <Counter value={quote.total} lang={lang} /> lei
-              </div>
-            </div>
-            <div className="ml-auto text-right font-mono text-[10.5px] text-accent">+{quote.points.earned.toLocaleString(lang === "en" ? "en-GB" : "ro-RO")} pts</div>
-          </motion.button>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {sheetOpen && !isDesktop && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 260, damping: 32 }}
-            className="fixed inset-0 z-40 overflow-y-auto bg-paper lg:hidden"
-          >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-rule bg-paper/95 px-4 py-3 backdrop-blur">
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em]">{project?.title ?? "Blueprint"}</span>
-              <button onClick={() => setSheetOpen(false)} className="grid h-9 w-9 place-items-center rounded-full border border-rule">
-                <IconClose size={18} />
-              </button>
-            </div>
-            <Board
-              board={agent.board}
-              tenant={tenant}
-              lang={lang}
-              highlight={highlight}
-              onHighlight={setHighlight}
-              onQty={agent.changeQty}
-              onAdd={agent.addItem}
-              onMoveStore={agent.moveStore}
-              onTier={agent.applyTier}
-                onChoose={agent.chooseOption}
-                sketch={agent.sketch}
-                ui={agent.ui}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!isDesktop && <MobileTabBar tabs={tabs} board={agent.board} lang={lang} busy={agent.busy} />}
       {quote && (
         <CartDrawer
           open={cartOpen}
@@ -235,7 +216,7 @@ export default function Workspace({
               ? undefined
               : () => {
                   setCartOpen(false);
-                  setSheetOpen(true);
+                  tabs.select(tabs.available.sketch ? "sketch" : "list");
                 }
           }
         />
@@ -252,6 +233,8 @@ function Rail({
   onSend,
   hasQuote,
   renderInlineBoard,
+  hidden = false,
+  onTyping,
 }: {
   lang: Lang;
   messages: ChatMessage[];
@@ -259,14 +242,27 @@ function Rail({
   onSend: (t: string) => void;
   hasQuote: boolean;
   renderInlineBoard: (m: ChatMessage) => React.ReactNode;
+  /** Phones: another tab is open (the conversation stays mounted, with its draft). */
+  hidden?: boolean;
+  /** Whether a message is being written (a non-empty draft). */
+  onTyping?: (typing: boolean) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
+  const scrolledFor = useRef<ChatMessage[] | null>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    // While hidden, catch up when the conversation is shown again.
+    if (!el || hidden || scrolledFor.current === messages) return;
+    scrolledFor.current = messages;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, hidden]);
+
+  const drafting = text.trim().length > 0;
+  useEffect(() => {
+    onTyping?.(drafting);
+  }, [drafting, onTyping]);
 
   const send = (t: string) => {
     if (!t.trim() || busy) return;
@@ -276,13 +272,13 @@ function Rail({
   const last = messages[messages.length - 1];
 
   return (
-    <section className="flex min-h-0 flex-col bg-paper">
+    <section className={`${hidden ? "hidden" : "flex"} min-h-0 flex-col bg-paper`}>
       {/* AI disclosure (EU AI Act, art. 50): pinned above the conversation so it never scrolls away */}
       <div role="note" className="flex items-start gap-2 border-b border-rule px-4 py-2 sm:px-6">
         <span className="mt-px shrink-0 rounded-[5px] border border-ink/15 px-1 font-mono text-[9px] font-semibold leading-[14px] tracking-[0.12em] text-ink-2">AI</span>
         <p className="font-mono text-[10.5px] leading-[1.45] text-ink-3">{tr("aiNotice", lang)}</p>
       </div>
-      <div ref={scrollRef} className="thin-scroll flex-1 space-y-6 overflow-y-auto px-4 pb-40 pt-6 sm:px-6 lg:pb-6">
+      <div ref={scrollRef} className="thin-scroll flex-1 space-y-6 overflow-y-auto px-4 pb-6 pt-6 sm:px-6">
         {messages.map((m) =>
           m.role === "user" ? (
             <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
@@ -321,7 +317,7 @@ function Rail({
         )}
       </div>
 
-      <div className="border-t border-rule bg-paper px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 sm:px-5">
+      <div className="border-t border-rule bg-paper px-3 pb-3 pt-2.5 sm:px-5 lg:pb-[max(12px,env(safe-area-inset-bottom))]">
         {hasQuote && !busy && last?.role === "assistant" && (
           <div className="thin-scroll -mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">
             {tr("quick", lang).map((q) => (
@@ -393,7 +389,18 @@ const fmtT = (ms: number) => {
  * Carries out the assistant's screen commands that live outside the sketch panel:
  * highlight a material, open the cart, open a product sheet, scroll to a panel.
  */
-function UiBridge({ ui, onHighlight, onCart }: { ui: UiSignal | null; onHighlight: (l: string | null) => void; onCart: () => void }) {
+function UiBridge({
+  ui,
+  onHighlight,
+  onCart,
+  onPanel,
+}: {
+  ui: UiSignal | null;
+  onHighlight: (l: string | null) => void;
+  onCart: () => void;
+  /** Bring a board panel into view (desktop: scroll to it; phones: open its tab). */
+  onPanel: (target: PanelTarget | null, c: UiCommand) => void;
+}) {
   const sheet = useProductSheet();
   const seq = ui?.seq;
   useEffect(() => {
@@ -403,11 +410,7 @@ function UiBridge({ ui, onHighlight, onCart }: { ui: UiSignal | null; onHighligh
     if (c.panel === "cart" || c.panel === "wallet") onCart();
     if (c.product) sheet?.open(c.product);
     const target = c.panel && c.panel !== "cart" && c.panel !== "wallet" ? c.panel : c.view || c.editor || c.highlight ? "sketch" : null;
-    if (target) {
-      // Desktop board anchors; on phones the latest inline card of that kind.
-      const els = document.querySelectorAll(`[data-panel="${target}"]`);
-      els[els.length - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    onPanel(target, c);
     // Run once per command.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq]);
