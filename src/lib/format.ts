@@ -15,6 +15,8 @@ export const money = (n: number, lang: Lang = "ro") => fmt(lang, 2).format(n);
 export const lei = (n: number, lang: Lang = "ro") => `${money(n, lang)} lei`;
 export const int = (n: number, lang: Lang = "ro") => fmt(lang, 0).format(Math.round(n));
 export const dec = (n: number, lang: Lang = "ro", digits = 2) => fmt(lang, digits).format(n);
+/** Store distances: "9,9 km" (ro) / "9.9 km" (en), whole numbers without decimals. */
+export const km = (n: number, lang: Lang = "ro") => `${dec(n, lang, Number.isInteger(n) ? 0 : 1)} km`;
 
 export function monthYear(iso: string, lang: Lang = "ro") {
   const d = new Date(iso);
