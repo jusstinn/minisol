@@ -62,6 +62,15 @@ describe("POST /api/quote and /api/sketch input validation", () => {
     expect(res.status).toBe(200);
   });
 
+  it("sketch: a rejected edit is explained in the customer's language (the plan editor shows `error`)", async () => {
+    const state = { basket: [], project: { type: "deck", inputs: { lengthM: 4, widthM: 3 } } };
+    const res = await sketch(post(JSON.stringify({ memberId: M, lang: "ro", state, edits: [{ op: "resize", zone: "A", w: 50 }] })));
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body.error).toBe("dimensiunea trebuie să fie între 0,5 și 30 m");
+    expect(body.code).toMatch(/must be between/);
+  });
+
   it("sketch: a numeric tenant is ignored, not a 500", async () => {
     const res = await sketch(post(JSON.stringify({ memberId: M, tenant: 3, edits: [] })));
     expect(res.status).toBeLessThan(500);
