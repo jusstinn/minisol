@@ -8,7 +8,8 @@ const p10 = paint(10, 200, { category: "paint" });
 const board = product({ name: "Deck pin 4 m", roles: ["deck_board"], price: 50, content: { amount: 4, unit: "m" }, category: "wood", bulky: true });
 const oil = product({ name: "Ulei terasă 2,5 l", roles: ["deck_oil"], price: 80, content: { amount: 2.5, unit: "l" }, category: "paint" });
 const drill = product({ name: "Drill", roles: ["cordless_drill"], price: 500, content: { amount: 1, unit: "buc" }, category: "power_tools", isTool: true });
-const all = [p10, board, oil, drill];
+const wpc = product({ name: "Deck WPC 4 m", roles: ["deck_board"], price: 120, content: { amount: 4, unit: "m" }, category: "wood", bulky: true, specs: { material: "WPC compozit" } });
+const all = [p10, board, oil, drill, wpc];
 
 function deps(stock: Record<string, number> = {}): QuoteDeps {
   return {
@@ -52,6 +53,17 @@ describe("buildQuote", () => {
     const many = buildQuote([{ sku: board.sku, qty: 20 }, { sku: oil.sku, qty: 2 }], { customer: customer(), storeId: "a", offers: [bundle] }, deps());
     expect(many.discountTotal).toBe(80);
     expect(many.total).toBe(20 * 50 + 80);
+  });
+
+  it("says when a chosen product makes a line unnecessary — even a free one", () => {
+    const bundle = offer({ id: "b", kind: "bundle_free_role", bundle: { requiresRole: "deck_board", requiresQty: 20, freeRole: "deck_oil" } });
+    const pine = buildQuote([{ sku: board.sku, qty: 20 }, { sku: oil.sku, qty: 2 }], { customer: customer(), storeId: "a", offers: [bundle] }, deps());
+    expect(pine.hints.filter((h) => h.kind === "not_needed")).toEqual([]);
+    const q = buildQuote([{ sku: wpc.sku, qty: 20 }, { sku: oil.sku, qty: 2 }], { customer: customer(), storeId: "a", offers: [bundle] }, deps());
+    expect(q.hints).toContainEqual(expect.objectContaining({ kind: "not_needed", offerId: "b", sku: oil.sku, role: "deck_oil", because: "deck-ul WPC" }));
+    // No offer involved: still flagged, with no offer id.
+    const plain = buildQuote([{ sku: wpc.sku, qty: 5 }, { sku: oil.sku, qty: 2 }], { customer: customer(), storeId: "a", offers: [], lang: "en" }, deps());
+    expect(plain.hints).toEqual([expect.objectContaining({ kind: "not_needed", offerId: "", because: "WPC boards" })]);
   });
 
   it("applies the single best basket threshold offer", () => {

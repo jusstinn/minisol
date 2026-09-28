@@ -749,6 +749,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         lang === "en"
           ? `Done — ${what.charAt(0).toLowerCase() + what.slice(1)}. I redrew the sketch and recalculated the list, keeping the products you picked: new total **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`
           : `Gata — ${what.charAt(0).toLowerCase() + what.slice(1)}. Am redesenat schița și am recalculat lista, păstrând produsele alese: total nou **${lei(ch.totalAfter, lang)}** (${sign}${lei(Math.abs(ch.delta), lang)}).`;
+      if (ch.warnings?.length) reply += ` ⚠ ${ch.warnings[0]}`;
     }
   } else if (intent.kind === "requality" && state.project) {
     const before = state.basket.length ? (await executeTool("modify_basket", JSON.stringify({ operations: [], storeId: null }), ctx())).cards?.find((c) => c.kind === "quote") : undefined;
@@ -895,6 +896,13 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
             : intent.kind === "remove"
               ? en ? `Removed ${label} — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am scos ${label} — total nou **${lei(q.quote.total, lang)}**${delta}.`
               : en ? `Switched to ${label}, sized for your project — new total **${lei(q.quote.total, lang)}**${delta}.` : `Am trecut la ${label}, calculat pentru proiectul tău — total nou **${lei(q.quote.total, lang)}**${delta}.`;
+        // "WPC needs no oil": offer to drop what the new choice made unnecessary.
+        const unneeded = intent.kind === "choose" ? q.quote.hints.find((h) => h.kind === "not_needed") : undefined;
+        const line = unneeded && q.quote.lines.find((l) => l.sku === unneeded.sku);
+        if (unneeded && line) {
+          const what = line.name.split(",")[0];
+          reply += en ? ` ${what} isn't needed with ${unneeded.because} — say "remove the oil" to drop it.` : ` ${what} nu e necesar la ${unneeded.because} — spune „scoate uleiul” și îl scot.`;
+        }
       }
     }
   } else if (intent.kind === "add_suggestions" && intent.text && state.project && !(await namedSuggestions(intent.text)).length) {

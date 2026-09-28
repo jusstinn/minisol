@@ -81,6 +81,8 @@ export interface SketchChange {
   totalAfter: number;
   delta: number;
   source: "agent" | "editor";
+  /** Safety notes this edit introduced (e.g. a railing once the deck is above 60 cm). */
+  warnings?: string[];
 }
 
 export interface SuggestionView {

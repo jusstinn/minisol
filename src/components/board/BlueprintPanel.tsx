@@ -282,11 +282,12 @@ function SketchView({
             initial={{ opacity: 0, y: 10, filter: "blur(6px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className={`display mt-1 text-[clamp(26px,3.4vw,46px)] ${dark ? "text-white" : "text-ink"}`}
+            className={`display mt-1 ${inline ? "line-clamp-2 text-[21px] leading-[1.05]" : "text-[clamp(26px,3.4vw,46px)]"} ${dark ? "text-white" : "text-ink"}`}
           >
             {project.title}
           </motion.h2>
-          <div className={`mt-3 space-y-0.5 font-mono text-[11px] ${dark ? "text-[#dce9ff]" : "text-ink-2"}`}>
+          {/* On phones the facts card under the sketch lists these; keep the drawing clear. */}
+          <div className={`mt-3 space-y-0.5 font-mono text-[11px] ${inline ? "hidden" : ""} ${dark ? "text-[#dce9ff]" : "text-ink-2"}`}>
             {project.measurements.slice(0, inline ? 2 : 4).map((m, i) => (
               <motion.div key={m.label} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i * 0.12 }} className="flex gap-2">
                 <span className={dark ? "text-[#8fb0e8]" : "text-ink-3"}>{m.label}</span>

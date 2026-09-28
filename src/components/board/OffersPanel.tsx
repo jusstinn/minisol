@@ -53,6 +53,15 @@ export default function OffersPanel({ offers, quote, lang }: { offers?: OfferVie
           </motion.div>
         ))}
       </div>
+      {items.some((o) => o.kind === "percent_category" || o.kind === "percent_role") && (
+        // Price-display rules (Omnibus): a percentage is a member discount on today's price; the
+        // list shows any reduction against the lowest price of the last 30 days, never more.
+        <p className="mt-3 text-[11px] leading-snug text-ink-3">
+          {lang === "en"
+            ? "Percentages are member discounts on today's price. On your list, reductions are shown against each product's lowest price in the last 30 days."
+            : "Procentele sunt reduceri de membru la prețul de azi. În listă, reducerile sunt arătate față de cel mai mic preț al produsului din ultimele 30 de zile."}
+        </p>
+      )}
     </div>
   );
 }
@@ -69,7 +78,7 @@ function badge(o: OfferView & { amount?: number }): string {
 }
 
 function kindLabel(k: OfferView["kind"], lang: Lang) {
-  const ro = { percent_category: "reducere", percent_role: "reducere", fixed_threshold: "lei", bundle_free_role: "cadou", points_multiplier: "puncte" };
-  const en = { percent_category: "off", percent_role: "off", fixed_threshold: "RON off", bundle_free_role: "free", points_multiplier: "points" };
+  const ro = { percent_category: "de membru", percent_role: "de membru", fixed_threshold: "lei", bundle_free_role: "cadou", points_multiplier: "puncte" };
+  const en = { percent_category: "member", percent_role: "member", fixed_threshold: "RON off", bundle_free_role: "free", points_multiplier: "points" };
   return (lang === "en" ? en : ro)[k];
 }

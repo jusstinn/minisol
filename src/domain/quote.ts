@@ -119,13 +119,27 @@ export interface Quote {
 }
 
 export interface QuoteHint {
+  /** The offer behind the hint; "" for a `not_needed` line no offer touches. */
   offerId: string;
-  kind: "bundle_missing_free_item" | "threshold_close";
+  /**
+   * `not_needed`: the chosen products make this line unnecessary (WPC boards need no oil) —
+   * worth saying most when an offer makes it free, which reads like a reason to keep it.
+   */
+  kind: "bundle_missing_free_item" | "threshold_close" | "not_needed";
   title: string;
-  /** For thresholds: RON still needed. For bundles: the role to add. */
+  /** For thresholds: RON still needed. For bundles: the role to add. For not_needed: the line's role. */
   amountToGo?: number;
   role?: MaterialRole;
+  /** not_needed: the line that can go, and what makes it unnecessary ("deck-ul WPC"). */
+  sku?: string;
+  because?: string;
 }
+
+/** Jobs a chosen product makes unnecessary. */
+const UNNEEDED_WITH: { role: MaterialRole; by: MaterialRole; when: (p: Product) => boolean; because: [string, string] }[] = [
+  // Composite boards are factory-finished; the calculator already says "not needed for WPC".
+  { role: "deck_oil", by: "deck_board", when: (p) => /wpc/i.test(String(p.specs.material ?? "")), because: ["deck-ul WPC", "WPC boards"] },
+];
 
 export interface QuoteDeps {
   products: Map<string, Product>;
@@ -242,11 +256,11 @@ export function buildQuote(
   }
 
   const hints: QuoteHint[] = [];
+  const has = (l: QuoteLine, role: MaterialRole) => deps.products.get(l.sku)!.roles.includes(role);
 
   // Bundle: buy N units of role A → one unit of the cheapest role-B line free.
   for (const o of ctx.offers.filter((x) => x.kind === "bundle_free_role" && x.bundle)) {
     const b = o.bundle!;
-    const has = (l: QuoteLine, role: MaterialRole) => deps.products.get(l.sku)!.roles.includes(role);
     const units = lines.filter((l) => has(l, b.requiresRole)).reduce((s, l) => s + l.qty, 0);
     if (units < b.requiresQty) continue;
     const freeCandidates = lines.filter((l) => has(l, b.freeRole) && l.qty > 0);
@@ -260,6 +274,18 @@ export function buildQuote(
     cheapest.netTotal = money(cheapest.netTotal - unitNet);
     if (isPersonalisedOffer(o)) cheapest.personalised = true;
     discounts.push({ offerId: o.id, title: ot(o), amount: unitNet, kind: o.kind, personalised: isPersonalisedOffer(o) });
+  }
+
+  for (const rule of UNNEEDED_WITH) {
+    const by = lines.find((l) => l.qty > 0 && has(l, rule.by) && rule.when(deps.products.get(l.sku)!));
+    if (!by) continue;
+    for (const l of lines.filter((x) => x.qty > 0 && has(x, rule.role))) {
+      // The offer that made it cheaper or free: a line offer, or the bundle that gave it away.
+      const o =
+        (l.offerId ? ctx.offers.find((x) => x.id === l.offerId) : undefined) ??
+        ctx.offers.find((x) => x.bundle?.freeRole === rule.role && discounts.some((d) => d.offerId === x.id));
+      hints.push({ offerId: o?.id ?? "", kind: "not_needed", title: o ? ot(o) : l.name, role: rule.role, sku: l.sku, because: rule.because[ctx.lang === "en" ? 1 : 0] });
+    }
   }
 
   // Omnibus: a reduction is only shown against the lowest price of the last 30 days. If the

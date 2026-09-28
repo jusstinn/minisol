@@ -22,7 +22,19 @@ export interface SizeHelp {
   estimator: "rect" | "length" | "area";
   /** Noun used by the estimator's message ("Terasă", "Gard"…). */
   noun: string;
+  /** What the calculator accepts, said up front ("până la 30 m pe latură"). */
+  limit: string;
 }
+
+const LIMITS: Record<ProjectType, [string, string]> = {
+  deck: ["până la 30 m pe latură (și poți adăuga forme în L)", "up to 30 m a side (L-shapes can be added)"],
+  laminate_floor: ["până la 30 m pe latură", "up to 30 m a side"],
+  lawn: ["până la 200 m pe latură", "up to 200 m a side"],
+  paint_room: ["camere până la 20 × 20 m, înălțime 2–5 m", "rooms up to 20 × 20 m, 2–5 m high"],
+  tiling: ["încăperi până la 20 × 20 m", "rooms up to 20 × 20 m"],
+  fence: ["până la 500 m în total, cu colțuri și porți", "up to 500 m in total, with corners and gates"],
+  drywall_partition: ["pereți până la 20 m lungime, 2–5 m înălțime", "walls up to 20 m long, 2–5 m high"],
+};
 
 /** An average adult pace. */
 export const PACE_M = 0.75;
@@ -103,6 +115,7 @@ export function sizeHelp(type: ProjectType, lang: Lang): SizeHelp {
     tips: TIPS[estimator].map((t) => t[i]),
     estimator,
     noun: NOUN[type][i],
+    limit: LIMITS[type][i],
   };
 }
 

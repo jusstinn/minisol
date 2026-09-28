@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useId, useState } from "react";
 import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
-import type { CategoryId, Lang, QualityTier } from "@/domain/types";
+import { MATERIAL_ROLES, type CategoryId, type Lang, type MaterialRole, type QualityTier } from "@/domain/types";
 import { dec, int, km, lei, monthYear, storeLabel, times } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import { IconCheck, IconMinus, IconPlus, IconSpark, IconTag, IconWallet, IconWarn } from "../ui/icons";
@@ -232,14 +232,7 @@ export default function QuotePanel({
       {quote.hints.length > 0 && (
         <div className="mt-5 space-y-1.5">
           {quote.hints.map((h) => (
-            <div key={h.offerId} className="flex items-center gap-2 rounded-xl border border-dashed border-accent/60 bg-accent/5 px-3 py-2 text-[12.5px] text-ink-2">
-              <IconSpark size={15} className="shrink-0 text-accent" />
-              {h.kind === "threshold_close"
-                ? lang === "en"
-                  ? `Add ${lei(h.amountToGo ?? 0, lang)} more → ${h.title}`
-                  : `Mai adaugi ${lei(h.amountToGo ?? 0, lang)} → ${h.title}`
-                : h.title}
-            </div>
+            <HintLine key={`${h.kind}:${h.offerId}:${h.sku ?? ""}`} hint={h} lang={lang} />
           ))}
         </div>
       )}
@@ -587,5 +580,30 @@ function SentToast({ kind, lang, storeName, onDone }: { kind: "wallet" | "reserv
             : `Rezervat pentru ridicare la ${storeName} — gata în 2 ore. (demo)`}
       </div>
     </motion.div>
+  );
+}
+
+/** An offer within reach: spend a bit more, or add the free item a bundle already unlocked. */
+export function HintLine({ hint: h, lang, compact }: { hint: Quote["hints"][number]; lang: Lang; compact?: boolean }) {
+  const en = lang === "en";
+  const role = h.role && MATERIAL_ROLES[h.role as MaterialRole];
+  const free = role ? (en ? role.labelEn.toLowerCase() : role.label.toLowerCase()) : en ? "free item" : "produsul gratuit";
+  const text =
+    h.kind === "not_needed"
+      ? en
+        ? `${role ? role.labelEn : "This item"} isn't needed with ${h.because ?? "your choice"}${h.offerId ? ` (the "${h.title}" offer makes it free)` : ""} — you can remove it from the list.`
+        : `Nu ai nevoie de ${role ? role.label.toLowerCase() : "acest produs"} la ${h.because ?? "varianta aleasă"}${h.offerId ? ` (oferta „${h.title}” ți-l dă gratuit)` : ""} — poți scoate produsul din listă.`
+      : h.kind === "threshold_close"
+      ? en
+        ? `Add ${lei(h.amountToGo ?? 0, lang)} more → ${h.title}`
+        : `Mai adaugi ${lei(h.amountToGo ?? 0, lang)} → ${h.title}`
+      : en
+        ? `${h.title}: the free ${free} isn't on your list — add it to get it`
+        : `${h.title}: ${free} gratuit nu e în listă — adaugă-l ca să-l primești`;
+  return (
+    <div className={`flex items-center gap-2 rounded-xl border border-dashed border-accent/60 bg-accent/5 text-ink-2 ${compact ? "px-2.5 py-1.5 text-[11.5px]" : "px-3 py-2 text-[12.5px]"}`}>
+      <IconSpark size={compact ? 13 : 15} className="shrink-0 text-accent" />
+      {text}
+    </div>
   );
 }

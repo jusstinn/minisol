@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { SketchChange } from "@/agent/types";
 import type { Lang } from "@/domain/types";
 import { dec, lei } from "@/lib/format";
-import { IconClose, IconPencil, IconSpark, IconUndo } from "../ui/icons";
+import { IconClose, IconPencil, IconSpark, IconUndo, IconWarn } from "../ui/icons";
 
 /** Counts from one amount to another — the total "re-prices" in front of the customer. */
 export function Rolling({ from, to, lang }: { from: number; to: number; lang: Lang }) {
@@ -90,6 +90,13 @@ export default function ChangeCard({
           </motion.li>
         ))}
       </ul>
+
+      {change.warnings && change.warnings.length > 0 && (
+        <div className="mx-3.5 mt-2.5 flex gap-2 rounded-lg bg-[#ffd479]/15 px-2.5 py-2 text-[12px] leading-snug">
+          <IconWarn size={14} className="mt-[1px] shrink-0 text-[#e0a100]" />
+          <span>{change.warnings.join(" ")}</span>
+        </div>
+      )}
 
       {lines.length > 0 && (
         <div className={`mx-3.5 mt-2.5 border-t pt-2 ${rule}`}>

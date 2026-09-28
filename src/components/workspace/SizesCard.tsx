@@ -33,6 +33,7 @@ export default function SizesCard({ card, lang, onSend, disabled }: { card: Extr
         <IconRuler size={13} />
         {en ? "Don't know the size? Pick one" : "Nu știi dimensiunile? Alege una"}
       </div>
+      {help.limit && <div className="px-4 pt-2 text-[11.5px] text-ink-3">{help.limit}</div>}
 
       <div className="grid gap-2 p-3 sm:grid-cols-3">
         {help.presets.map((p, i) => (

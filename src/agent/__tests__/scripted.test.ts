@@ -175,6 +175,44 @@ describe("the chat can change everything on screen", () => {
   }, 30000);
 });
 
+describe("edits that raise a new concern", () => {
+  const run = async (message: string, state: Parameters<typeof runScriptedAgent>[0]["state"]) => {
+    const tenant = getTenant("demo");
+    const sources = getDataSources(tenant.id);
+    const customer = (await sources.loyalty.getMember("WL-RO-100231"))!;
+    const events: AgentEvent[] = [];
+    for await (const ev of runScriptedAgent({ sources, tenant, customer, message, state, lang: "ro" })) events.push(ev);
+    const last = events.filter((e) => e.type === "state").at(-1) as Extract<AgentEvent, { type: "state" }> | undefined;
+    const text = events.filter((e) => e.type === "text").map((e) => (e as { delta: string }).delta).join("");
+    return { events, text, state: last?.state ?? state };
+  };
+
+  it("warns about the railing when an edit lifts the deck above 60 cm — once", async () => {
+    const s0 = (await run("Terasă 4 × 3 m", { basket: [] })).state;
+    const high = await run("fă terasa înaltă de 80 cm", s0);
+    const change = high.events.find((e) => e.type === "card" && e.card.kind === "change") as Extract<AgentEvent, { type: "card" }> | undefined;
+    expect(change?.card.kind === "change" && change.card.change.warnings?.[0]).toMatch(/balustrad/);
+    expect(high.text).toMatch(/⚠.*balustrad/);
+    // Already warned: a further edit doesn't repeat it.
+    const wider = await run("fă terasa înaltă de 90 cm", high.state);
+    const c2 = wider.events.find((e) => e.type === "card" && e.card.kind === "change") as Extract<AgentEvent, { type: "card" }> | undefined;
+    expect(c2?.card.kind === "change" && c2.card.change.warnings).toBeFalsy();
+  }, 20000);
+
+  it("switching to WPC offers to drop the oil it no longer needs", async () => {
+    const s0 = (await run("Terasă 5 × 4 m", { basket: [] })).state;
+    const wpc = await run("o vreau din WPC", s0);
+    const q = wpc.events.filter((e) => e.type === "card" && e.card.kind === "quote").at(-1) as Extract<AgentEvent, { type: "card" }> | undefined;
+    if (q?.card.kind !== "quote") throw new Error("no quote");
+    const hint = q.card.quote.hints.find((h) => h.kind === "not_needed");
+    expect(wpc.state.basket.some((b) => b.role === "deck_oil")).toBe(true);
+    expect(hint?.role).toBe("deck_oil");
+    expect(wpc.text).toMatch(/scoate uleiul/);
+    const dropped = await run("scoate uleiul", wpc.state);
+    expect(dropped.state.basket.some((b) => b.role === "deck_oil")).toBe(false);
+  }, 20000);
+});
+
 describe("customers who don't know their measurements", () => {
   it("every preset and pace estimate is a complete project request (RO + EN)", async () => {
     const { sizeHelp, estimateMessage } = await import("@/domain/sizes");
@@ -182,6 +220,7 @@ describe("customers who don't know their measurements", () => {
     for (const type of PROJECT_TYPES) {
       for (const lang of ["ro", "en"] as const) {
         const help = sizeHelp(type, lang);
+        expect(help.limit, `${type}/${lang}`).toBeTruthy();
         const msgs = [...help.presets.map((p) => p.message), estimateMessage(type, lang, 4.5, 3)];
         for (const m of msgs) {
           const i = parseIntent(m, { basket: [] });

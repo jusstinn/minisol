@@ -418,7 +418,9 @@ function quoteForModel(q: Quote, lang: Lang) {
     offerHints: q.hints.map((h) =>
       h.kind === "threshold_close"
         ? `Add ${h.amountToGo} RON more to unlock: ${h.title}`
-        : `Bundle unlocked but the free item (${h.role}) is not in the basket: ${h.title}`,
+        : h.kind === "not_needed"
+          ? `${h.sku} (${h.role}) is not needed with ${h.because}${h.offerId ? ` even though "${h.title}" makes it free` : ""} — offer to remove it`
+          : `Bundle unlocked but the free item (${h.role}) is not in the basket: ${h.title}`,
     ),
   };
 }
@@ -819,6 +821,8 @@ export async function applySketchEdit(
     delta: Math.round((r.quote.total - quote0.total) * 100) / 100,
     source,
   };
+  const newSafety = calc.safetyNotes.filter((n) => !(prev.safetyNotes ?? []).includes(n));
+  if (newSafety.length) change.warnings = newSafety;
 
   return {
     state: r.state,
@@ -831,6 +835,8 @@ export async function applySketchEdit(
       applied: edited.changes,
       sketch: describeLayout(edited.layout),
       project: { title: calc.title, measurements: calc.measurements, safetyNotes: calc.safetyNotes },
+      // Mention these in the reply: the edit made them relevant.
+      newSafetyNotes: newSafety.length ? newSafety : undefined,
       display: { totalBefore: lei(quote0.total, ctx.lang), totalAfter: lei(r.quote.total, ctx.lang), difference: signedLei(change.delta, ctx.lang) },
       materialChanges: lines.map((l) => ({ what: l.label, product: l.name, switchedFrom: l.beforeName, from: l.before, to: l.after, unit: l.unit, price: signedLei(l.deltaRon, ctx.lang) })),
       quote: quoteForModel(r.quote, ctx.lang),

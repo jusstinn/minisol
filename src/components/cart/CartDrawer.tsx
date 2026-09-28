@@ -8,7 +8,7 @@ import type { Lang } from "@/domain/types";
 import { int, lei } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import WalletListModal from "../board/WalletListModal";
-import { LowestPriceNote, PersonalisedBadge, ReferencePrice, measurePriceLabel } from "../board/QuotePanel";
+import { HintLine, LowestPriceNote, PersonalisedBadge, ReferencePrice, measurePriceLabel } from "../board/QuotePanel";
 import { IconBag, IconCheck, IconClose, IconMinus, IconPin, IconPlus, IconTrash, IconTruck, IconWallet } from "../ui/icons";
 import { Counter } from "../ui/primitives";
 import { ProductArt } from "../ui/ProductArt";
@@ -191,6 +191,13 @@ export default function CartDrawer({
                       <button onClick={onShowPlan} className="mt-3 w-full rounded-xl border border-dashed border-ink/25 py-2.5 text-[12.5px] text-ink-2 hover:border-ink hover:text-ink lg:hidden">
                         {en ? "See the full plan & 3D →" : "Vezi planul complet și 3D →"}
                       </button>
+                    )}
+                    {quote.hints.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {quote.hints.map((h) => (
+                          <HintLine key={`${h.kind}:${h.offerId}:${h.sku ?? ""}`} hint={h} lang={lang} compact />
+                        ))}
+                      </div>
                     )}
                   </div>
 
