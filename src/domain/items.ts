@@ -186,4 +186,5 @@ export function verticalRange(kind: ItemKind, ceilingY: number | null): [number,
 }
 
 /** "Vas WC" → "vas WC" (only the first letter, so abbreviations stay). */
-export const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+/** "Masă" → "masă" mid-sentence; acronyms stay as they are ("BBQ grill", "WC"). */
+export const lowerFirst = (t: string) => (/^[A-ZĂÂÎȘȚ]{2}/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));

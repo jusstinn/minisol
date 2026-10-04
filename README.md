@@ -24,6 +24,27 @@ white-label: the same build demos as a neutral retailer ("Atelier"), as HORNBACH
 
 ---
 
+## Demo with the live AI (behind a sign-in)
+
+To show Blueprint on its public URL with the real model, add these to the Vercel project
+(*Settings → Environment Variables*, Production, type **Sensitive**), then redeploy:
+
+| Variable | Value |
+|---|---|
+| `OPENAI_API_KEY` | A key from an OpenAI project with a monthly budget limit |
+| `SITE_LOGIN_USER` | The user name you'll sign in with |
+| `SITE_LOGIN_PASSWORD` | A long password (changing it signs everyone out) |
+
+With the sign-in on:
+
+- every page asks for the user name and password, and every API answers 401 without them
+- live AI runs without the shared counter store
+- each visitor gets 40 AI turns per 10 minutes
+
+The signed-in start screen shows **AI live** or **AI offline**, with the reason on hover.
+`/api/health` gives the same answer as JSON. The tested demo script is in
+[docs/demo.md](docs/demo.md).
+
 ## Quick start
 
 ```bash
