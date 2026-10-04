@@ -83,6 +83,9 @@ async function main() {
     const tools = events.filter((e) => e.type === "status").length;
     const problems: string[] = [];
 
+    // A live run that quietly finished on the offline fallback isn't a pass for the model.
+    const fellBack = llm && events.some((e) => e.type === "mode" && e.mode === "scripted");
+    if (fellBack) problems.push("the model failed — the offline fallback answered");
     for (const k of sc.expectCards ?? []) if (!cards.some((c) => c.kind === k)) problems.push(`missing card ${k}`);
     if (sc.expectText && !sc.expectText.test(text)) problems.push(`text does not match ${sc.expectText}`);
     if (sc.forbidTools && tools > 1) problems.push(`used ${tools} tools on an off-topic request`);

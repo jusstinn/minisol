@@ -124,6 +124,7 @@ export default function Entry({
             </button>
           ))}
         </div>
+        {signOut && <AiStatus lang={lang} />}
         {signOut && (
           <a href="/api/logout" className="rounded-full px-2 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 transition hover:text-ink">
             {lang === "en" ? "Sign out" : "Ieșire"}
@@ -403,5 +404,43 @@ function Ticker({ lang }: { lang: Lang }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Behind the site sign-in (a demo): is the live AI ready? Checked once on the start screen, so the
+ * presenter knows before the first question (/api/health — no tokens spent).
+ */
+function AiStatus({ lang }: { lang: Lang }) {
+  const [ai, setAi] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { ai?: string } | null) => alive && setAi(d?.ai ?? "unreachable"))
+      .catch(() => alive && setAi("unreachable"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!ai) return null;
+  const en = lang === "en";
+  const live = ai === "live";
+  const why: Record<string, [string, string]> = {
+    not_configured: ["fără cheie OpenAI", "no OpenAI key"],
+    key_invalid: ["cheia OpenAI nu e validă", "OpenAI key invalid"],
+    model_unavailable: ["modelul nu e disponibil", "model unavailable"],
+    rate_limited: ["limită OpenAI atinsă", "OpenAI rate limit"],
+    unreachable: ["OpenAI nu răspunde", "OpenAI unreachable"],
+    off: ["mod offline", "offline mode"],
+  };
+  return (
+    <span
+      title={live ? (en ? "The live AI is ready" : "AI-ul live e pregătit") : `${en ? "Offline assistant only" : "Doar asistentul offline"}: ${why[ai]?.[en ? 1 : 0] ?? ai}`}
+      className="flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2"
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-ok" : "bg-accent"}`} />
+      <span className="hidden sm:inline">{live ? "AI live" : en ? "AI offline" : "AI offline"}</span>
+    </span>
   );
 }
