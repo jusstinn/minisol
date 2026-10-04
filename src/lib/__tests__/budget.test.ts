@@ -22,7 +22,7 @@ afterEach(() => setCounterStore(null));
 describe("allowAiTurn", () => {
   it("stops a visitor after LLM_TURNS_PER_10_MIN", async () => {
     setCounterStore(fresh());
-    const env = { LLM_TURNS_PER_10_MIN: "3" };
+    const env = { LLM_TURNS_PER_10_MIN: "3", LLM_COOLDOWN_S: "0" };
     const who = { ip: "1.1.1.1", tenant: "demo" };
     const got = [];
     for (let i = 0; i < 4; i++) got.push((await allowAiTurn(who, env)).ok);
@@ -32,7 +32,7 @@ describe("allowAiTurn", () => {
 
   it("caps a signed-in member per day, whatever IPs they use", async () => {
     setCounterStore(fresh());
-    const env = { LLM_MEMBER_TURNS_PER_DAY: "2" };
+    const env = { LLM_MEMBER_TURNS_PER_DAY: "2", LLM_COOLDOWN_S: "0" };
     const r = [];
     for (const ip of ["a", "b", "c"]) r.push(await allowAiTurn({ ip, tenant: "hornbach", memberId: "WL-1" }, env));
     expect(r.map((x) => x.ok)).toEqual([true, true, false]);
@@ -41,7 +41,7 @@ describe("allowAiTurn", () => {
 
   it("caps the whole deployment per day — the backstop for IP rotation", async () => {
     setCounterStore(fresh());
-    const env = { LLM_DAILY_TURNS: "5" };
+    const env = { LLM_DAILY_TURNS: "5", LLM_COOLDOWN_S: "0" };
     const r = [];
     for (let i = 0; i < 7; i++) r.push((await allowAiTurn({ ip: `10.0.0.${i}`, tenant: "demo" }, env)).ok);
     expect(r).toEqual([true, true, true, true, true, false, false]);
@@ -49,7 +49,7 @@ describe("allowAiTurn", () => {
 
   it("stops live AI once the day's tokens are used — overall and per member", async () => {
     setCounterStore(fresh());
-    const env = { LLM_DAILY_TOKENS: "10000", LLM_MEMBER_TOKENS_PER_DAY: "3000" };
+    const env = { LLM_DAILY_TOKENS: "10000", LLM_MEMBER_TOKENS_PER_DAY: "3000", LLM_COOLDOWN_S: "0" };
     const member = { ip: "a", tenant: "hornbach", memberId: "WL-1" };
     expect((await allowAiTurn(member, env)).ok).toBe(true);
     await recordAiTokens(member, 3500, env);
@@ -67,6 +67,28 @@ describe("allowAiTurn", () => {
     expect((await allowAiTurn({ ip: "p3", tenant: "demo" }, { VERCEL_ENV: "preview" })).ok).toBe(true);
     // Behind the site sign-in only invited people get in: per-instance counters are enough.
     expect((await allowAiTurn({ ip: "p4", tenant: "demo" }, { ...prod, SITE_LOGIN_USER: "u", SITE_LOGIN_PASSWORD: "p" })).ok).toBe(true);
+  });
+
+  it("cools down between turns of the same visitor, not across visitors", async () => {
+    setCounterStore(fresh());
+    expect((await allowAiTurn({ ip: "a", tenant: "demo", sessionId: "s1" }, {})).ok).toBe(true);
+    expect(await allowAiTurn({ ip: "a", tenant: "demo", sessionId: "s1" }, {})).toEqual({ ok: false, reason: "cooldown" });
+    // Another device behind the same sign-in (and the same venue Wi-Fi) isn't held back.
+    expect((await allowAiTurn({ ip: "a", tenant: "demo", sessionId: "s2" }, {})).ok).toBe(true);
+  });
+
+  it("limits each sign-in session on its own, with a looser cap for the whole IP", async () => {
+    const st = fresh();
+    setCounterStore(st);
+    const env = { LLM_TURNS_PER_10_MIN: "2", LLM_COOLDOWN_S: "0" };
+    const r = [];
+    for (const s of ["s1", "s1", "s1"]) r.push((await allowAiTurn({ ip: "venue", tenant: "demo", sessionId: s }, env)).ok);
+    expect(r).toEqual([true, true, false]);
+    // Other sessions on the same IP still work, up to 3× the per-visitor limit for the IP.
+    const more = [];
+    for (const s of ["s2", "s2", "s3", "s3", "s4"]) more.push((await allowAiTurn({ ip: "venue", tenant: "demo", sessionId: s }, env)).ok);
+    expect(more).toEqual([true, true, true, true, false]);
+    expect(st.keys.some((k) => k.startsWith("ai:v:s:s1"))).toBe(true);
   });
 
   it("fails closed when the counter store is down", async () => {

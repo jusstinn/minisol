@@ -9,7 +9,10 @@ import { getTenant } from "@/config/tenant";
 import { readJson } from "@/lib/body";
 import { createHash } from "node:crypto";
 import { historyKey, openHistory, sealHistory } from "@/agent/historySeal";
+import { modelSpec } from "@/agent/models";
+import { createPlanWriter } from "@/agent/planWriter";
 import { allowAiTurn, recordAiTokens } from "@/lib/budget";
+import { siteSessionId } from "@/lib/siteLogin";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { memberFromRequest } from "@/lib/session";
 
@@ -65,7 +68,7 @@ export async function POST(req: Request) {
     offlineReason = "AI not configured";
   } else {
     // Protect the model budget (src/lib/budget.ts): over a limit, degrade to the offline agent, don't fail.
-    const allowed = await allowAiTurn({ ip, tenant: tenant.id, memberId });
+    const allowed = await allowAiTurn({ ip, tenant: tenant.id, memberId, sessionId: siteSessionId(req) ?? undefined });
     if (!allowed.ok) offlineReason = allowed.reason;
     else {
       try {
@@ -108,7 +111,10 @@ export async function POST(req: Request) {
           send({ type: "mode", mode: "live" });
           const safetyId = createHash("sha256").update(`${tenant.id}:${customer.memberId}`).digest("hex").slice(0, 32);
           const onUsage = (tokens: number) => void recordAiTokens({ tenant: tenant.id, memberId }, tokens);
-          for await (const ev of runAgent({ llm, sources, tenant, customer, message, history, state, lang: bodyLang, signal: req.signal, safetyId, onUsage })) {
+          // New projects get their plan from the stronger model when one is configured (OPENAI_PLAN_MODEL).
+          const planSpec = modelSpec("plan");
+          const planWriter = planSpec && process.env.OPENAI_API_KEY ? createPlanWriter(process.env.OPENAI_API_KEY, planSpec, onUsage) : undefined;
+          for await (const ev of runAgent({ llm, sources, tenant, customer, message, history, state, lang: bodyLang, signal: req.signal, safetyId, onUsage, planWriter })) {
             // Status lines alone (e.g. the prefilled profile lookup) don't commit us to the live agent.
             if (ev.type !== "status" && ev.type !== "mode") streamed = true;
             send(ev);

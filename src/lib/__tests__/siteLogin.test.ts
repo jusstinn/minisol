@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as login } from "@/app/api/login/route";
 import { GET as logoutGet } from "@/app/api/logout/route";
 import { proxy } from "@/proxy";
-import { checkCredentials, loginCookieValue, safeNext, siteLogin, validLoginCookie } from "../siteLogin";
+import { checkCredentials, loginCookieValue, loginSession, safeNext, siteLogin, siteSessionId, validLoginCookie } from "../siteLogin";
 
 const ENV = { SITE_LOGIN_USER: "Demo", SITE_LOGIN_PASSWORD: "correct horse battery staple" };
 
@@ -32,7 +32,11 @@ describe("siteLogin", () => {
     expect(validLoginCookie(l, c.value, now + 8 * 86_400_000)).toBe(false);
     expect(validLoginCookie(siteLogin({ ...ENV, SITE_LOGIN_PASSWORD: "new password" })!, c.value, now)).toBe(false);
     expect(validLoginCookie(l, c.value.replace(/.$/, (ch) => (ch === "A" ? "B" : "A")), now)).toBe(false);
-    expect(validLoginCookie(l, "v1.99999999999." + "a".repeat(43), now)).toBe(false);
+    expect(validLoginCookie(l, "v2.99999999999." + "a".repeat(16) + "." + "a".repeat(43), now)).toBe(false);
+    // Each sign-in gets its own session id (the AI limits apply per device).
+    const other = loginCookieValue(l, now);
+    expect(loginSession(l, other.value, now)).not.toBe(loginSession(l, c.value, now));
+    expect(loginSession(l, c.value, now)).toMatch(/^[A-Za-z0-9_-]{16}$/);
   });
 
   it("only redirects to paths on this site", () => {
@@ -69,9 +73,10 @@ describe("the gate", () => {
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ ok: true, next: "/pitch" });
     const setCookie = ok.headers.get("set-cookie")!;
-    expect(setCookie).toMatch(/^blueprint_login=v1\.\d+\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax/);
+    expect(setCookie).toMatch(/^blueprint_login=v2\.\d+\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax/);
     const cookie = setCookie.split(";")[0];
 
+    expect(siteSessionId(new Request(`${B}/api/chat`, { headers: { cookie } }))).toMatch(/^[A-Za-z0-9_-]{16}$/);
     const through = await proxy(new NextRequest(`${B}/api/chat`, { method: "POST", headers: { cookie } }));
     expect(through.headers.get("x-middleware-next")).toBe("1");
     // Signed in already: the form steps aside.

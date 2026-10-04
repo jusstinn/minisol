@@ -416,6 +416,25 @@ The pilot needs two secrets. Add them in *Project → Settings → Environment V
 - Safety rules in the prompt and calculators: electrics, gas, structural walls, work at height
   → licensed professional; hazard notes per project.
 
+### Two models, and staying inside OpenAI's limits
+
+- **Two models:**
+  - **The conversation model** (`OPENAI_MODEL`, `gpt-5.4-mini`) runs every turn: tools, sketch edits, list changes, replies.
+  - **The plan model** (`OPENAI_PLAN_MODEL`, e.g. `gpt-5.5`) writes a new project's step-by-step plan, in one compact call of about 2–4k tokens (`src/agent/planWriter.ts`).
+- **The plan runs in parallel with the reply.** The reply starts in about a second, and the plan card follows when it's ready. If the plan model is busy or fails, the reviewed template plan is used.
+- **The governor** (`src/agent/models.ts`) counts requests per minute, tokens per minute and requests per day for each model (`OPENAI_*` / `OPENAI_PLAN_*`):
+  - Near a per-minute limit it waits for the next minute, if that's at most 20 s away, and shows "AI-ul e ocupat — aștept …" (AI busy, waiting).
+  - Past a daily limit it doesn't call the model, and the turn falls back.
+- **Who the limits apply to:**
+  - **Pilot:** the member from the signed pass link.
+  - **Demo behind the site sign-in:** the sign-in session, a random id in the signed cookie, so each device counts separately even with a shared user name.
+  - **Otherwise:** the IP.
+  
+  On top of that:
+  - a looser per-IP cap
+  - a short cooldown between one visitor's turns (`LLM_COOLDOWN_S`)
+  - the deployment's daily caps
+
 ### Abuse and prompt injection
 
 Everything with a price comes from the deterministic engine, so a hijacked model can't change what

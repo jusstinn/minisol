@@ -509,6 +509,8 @@ function modeReason(reason: string | undefined, lang: Lang): string {
     "per-visitor AI limit reached": ["Limita AI pe 10 minute a fost atinsă — revine în curând", "AI limit for 10 minutes reached — back shortly"],
     "daily AI limit for this member reached": ["Limita zilnică de AI pentru acest membru a fost atinsă", "This member's daily AI limit is reached"],
     "daily AI budget reached": ["Bugetul de AI de azi s-a terminat", "Today's AI budget is used up"],
+    "daily AI limit for this visitor reached": ["Limita zilnică de AI pentru acest dispozitiv a fost atinsă", "This device's daily AI limit is reached"],
+    cooldown: ["Câteva secunde între întrebări — răspunsul acesta e offline", "A few seconds between questions — this answer is offline"],
   };
   const hit = known[reason];
   return hit ? hit[en ? 1 : 0] : en ? "Live AI is off right now" : "AI-ul live e oprit momentan";

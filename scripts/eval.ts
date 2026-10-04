@@ -9,6 +9,8 @@
  */
 import { getDataSources } from "../src/adapters";
 import { createLlmFromEnv } from "../src/agent/llm";
+import { modelSpec } from "../src/agent/models";
+import { createPlanWriter } from "../src/agent/planWriter";
 import { runAgent } from "../src/agent/run";
 import { runScriptedAgent } from "../src/agent/scripted";
 import type { AgentEvent, Card } from "../src/agent/types";
@@ -62,6 +64,9 @@ async function main() {
   const tenant = getTenant("demo");
   const sources = getDataSources(tenant.id);
   const llm = scripted ? null : createLlmFromEnv();
+  const planSpec = modelSpec("plan");
+  const planWriter = !scripted && planSpec && process.env.OPENAI_API_KEY ? createPlanWriter(process.env.OPENAI_API_KEY, planSpec) : undefined;
+  if (planWriter) console.log(`plans by ${planSpec!.model}, chat by ${modelSpec("chat")!.model}\n`);
   let passed = 0;
   const scenarios = SCENARIOS.filter((s) => !only || s.id === only);
 
@@ -70,7 +75,7 @@ async function main() {
     const events: AgentEvent[] = [];
     const t0 = Date.now();
     const gen = llm
-      ? runAgent({ llm, sources, tenant, customer, message: sc.message, history: [], state: { basket: [] } })
+      ? runAgent({ llm, sources, tenant, customer, message: sc.message, history: [], state: { basket: [] }, planWriter })
       : runScriptedAgent({ sources, tenant, customer, message: sc.message, state: { basket: [] }, lang: customer.language });
     try {
       for await (const ev of gen) events.push(ev);

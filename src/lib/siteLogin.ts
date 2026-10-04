@@ -1,13 +1,15 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 /**
  * A username/password gate for the whole site, for demos with the live AI on a public URL.
  * On when SITE_LOGIN_USER and SITE_LOGIN_PASSWORD are set (Vercel → Settings → Environment
  * Variables): every page asks to sign in, every API answers 401 without the login cookie.
  *
- * The cookie is `v1.<exp>.<sig>`, signed with a key derived from the password, so changing the
- * password signs everyone out. No accounts, no database. Separate from the pass-link mode
- * (REQUIRE_PASS_LINK), which says *which member* is using it; this says who may use the site.
+ * The cookie is `v2.<exp>.<session>.<sig>`, signed with a key derived from the password, so changing
+ * the password signs everyone out. `session` is random per sign-in (per device): the AI limits and
+ * cooldown apply to it, since everyone at a demo may share the same user name. No accounts, no
+ * database. Separate from the pass-link mode (REQUIRE_PASS_LINK), which says *which member* is using
+ * it; this says who may use the site.
  */
 
 type Env = Record<string, string | undefined>;
@@ -41,24 +43,43 @@ function key(login: SiteLogin): Buffer {
   return createHmac("sha256", `${login.user}\n${login.password}`).update("blueprint:site-login:v1").digest();
 }
 
-function sign(login: SiteLogin, exp: number): string {
-  return createHmac("sha256", key(login)).update(`v1.${exp}`).digest("base64url");
+function sign(login: SiteLogin, exp: number, session: string): string {
+  return createHmac("sha256", key(login)).update(`v2.${exp}.${session}`).digest("base64url");
 }
 
 export function loginCookieValue(login: SiteLogin, now = Date.now()): { value: string; maxAge: number } {
   const exp = Math.floor(now / 1000) + login.maxAgeS;
-  return { value: `v1.${exp}.${sign(login, exp)}`, maxAge: login.maxAgeS };
+  const session = randomBytes(12).toString("base64url");
+  return { value: `v2.${exp}.${session}.${sign(login, exp, session)}`, maxAge: login.maxAgeS };
+}
+
+/** The sign-in's session id when the cookie is valid, else null. */
+export function loginSession(login: SiteLogin, value: string | undefined, now = Date.now()): string | null {
+  if (!value || value.length > 140) return null;
+  const m = value.match(/^v2\.(\d{1,12})\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]{43})$/);
+  if (!m) return null;
+  const exp = Number(m[1]);
+  if (exp < Math.floor(now / 1000)) return null;
+  const want = Buffer.from(sign(login, exp, m[2]));
+  const got = Buffer.from(m[3]);
+  return got.length === want.length && timingSafeEqual(got, want) ? m[2] : null;
 }
 
 export function validLoginCookie(login: SiteLogin, value: string | undefined, now = Date.now()): boolean {
-  if (!value || value.length > 120) return false;
-  const m = value.match(/^v1\.(\d{1,12})\.([A-Za-z0-9_-]{43})$/);
-  if (!m) return false;
-  const exp = Number(m[1]);
-  if (exp < Math.floor(now / 1000)) return false;
-  const want = Buffer.from(sign(login, exp));
-  const got = Buffer.from(m[2]);
-  return got.length === want.length && timingSafeEqual(got, want);
+  return loginSession(login, value, now) !== null;
+}
+
+/** In an API route: the signed-in session's id (null when the sign-in is off or the cookie is missing). */
+export function siteSessionId(req: Request, env: Env = process.env): string | null {
+  const login = siteLogin(env);
+  if (!login) return null;
+  const name = loginCookieName(env);
+  const raw = req.headers.get("cookie") ?? "";
+  for (const part of raw.split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return loginSession(login, decodeURIComponent(part.slice(i + 1).trim()));
+  }
+  return null;
 }
 
 /** `__Host-` in production: Secure, path "/", no Domain. */

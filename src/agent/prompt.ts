@@ -2,7 +2,7 @@ import type { Tenant } from "@/config/tenant";
 import { describeLayout } from "@/domain/layout";
 import type { SessionState } from "./types";
 
-export function systemPrompt(opts: { today: string; lang: "ro" | "en"; state: SessionState; tenant: Tenant; prefilled?: boolean }): string {
+export function systemPrompt(opts: { today: string; lang: "ro" | "en"; state: SessionState; tenant: Tenant; prefilled?: boolean; planShown?: boolean }): string {
   const { today, lang, state, tenant } = opts;
   const basket = state.basket.length
     ? `A basket from earlier in the conversation exists (${state.basket.length} lines, store ${state.storeId}${state.project ? `, a ${state.project.type} project` : ""}). Use modify_basket to change it; calculate_project replaces it.`
@@ -53,5 +53,5 @@ When the customer changes the SHAPE of the same project — bigger/smaller, an L
 - The sketch is an indicative, to-scale visualisation of the customer's dimensions — never call it a technical drawing, structural design or permit plan.
 
 # State
-${opts.prefilled ? "The project in the customer's latest message was ALREADY calculated for you (see the calculate_project result above) and the customer already sees it. Do not call get_customer_context or calculate_project again unless the customer's numbers or project differ from what was used — go straight to present_plan and your short reply (or edit_sketch/modify_basket if they asked for more).\n" : ""}${basket}${lines}${extras}${sketch}`;
+${opts.prefilled ? `The project in the customer's latest message was ALREADY calculated for you (see the calculate_project result above) and the customer already sees it. Do not call get_customer_context or calculate_project again unless the customer's numbers or project differ from what was used — ${opts.planShown ? "the plan card is presented separately (don't call present_plan): write only your short reply" : "go straight to present_plan and your short reply"} (or edit_sketch/modify_basket if they asked for more).\n` : ""}${basket}${lines}${extras}${sketch}`;
 }

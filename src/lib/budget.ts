@@ -83,6 +83,11 @@ function store(env: Env): CounterStore | null {
 
 const NO_STORE: Allowance = { ok: false, reason: "AI budget store not configured" };
 
+/** Counters for OpenAI's own rate limits (src/agent/models.ts): shared when possible, else this instance's. */
+export function rateStore(env: Env = process.env): CounterStore {
+  return store(env) ?? memoryStore;
+}
+
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
 const num = (v: string | undefined, d: number) => (v !== undefined && v.trim() !== "" && Number.isFinite(Number(v)) ? Math.max(0, Number(v)) : d);
@@ -95,18 +100,29 @@ async function over(s: CounterStore, key: string, limit: number, windowMs: numbe
 }
 
 /**
- * May this chat turn use the model? `memberId` only in product mode (a verified session).
+ * May this chat turn use the model? Limits apply to the most specific identity available:
+ * the member (signed pass link) → the sign-in session (one per device, even when everyone at a demo
+ * shares the user name) → the IP. A looser per-IP limit sits on top (no farming sessions from one
+ * place), and deployment-wide daily caps on turns and tokens under everything.
  * If the counter store fails, the answer is no: an outage must not turn into an open tap.
  */
-export async function allowAiTurn(who: { ip: string; tenant: string; memberId?: string }, env: Env = process.env): Promise<Allowance> {
+export async function allowAiTurn(
+  who: { ip: string; tenant: string; memberId?: string; sessionId?: string },
+  env: Env = process.env,
+): Promise<Allowance> {
   const s = store(env);
   if (!s) return NO_STORE;
+  const signedIn = !!siteLogin(env);
+  const id = who.memberId ? `m:${who.tenant}:${who.memberId}` : who.sessionId ? `s:${who.sessionId}` : `ip:${who.ip}`;
+  const perVisitor = num(env.LLM_TURNS_PER_10_MIN, signedIn ? 40 : 12);
   try {
-    // Behind the sign-in the visitor is someone you invited (often mid-demo): more room per visitor.
-    const perVisitor = num(env.LLM_TURNS_PER_10_MIN, siteLogin(env) ? 40 : 12);
-    if (await over(s, `ai:ip:${who.ip}`, perVisitor, 10 * MIN)) return { ok: false, reason: "per-visitor AI limit reached" };
-    if (who.memberId && (await over(s, `ai:member:${who.tenant}:${who.memberId}:${today()}`, num(env.LLM_MEMBER_TURNS_PER_DAY, 40), DAY)))
-      return { ok: false, reason: "daily AI limit for this member reached" };
+    // A breather between turns: people never notice (an answer takes longer); scripts do.
+    const cooldownMs = num(env.LLM_COOLDOWN_S, 3) * 1000;
+    if (cooldownMs && (await s.hit(`ai:cool:${id}`, cooldownMs)) > 1) return { ok: false, reason: "cooldown" };
+    if (await over(s, `ai:v:${id}`, perVisitor, 10 * MIN)) return { ok: false, reason: "per-visitor AI limit reached" };
+    if (!id.startsWith("ip:") && (await over(s, `ai:ip:${who.ip}`, perVisitor * 3, 10 * MIN))) return { ok: false, reason: "per-visitor AI limit reached" };
+    const perDay = who.memberId ? num(env.LLM_MEMBER_TURNS_PER_DAY, 40) : num(env.LLM_TURNS_PER_DAY, 60);
+    if (await over(s, `ai:day:${id}:${today()}`, perDay, DAY)) return { ok: false, reason: who.memberId ? "daily AI limit for this member reached" : "daily AI limit for this visitor reached" };
     if (await over(s, `ai:all:${who.tenant}:${today()}`, num(env.LLM_DAILY_TURNS, 400), DAY)) return { ok: false, reason: "daily AI budget reached" };
     // Tokens, not just turns: one turn can be long. Read-only checks (add 0) against what was used.
     if (who.memberId && (await s.hit(`tok:member:${who.tenant}:${who.memberId}:${today()}`, DAY, 0)) > num(env.LLM_MEMBER_TOKENS_PER_DAY, 800_000))

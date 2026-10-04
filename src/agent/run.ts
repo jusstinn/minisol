@@ -9,6 +9,7 @@ import { scriptedPlan } from "./scripted-plans";
 import type { AgentEvent, Card, SessionState } from "./types";
 import { percentsIn, verifyReply } from "./verify";
 import { LOYALTY } from "@/domain/loyalty";
+import type { PlanArgs, PlanWriter } from "./planWriter";
 
 export interface RunOptions {
   llm: LlmClient;
@@ -28,6 +29,8 @@ export interface RunOptions {
   safetyId?: string;
   /** Called with the tokens each model call used (the daily token budgets). */
   onUsage?: (tokens: number) => void;
+  /** The stronger model that writes a new project's plan (src/agent/planWriter.ts); none → the chat model does. */
+  planWriter?: PlanWriter;
 }
 
 /**
@@ -54,6 +57,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // as tool calls it already made: the customer sees the sketch and the priced list
   // within a second, and the model skips 1–2 round trips (only plan + reply remain).
   let prefilled = false;
+  /** The plan is (being) presented outside the chat model: it mustn't call present_plan. */
+  let planShown = false;
+  let planPending: Promise<PlanArgs | null> | undefined;
   if (opts.prefill !== false) {
     if (!opts.history.length) {
       yield { type: "status", tool: "get_customer_context", label: TOOL_STATUS.get_customer_context[lang] };
@@ -82,12 +88,28 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         yield { type: "card", card };
       }
       input.push(opts.llm.toolCall("pre_calc", "calculate_project", args), opts.llm.toolOutput("pre_calc", JSON.stringify(r.forModel)));
+
+      // The plan: the stronger model writes it in one compact call, in parallel with the chat model's
+      // reply (the reply doesn't need it); the card arrives when it's ready, else the template plan.
+      if (prefilled && opts.planWriter && state.project && lastQuote) {
+        const p = state.project;
+        planPending = drainPlan(
+          opts.planWriter.write({
+            // The language the customer wrote in (the reply follows it too), else the session's.
+            lang: writtenIn(opts.message) ?? lang,
+            retailer: opts.tenant.name,
+            project: { type: p.type, title: p.title, inputs: p.inputs, measurements: p.measurements, assumptions: p.assumptions, safetyNotes: p.safetyNotes },
+            products: lastQuote.quote.lines.map((l) => ({ name: l.name, qty: l.qty, unit: l.salesUnit })),
+          }),
+        );
+        planShown = true;
+      }
     }
   }
 
   try {
     for (let step = 0; step < maxSteps; step++) {
-      const instructions = systemPrompt({ today: now.toISOString().slice(0, 10), lang, state, tenant: opts.tenant, prefilled });
+      const instructions = systemPrompt({ today: now.toISOString().slice(0, 10), lang, state, tenant: opts.tenant, prefilled, planShown });
       let completed: Extract<LlmEvent, { type: "completed" }> | undefined;
 
       for await (const ev of opts.llm.stream({ instructions, input, tools: TOOL_DEFINITIONS, signal: opts.signal, safetyId: opts.safetyId })) {
@@ -95,7 +117,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
           turnText += ev.delta;
           yield { type: "text", delta: ev.delta };
         }
-        else if (ev.type === "tool_start") {
+        else if (ev.type === "waiting") {
+          yield { type: "status", tool: "wait", label: lang === "en" ? `The AI is busy — waiting ${ev.seconds} s…` : `AI-ul e ocupat — aștept ${ev.seconds} s…` };
+        } else if (ev.type === "tool_start") {
           const label = TOOL_STATUS[ev.name]?.[lang] ?? ev.name;
           yield { type: "status", tool: ev.name, label };
         } else if (ev.type === "completed") completed = ev;
@@ -136,11 +160,23 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     if (!prefilled || turnText || opts.signal?.aborted || !lastQuote || !state.project) throw e;
     console.warn("[agent] model unavailable after prefill, finishing deterministically:", (e as Error).message);
     yield { type: "mode", mode: "scripted", reason: "AI temporarily unavailable" };
-    yield { type: "card", card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: { ...scriptedPlan(state.project.type, state.project.inputs, lang), approvedBy: opts.tenant.plans === "approved" ? opts.tenant.name : undefined } } };
+    if (!planShown) yield templatePlan(state.project, lang, opts.tenant);
     const text = projectReply(lastQuote.quote, lastQuote, state.project.title, lang, state.suggestions);
     turnText = text;
     yield { type: "text", delta: text };
     input.push({ role: "assistant", content: text });
+  }
+
+  // The plan written in parallel: its card now (the reply is already on screen), or the template.
+  if (planPending && state.project) {
+    yield { type: "status", tool: "present_plan", label: TOOL_STATUS.present_plan[lang] };
+    const args = await planPending;
+    if (args) {
+      const planArgs = JSON.stringify(args);
+      const pr = await executeTool("present_plan", planArgs, toolCtx());
+      for (const card of pr.cards ?? []) yield { type: "card", card };
+      input.push(opts.llm.toolCall("pre_plan", "present_plan", planArgs), opts.llm.toolOutput("pre_plan", JSON.stringify(pr.forModel)));
+    } else yield templatePlan(state.project, lang, opts.tenant);
   }
 
   // Guard: every amount in the reply must come from the quote engine.
@@ -199,4 +235,30 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   yield { type: "history", items: opts.llm.sanitizeHistory(input) };
   yield { type: "done", usage, ms: Date.now() - started };
+}
+
+/** Run a plan writer to its result (its short waits happen in the background). */
+async function drainPlan(gen: AsyncGenerator<unknown, PlanArgs | null>): Promise<PlanArgs | null> {
+  try {
+    let step = await gen.next();
+    while (!step.done) step = await gen.next();
+    return step.value;
+  } catch {
+    return null;
+  }
+}
+
+/** The reviewed template plan for the project type (no model involved). */
+function templatePlan(project: NonNullable<SessionState["project"]>, lang: Lang, tenant: RunOptions["tenant"]): AgentEvent {
+  return {
+    type: "card",
+    card: { kind: "plan", id: `plan-${Date.now().toString(36)}`, plan: { ...scriptedPlan(project.type, project.inputs, lang), approvedBy: tenant.plans === "approved" ? tenant.name : undefined } },
+  };
+}
+
+/** Romanian or English, when the message makes it clear. */
+export function writtenIn(text: string): Lang | undefined {
+  if (/[ăâîșțşţ]/i.test(text) || /\b(vreau|si|și|cu|pentru|de|baie|terasa|gard|perete|camera|fac|refac)\b/i.test(text)) return "ro";
+  if (/\b(i|want|my|the|with|and|for|build|bathroom|deck|fence|wall|room)\b/i.test(text)) return "en";
+  return undefined;
 }
