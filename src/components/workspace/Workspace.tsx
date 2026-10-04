@@ -130,7 +130,7 @@ export default function Workspace({
       <header className="flex items-center gap-2 border-b border-rule bg-paper/90 px-4 py-2.5 backdrop-blur sm:gap-3 sm:px-6">
         <button onClick={onExit} className="flex items-center gap-2 rounded-lg" title={tr("newProject", lang)} aria-label={`Blueprint — ${tr("newProject", lang)}`}>
           <Logo className="text-ink" />
-          <span className="display text-[17px] leading-none">Blueprint</span>
+          <span className="display hidden text-[17px] leading-none min-[400px]:inline">Blueprint</span>
         </button>
         <span className="hidden font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 md:inline">
           / {tenant.name} / {project ? project.title : "…"}

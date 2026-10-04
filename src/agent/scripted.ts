@@ -751,7 +751,18 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       { projectType: intent.type, params: intent.params, quality: intent.quality ?? null, storeId: null, includeOptional: null, keepSketch: null },
       650,
     );
-    const quoteCard = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
+    let quoteCard = r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote");
+    // Extras in the same message — "gard de 20 m cu o poartă la mijloc", "terasă 4 × 3 m cu 2 trepte",
+    // "baie cu un vas WC lângă ușă" — are drawn right away (sizes, doors and windows are already in the project).
+    const extras = quoteCard && state.project ? (parseSketchEdit(fold(opts.message), intent.type) ?? []).filter((e) => e.op === "add_steps" || e.op === "add_item" || e.op === "add_fence_segment" || (e.op === "add_opening" && e.kind === "gate")) : [];
+    if (extras.length) {
+      const blank: Omit<SketchOp, "op"> = {
+        zone: null, w: null, d: null, h: null, side: null, align: null, width: null, count: null, value: null,
+        kind: null, wall: null, pos: null, id: null, segment: null, length: null, turn: null, key: null,
+      };
+      const er = yield* runTool("edit_sketch", { edits: extras.map((e) => ({ ...blank, option: null, ...e })) }, 400);
+      quoteCard = er.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote") ?? quoteCard;
+    }
     if (!quoteCard || !state.project) {
       const max = String((r.forModel as { error?: string }).error ?? "").match(/max is (\d+(?:\.\d+)?)/)?.[1];
       reply = max

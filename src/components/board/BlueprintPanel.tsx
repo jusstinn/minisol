@@ -378,14 +378,17 @@ function SketchView({
         {up.overlay}
 
         {/* legend */}
-        <div className={`absolute bottom-3 left-3 right-3 flex flex-wrap items-end gap-1.5 sm:bottom-5 sm:left-6 sm:right-auto ${editing && !inline ? "sm:max-w-[38%]" : "sm:max-w-[60%]"}`}>
+        {/* Phones: one row that scrolls sideways (7 layers would otherwise cover half the sketch). */}
+        <div
+          className={`no-scrollbar absolute bottom-3 left-3 right-3 flex items-end gap-1.5 overflow-x-auto sm:bottom-5 sm:left-6 sm:right-auto sm:flex-wrap sm:overflow-visible ${editing && !inline ? "sm:max-w-[38%]" : "sm:max-w-[60%]"}`}
+        >
           {build.layers.map((l, i) => (
             <button
               key={l.id}
               onMouseEnter={() => onHighlight(l.id)}
               onMouseLeave={() => onHighlight(null)}
               onClick={() => onHighlight(highlight === l.id ? null : l.id)}
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider backdrop-blur transition ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider backdrop-blur transition ${
                 highlight === l.id
                   ? "bg-accent text-on-accent"
                   : dark

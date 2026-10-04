@@ -289,3 +289,11 @@ input[type="range"]:focus-visible {
     transition-duration: 1ms !important;
   }
 }
+
+/* Sideways-scrolling rows (e.g. the sketch legend on phones): scrollable, without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
