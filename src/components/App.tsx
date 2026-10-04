@@ -17,12 +17,15 @@ export default function App({
   initialMember,
   passMember,
   initialLang,
+  signOut = false,
 }: {
   tenant: Tenant;
   initialMember?: string;
   /** Product mode: the member from the signed pass-link session (no demo picker). */
   passMember?: MemberSummary;
   initialLang?: Lang;
+  /** The site sign-in is on: offer "Sign out" on the start screen. */
+  signOut?: boolean;
 }) {
   const [members, setMembers] = useState<MemberSummary[]>(passMember ? [passMember] : []);
   const [memberId, setMemberId] = useState<string | undefined>(passMember?.memberId ?? initialMember);
@@ -69,6 +72,7 @@ export default function App({
         {!session || !member ? (
           <motion.div key="entry" exit={{ opacity: 0, y: -24, filter: "blur(6px)" }} transition={{ duration: 0.45, ease: [0.7, 0, 0.84, 0] }}>
             <Entry
+              signOut={signOut}
               tenant={tenant}
               members={members}
               member={member}

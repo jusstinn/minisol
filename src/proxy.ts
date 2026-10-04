@@ -4,18 +4,48 @@ import { getTenant } from "@/config/tenant";
 import { claimOnce } from "@/lib/budget";
 import { maxLinkLifetimeS, passLinkSecret, requirePassLink, verifyPassToken } from "@/lib/passToken";
 import { createSession, sessionCookieName, sessionCookieOptions } from "@/lib/session";
+import { loginCookieName, safeNext, siteLogin, validLoginCookie } from "@/lib/siteLogin";
+import type { SiteLogin } from "@/lib/siteLogin";
 
 /**
- * Signed pass link → session cookie (product mode, REQUIRE_PASS_LINK=1).
- *
- * The customer taps the Blueprint link on their wallet pass: `/?retailer=<tenant>&t=<token>`.
- * We verify the token, exchange it for a short httpOnly session cookie and redirect to the same
- * URL without `t`, so the token never stays in the address bar, history or Referer headers.
- * Only runs for page requests that carry `t` (see matcher); in the demo it is a no-op.
+ * Two gates, both off by default (the open demo):
+ * - Site sign-in (SITE_LOGIN_USER / SITE_LOGIN_PASSWORD): without the login cookie, pages go to
+ *   /login and APIs answer 401 — so a public URL can run the live AI for the people you let in.
+ * - Signed pass links (REQUIRE_PASS_LINK=1): `/?retailer=<tenant>&t=<token>` from the member's
+ *   wallet pass is verified and exchanged for a short httpOnly session cookie, then the URL is
+ *   reloaded without `t`, so the token never stays in the address bar, history or Referer headers.
  */
 export async function proxy(req: NextRequest) {
-  if (!requirePassLink()) return NextResponse.next();
+  const login = siteLogin();
+  if (login) {
+    const stop = siteGate(req, login);
+    if (stop) return stop;
+  }
+  if (requirePassLink() && req.nextUrl.searchParams.has("t") && !req.nextUrl.pathname.startsWith("/api/")) return passLink(req);
+  return NextResponse.next();
+}
 
+/** Reachable without signing in: the form and the two endpoints it uses. */
+const OPEN = new Set(["/login", "/api/login", "/api/logout"]);
+
+function siteGate(req: NextRequest, login: SiteLogin): NextResponse | null {
+  const path = req.nextUrl.pathname;
+  const signedIn = validLoginCookie(login, req.cookies.get(loginCookieName())?.value);
+  if (OPEN.has(path)) {
+    // Already signed in: skip the form.
+    if (path === "/login" && signedIn) return noStore(NextResponse.redirect(new URL(safeNext(req.nextUrl.searchParams.get("next")), req.url), 303));
+    return null;
+  }
+  if (signedIn) return null;
+  if (path.startsWith("/api/")) return noStore(NextResponse.json({ error: "Sign in required" }, { status: 401 }));
+  const url = req.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  if (path !== "/" || req.nextUrl.search) url.searchParams.set("next", path + req.nextUrl.search);
+  return noStore(NextResponse.redirect(url, 303));
+}
+
+async function passLink(req: NextRequest) {
   const secret = passLinkSecret();
   const url = req.nextUrl.clone();
   const token = url.searchParams.get("t");
@@ -54,10 +84,6 @@ function noStore(res: NextResponse) {
 }
 
 export const config = {
-  matcher: [
-    {
-      source: "/((?!api|_next/static|_next/image|favicon.ico|icon.svg).*)",
-      has: [{ type: "query", key: "t" }],
-    },
-  ],
+  // Everything but static assets; with both gates off this returns straight away.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

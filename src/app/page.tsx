@@ -4,6 +4,7 @@ import App from "@/components/App";
 import PassRequired from "@/components/entry/PassRequired";
 import { getTenant } from "@/config/tenant";
 import { requirePassLink } from "@/lib/passToken";
+import { siteLogin } from "@/lib/siteLogin";
 import { memberSummary, sessionCookieName, verifySession } from "@/lib/session";
 
 export default async function Page({ searchParams }: PageProps<"/">) {
@@ -20,9 +21,9 @@ export default async function Page({ searchParams }: PageProps<"/">) {
     const sources = getDataSources(tenant.id);
     const [customer, stores] = await Promise.all([sources.loyalty.getMember(session.memberId), sources.stores.list()]);
     if (!customer) return <PassRequired tenant={tenant} initialLang={session.lang ?? lang} reason="invalid" />;
-    return <App tenant={tenant} passMember={memberSummary(customer, stores)} initialLang={session.lang ?? customer.language} />;
+    return <App tenant={tenant} passMember={memberSummary(customer, stores)} initialLang={session.lang ?? customer.language} signOut={!!siteLogin()} />;
   }
 
   const member = typeof sp.member === "string" ? sp.member : undefined;
-  return <App tenant={tenant} initialMember={member} />;
+  return <App tenant={tenant} initialMember={member} signOut={!!siteLogin()} />;
 }

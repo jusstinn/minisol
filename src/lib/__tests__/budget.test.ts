@@ -65,6 +65,8 @@ describe("allowAiTurn", () => {
     expect((await allowPlanRead({ ip: "p1", tenant: "demo" }, prod)).ok).toBe(false);
     expect((await allowAiTurn({ ip: "p2", tenant: "demo" }, { ...prod, ALLOW_MEMORY_BUDGET: "1" })).ok).toBe(true);
     expect((await allowAiTurn({ ip: "p3", tenant: "demo" }, { VERCEL_ENV: "preview" })).ok).toBe(true);
+    // Behind the site sign-in only invited people get in: per-instance counters are enough.
+    expect((await allowAiTurn({ ip: "p4", tenant: "demo" }, { ...prod, SITE_LOGIN_USER: "u", SITE_LOGIN_PASSWORD: "p" })).ok).toBe(true);
   });
 
   it("fails closed when the counter store is down", async () => {

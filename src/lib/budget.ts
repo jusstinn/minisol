@@ -1,3 +1,5 @@
+import { siteLogin } from "./siteLogin";
+
 /**
  * How many AI calls are allowed, so nobody can run up the OpenAI bill.
  *
@@ -73,8 +75,9 @@ function store(env: Env): CounterStore | null {
   const token = env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN;
   if (url && token) return upstashStore(url, token);
   // In production, per-instance counters don't add up to a real limit: no shared store, no live
-  // AI (the offline agent still answers) — unless someone decides otherwise, explicitly.
-  if (env.VERCEL_ENV === "production" && env.ALLOW_MEMORY_BUDGET !== "1") return null;
+  // AI (the offline agent still answers) — unless the site is behind the sign-in (only invited
+  // people), or someone decides otherwise explicitly.
+  if (env.VERCEL_ENV === "production" && env.ALLOW_MEMORY_BUDGET !== "1" && !siteLogin(env)) return null;
   return memoryStore;
 }
 
@@ -99,7 +102,9 @@ export async function allowAiTurn(who: { ip: string; tenant: string; memberId?: 
   const s = store(env);
   if (!s) return NO_STORE;
   try {
-    if (await over(s, `ai:ip:${who.ip}`, num(env.LLM_TURNS_PER_10_MIN, 12), 10 * MIN)) return { ok: false, reason: "per-visitor AI limit reached" };
+    // Behind the sign-in the visitor is someone you invited (often mid-demo): more room per visitor.
+    const perVisitor = num(env.LLM_TURNS_PER_10_MIN, siteLogin(env) ? 40 : 12);
+    if (await over(s, `ai:ip:${who.ip}`, perVisitor, 10 * MIN)) return { ok: false, reason: "per-visitor AI limit reached" };
     if (who.memberId && (await over(s, `ai:member:${who.tenant}:${who.memberId}:${today()}`, num(env.LLM_MEMBER_TURNS_PER_DAY, 40), DAY)))
       return { ok: false, reason: "daily AI limit for this member reached" };
     if (await over(s, `ai:all:${who.tenant}:${today()}`, num(env.LLM_DAILY_TURNS, 400), DAY)) return { ok: false, reason: "daily AI budget reached" };

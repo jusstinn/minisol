@@ -35,6 +35,7 @@ export default function Entry({
   members,
   member,
   fromPass = false,
+  signOut = false,
   lang,
   onLang,
   onSelect,
@@ -48,6 +49,8 @@ export default function Entry({
   member?: MemberSummary;
   /** Product mode: the member arrived through their signed pass link — show only their pass, no demo picker. */
   fromPass?: boolean;
+  /** Site sign-in is on: a "Sign out" link. */
+  signOut?: boolean;
   lang: Lang;
   onLang: (l: Lang) => void;
   onSelect: (m: MemberSummary) => void;
@@ -115,6 +118,11 @@ export default function Entry({
             </button>
           ))}
         </div>
+        {signOut && (
+          <a href="/api/logout" className="rounded-full px-2 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 transition hover:text-ink">
+            {lang === "en" ? "Sign out" : "Ieșire"}
+          </a>
+        )}
       </header>
 
       <main className="relative z-10 mx-auto grid w-full max-w-[1480px] flex-1 grid-cols-1 gap-10 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pt-14">
