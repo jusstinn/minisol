@@ -235,6 +235,18 @@ export default function Entry({
             })}
           </div>
 
+          {/* who is asking: the demo members to pick from · a signed pass link: only the member's own card */}
+          <MemberPicker
+            members={members}
+            selected={member}
+            tenant={tenant}
+            lang={lang}
+            onSelect={onSelect}
+            fromPass={fromPass}
+            failed={membersFailed}
+            onRetry={onRetryMembers}
+          />
+
           <p className="mt-8 max-w-[560px] font-mono text-[11px] leading-relaxed text-ink-3">
             <span className="text-ink-2">{tr("aiIntro", lang)}</span> {tr("privacy", lang)}
           </p>
@@ -247,9 +259,9 @@ export default function Entry({
           )}
         </section>
 
-        {/* right: blueprint sheet + wallet passes */}
-        <section className="flex flex-col gap-8 lg:relative lg:block lg:min-h-[640px]">
-          <div className="bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:left-10 lg:h-auto">
+        {/* right: the blueprint sheet, uncovered */}
+        <section className="lg:relative lg:min-h-[640px]">
+          <div className="bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:h-auto">
             <div className="absolute inset-0">
               <SceneBoundary resetKey={heroIdx} en={lang === "en"} dark>
                 <Scene build={heroBuild} mode="blueprint" autoRotate compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
@@ -266,37 +278,6 @@ export default function Entry({
             <TitleBlock lang={lang} />
           </div>
 
-          {/* demo: pass stack to pick from · signed pass link: only the member's own pass */}
-          <div className="order-first mx-auto w-[min(92%,340px)] lg:absolute lg:-bottom-4 lg:-left-8 lg:order-none lg:mx-0 lg:w-[330px]">
-            {fromPass && member ? (
-              <>
-                <div className="mb-3">
-                  <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">
-                    {lang === "en" ? "Your card" : "Cardul tău"} · {tenant.programName}
-                  </span>
-                </div>
-                <WalletPass member={member} tenant={tenant} lang={lang} />
-              </>
-            ) : (
-              <>
-                <div className="mb-[104px]">
-                  <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">{tr("pickPass", lang)} ↓</span>
-                </div>
-                {membersFailed ? (
-                  <div className="grid aspect-[1.58/1] w-full place-items-center rounded-[18px] border-2 border-dashed border-ink/20 bg-card/70 p-6 text-center">
-                    <div>
-                      <p className="text-[14.5px] text-ink-2">{lang === "en" ? "Couldn't load the loyalty cards." : "Nu am putut încărca cardurile de fidelitate."}</p>
-                      <button onClick={onRetryMembers} className="mt-3 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-paper">
-                        {lang === "en" ? "Try again" : "Reîncearcă"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
-                )}
-              </>
-            )}
-          </div>
         </section>
       </main>
 
@@ -305,60 +286,81 @@ export default function Entry({
   );
 }
 
-function PassStack({
+/**
+ * Whose loyalty card the demo runs as: a row of compact cards (the selected one ringed), and the
+ * member's story underneath. With a signed pass link there is nothing to pick — just their card.
+ */
+function MemberPicker({
   members,
   selected,
   tenant,
   lang,
   onSelect,
+  fromPass,
+  failed,
+  onRetry,
 }: {
   members: MemberSummary[];
   selected?: MemberSummary;
   tenant: Tenant;
   lang: Lang;
   onSelect: (m: MemberSummary) => void;
+  fromPass: boolean;
+  failed: boolean;
+  onRetry?: () => void;
 }) {
-  if (!members.length || !selected) return <div className="aspect-[1.58/1] w-full animate-pulse rounded-[18px] bg-paper-3" />;
-  const order = [selected, ...members.filter((m) => m.memberId !== selected.memberId)];
-  return (
-    <div>
-      <div className="relative aspect-[1.58/1] w-full">
-        {order
-          .map((m, pos) => ({ m, pos }))
-          .reverse()
-          .map(({ m, pos }) => (
-            <motion.div
-              key={m.memberId}
-              className="absolute inset-0 cursor-pointer"
-              style={{ zIndex: 10 - pos }}
-              initial={false}
-              animate={{ x: 0, y: -pos * 30, rotate: 0, scale: 1 - pos * 0.035, opacity: pos > 3 ? 0 : 1 }}
-              transition={{ type: "spring", stiffness: 260, damping: 26 }}
-              onClick={() => pos > 0 && onSelect(m)}
-              whileHover={pos > 0 ? { y: -pos * 30 - 14 } : undefined}
-            >
-              <WalletPass member={m} tenant={tenant} lang={lang} tilt={pos === 0} />
-            </motion.div>
-          ))}
+  const en = lang === "en";
+  if (failed) {
+    return (
+      <div className="mt-7 flex max-w-[680px] items-center gap-3 rounded-xl border border-dashed border-ink/20 bg-card/70 px-4 py-3">
+        <p className="flex-1 text-[13.5px] text-ink-2">{en ? "Couldn't load the loyalty cards." : "Nu am putut încărca cardurile de fidelitate."}</p>
+        <button onClick={onRetry} className="rounded-full bg-ink px-3.5 py-1.5 text-[12.5px] font-semibold text-paper">
+          {en ? "Try again" : "Reîncearcă"}
+        </button>
       </div>
+    );
+  }
+  const shown = fromPass ? (selected ? [selected] : []) : members;
+  return (
+    <div className="mt-7 max-w-[680px]">
+      <div className="label mb-2">{fromPass ? `${en ? "Your card" : "Cardul tău"} · ${tenant.programName}` : tr("pickPass", lang)}</div>
+      {!shown.length ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[46px] animate-pulse rounded-xl bg-paper-3" />
+          ))}
+        </div>
+      ) : (
+        <div role={fromPass ? undefined : "radiogroup"} aria-label={tr("pickPass", lang)} className={`grid gap-2 ${fromPass ? "max-w-[260px] grid-cols-1" : "grid-cols-2 sm:grid-cols-4"}`}>
+          {shown.map((m) => {
+            const on = m.memberId === selected?.memberId;
+            return (
+              <button
+                key={m.memberId}
+                role={fromPass ? undefined : "radio"}
+                aria-checked={fromPass ? undefined : on}
+                disabled={fromPass}
+                onClick={() => onSelect(m)}
+                className={`rounded-xl text-left transition ${on ? "ring-2 ring-accent ring-offset-2 ring-offset-paper" : "opacity-60 hover:-translate-y-0.5 hover:opacity-100"}`}
+              >
+                <WalletPass member={m} tenant={tenant} lang={lang} compact />
+              </button>
+            );
+          })}
+        </div>
+      )}
       <AnimatePresence mode="wait">
-        <motion.div
-          key={selected.memberId}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          className="mt-4 rounded-xl border border-rule bg-card/85 px-3.5 py-2.5 backdrop-blur"
-        >
-          <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">
-            {selected.firstName} · {selected.tier} · {selected.city}
-          </div>
-          <div className="mt-0.5 text-[13.5px] leading-snug text-ink-2">{lang === "en" ? selected.personaEn : selected.persona}</div>
-          {!selected.personalization && (
-            <div className="mt-1.5 inline-flex rounded-full bg-ink px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-paper">
-              {tr("noPersonalization", lang)}
-            </div>
-          )}
-        </motion.div>
+        {selected && (
+          <motion.p key={selected.memberId} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-2.5 text-[13px] leading-snug text-ink-3">
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.14em]">
+              {selected.firstName} · {selected.city}
+            </span>
+            {(en ? selected.personaEn : selected.persona) && <> — {en ? selected.personaEn : selected.persona}</>}
+            {!selected.personalization && (
+              <span className="ml-1.5 inline-flex rounded-full bg-ink px-2 py-0.5 align-middle font-mono text-[10px] uppercase tracking-wider text-paper">{tr("noPersonalization", lang)}</span>
+            )}
+          </motion.p>
+        )}
       </AnimatePresence>
     </div>
   );
