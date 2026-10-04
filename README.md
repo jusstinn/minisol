@@ -332,7 +332,7 @@ LoyaltyProvider   getMember · getOffers            // WalletLoop
   (e.g. `deck_board`, `tile_adhesive`) plus `content` (how much one sales unit provides) and a
   coverage spec for paints/oils/seed. That mapping is typically a one-off enrichment job over
   the retailer's category tree.
-- Demo data lives in `src/data/` (255 products with fictional brands, 11 stores modelled on a
+- Demo data lives in `src/data/` (313 products with fictional brands, 11 stores modelled on a
   Romanian DIY network, deterministic stock, 10 WalletLoop offers, 4 personas).
 
 ## Production entry: signed pass links

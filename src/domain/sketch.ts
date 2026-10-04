@@ -137,7 +137,6 @@ export interface ToolSketch {
 }
 
 export type SketchSpec = LinearSketch | TileSketch | PanelSketch | SheetSketch | ContainerSketch | FastenerSketch | ToolSketch;
-export type SketchTemplate = SketchSpec["template"];
 
 // ───────────────────────────── spec parsing ─────────────────────────────
 

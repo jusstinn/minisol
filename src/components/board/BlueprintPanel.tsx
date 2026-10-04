@@ -18,6 +18,8 @@ import type { ViewMode } from "../blueprint/Scene";
 import { useUploads } from "../blueprint/uploads/useUploads";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
 import ChangeCard, { Rolling, signed } from "./ChangeCard";
+import SceneBoundary from "../blueprint/SceneBoundary";
+import { useSketchMode } from "../workspace/NextStepChips";
 
 const Scene = dynamic(() => import("../blueprint/Scene"), {
   ssr: false,
@@ -35,15 +37,6 @@ export interface SketchControls {
   canUndo: boolean;
 }
 
-/** Tenant default, overridable with ?sketch=auto|on_demand (to show either behaviour in a pitch). */
-function useSketchMode(tenant: Tenant): Tenant["sketch"] {
-  const [mode] = useState<Tenant["sketch"]>(() => {
-    if (typeof window === "undefined") return tenant.sketch;
-    const q = new URLSearchParams(window.location.search).get("sketch");
-    return q === "auto" || q === "on_demand" ? q : tenant.sketch;
-  });
-  return mode;
-}
 
 export default function BlueprintPanel({
   project,
@@ -241,6 +234,7 @@ function SketchView({
         {...up.dropProps}
       >
         <div className="absolute inset-0">
+          <SceneBoundary resetKey={build} en={lang === "en"} dark={dark}>
           <Scene
             build={build}
             mode={mode}
@@ -255,6 +249,7 @@ function SketchView({
             paused={paused}
             extra={up.sceneExtra}
           />
+          </SceneBoundary>
         </div>
 
         {/* title block — kept clear of the controls column on the right (≈7.5 rem on phones, ≈18 rem with labels from sm) */}

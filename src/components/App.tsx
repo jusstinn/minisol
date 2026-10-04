@@ -45,20 +45,36 @@ export default function App({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The demo members: retried twice quietly (a busy venue Wi-Fi), then a "try again" on the card.
+  const [membersFailed, setMembersFailed] = useState(false);
+  const [loadSeq, setLoadSeq] = useState(0);
   useEffect(() => {
     if (fromPass) return;
-    fetch(`/api/members?tenant=${tenant.id}`)
-      .then((r) => r.json())
-      .then((d: { members: MemberSummary[] }) => {
+    let cancelled = false;
+    const load = async (attempt: number): Promise<void> => {
+      try {
+        const r = await fetch(`/api/members?tenant=${tenant.id}`);
+        const d = (await r.json().catch(() => null)) as { members?: MemberSummary[] } | null;
+        if (!r.ok || !Array.isArray(d?.members) || !d.members.length) throw new Error(`members ${r.status}`);
+        if (cancelled) return;
         setMembers(d.members);
+        setMembersFailed(false);
         const initial = d.members.find((m) => m.memberId === initialMember) ?? d.members[0];
-        if (initial) {
-          setMemberId(initial.memberId);
-          setLang(initial.language);
-        }
-      })
-      .catch(() => {});
-  }, [tenant.id, initialMember, fromPass]);
+        setMemberId(initial.memberId);
+        setLang(initial.language);
+      } catch {
+        if (cancelled) return;
+        if (attempt < 2) {
+          await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+          if (!cancelled) return load(attempt + 1);
+        } else setMembersFailed(true);
+      }
+    };
+    void load(0);
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant.id, initialMember, fromPass, loadSeq]);
 
   const member = useMemo(() => members.find((m) => m.memberId === memberId), [members, memberId]);
 
@@ -73,6 +89,11 @@ export default function App({
           <motion.div key="entry" exit={{ opacity: 0, y: -24, filter: "blur(6px)" }} transition={{ duration: 0.45, ease: [0.7, 0, 0.84, 0] }}>
             <Entry
               signOut={signOut}
+              membersFailed={membersFailed}
+              onRetryMembers={() => {
+                setMembersFailed(false);
+                setLoadSeq((n) => n + 1);
+              }}
               tenant={tenant}
               members={members}
               member={member}

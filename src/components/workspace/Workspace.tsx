@@ -137,7 +137,7 @@ export default function Workspace({
         </span>
         <button
           onClick={() => setOffline((o) => !o)}
-          title={agent.mode?.reason ?? ""}
+          title={modeReason(offline ? "forced" : agent.mode?.reason, lang)}
           aria-pressed={offline}
           aria-label={
             offline || agent.mode?.mode === "scripted"
@@ -385,8 +385,14 @@ function Rail({
                 </div>
               )}
               {m.error && (
-                <div className="rounded-xl border border-bad/30 bg-bad/5 px-3 py-2 text-[13px] text-bad">
-                  {tr("error", lang)} <span className="font-mono text-[11px] opacity-70">({m.error})</span>
+                // The friendly line only (technical details stay in the console); one tap to ask again.
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-bad/30 bg-bad/5 px-3 py-2 text-[13px] text-bad">
+                  <span>{tr("error", lang)}</span>
+                  {!busy && lastUserText(messages, m.id) && (
+                    <button onClick={() => onSend(lastUserText(messages, m.id)!)} className="rounded-full border border-bad/40 px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wider hover:bg-bad/10">
+                      {lang === "en" ? "Try again" : "Reîncearcă"}
+                    </button>
+                  )}
                 </div>
               )}
               {m.cards.map((c) => c.kind === "sizes" && <SizesCard key={c.id} card={c} lang={lang} onSend={(t) => onSend(t, "sizes")} disabled={busy} />)}
@@ -483,4 +489,27 @@ function UiBridge({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq]);
   return null;
+}
+
+/** The customer's message an assistant message answered (for "try again"). */
+function lastUserText(messages: ChatMessage[], assistantId: string): string | undefined {
+  const i = messages.findIndex((m) => m.id === assistantId);
+  for (let j = i - 1; j >= 0; j--) if (messages[j].role === "user") return messages[j].text;
+  return undefined;
+}
+
+/** Why the assistant is offline, for the badge's tooltip (the server sends short reason codes). */
+function modeReason(reason: string | undefined, lang: Lang): string {
+  if (!reason) return "";
+  const en = lang === "en";
+  const known: Record<string, [string, string]> = {
+    forced: ["Ai ales demo-ul offline — apasă pentru AI live", "You chose the offline demo — tap for live AI"],
+    "AI not configured": ["AI-ul live nu e configurat pe acest server", "Live AI isn't configured on this server"],
+    "AI temporarily unavailable": ["AI-ul nu răspunde acum — continui cu asistentul offline", "The AI isn't answering right now — carrying on offline"],
+    "per-visitor AI limit reached": ["Limita AI pe 10 minute a fost atinsă — revine în curând", "AI limit for 10 minutes reached — back shortly"],
+    "daily AI limit for this member reached": ["Limita zilnică de AI pentru acest membru a fost atinsă", "This member's daily AI limit is reached"],
+    "daily AI budget reached": ["Bugetul de AI de azi s-a terminat", "Today's AI budget is used up"],
+  };
+  const hit = known[reason];
+  return hit ? hit[en ? 1 : 0] : en ? "Live AI is off right now" : "AI-ul live e oprit momentan";
 }

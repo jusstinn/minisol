@@ -93,7 +93,7 @@ function view(card: ChipCard, board: Board, lang: Lang): ChipView {
             {q.lines.length} {tr("products", lang)} · <span className="num">{lei(q.total, lang)}</span>
           </>
         ),
-        meta: [q.saving > 0 && `${tr("youSave", lang)} ${lei(q.saving, lang)}`, `+${int(q.points.earned, lang)} pts`].filter(Boolean).join(" · "),
+        meta: [q.saving > 0 && `${tr("youSave", lang)} ${lei(q.saving, lang)}`, `+${int(q.points.earned, lang)} ${tr("points", lang)}`].filter(Boolean).join(" · "),
       };
     }
     case "stock": {

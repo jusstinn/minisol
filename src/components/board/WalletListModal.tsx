@@ -130,7 +130,7 @@ export default function WalletListModal({
                   </div>
                   <div className="text-right">
                     <div className="display-cond text-[22px] leading-none">{lei(quote.total, lang)}</div>
-                    <div className="mt-1 font-mono text-[10px] text-accent">+{quote.points.earned.toLocaleString(lang === "en" ? "en-GB" : "ro-RO")} pts</div>
+                    <div className="mt-1 font-mono text-[10px] text-accent">+{quote.points.earned.toLocaleString(lang === "en" ? "en-GB" : "ro-RO")} {lang === "en" ? "pts" : "puncte"}</div>
                   </div>
                 </div>
                 <div className="thin-scroll flex-1 overflow-y-auto px-5 py-3">

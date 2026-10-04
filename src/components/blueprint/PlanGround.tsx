@@ -29,6 +29,8 @@ export default function PlanGround({ plan, mode }: { plan: PlanEntry; mode: View
       };
       made = { real: mk(c.real), blue: mk(c.blue) };
       setTex({ blob: plan.blob, ...made });
+    }).catch(() => {
+      // An image the browser can't draw: the plan simply isn't laid under the sketch.
     });
     return () => {
       alive = false;

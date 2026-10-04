@@ -28,21 +28,8 @@ const STORE_SIZE: Record<string, number> = {
   constanta: 0.8,
 };
 
-/**
- * Scripted gaps that make demos interesting: e.g. the premium deck board is sold
- * out at Militari but available at Berceni. Keyed by `${storeId}:${sku}`.
- * Filled in by `setStockOverrides` once the catalog is known.
- */
-const overrides = new Map<string, number>();
-
-export function setStockOverrides(entries: Record<string, number>) {
-  for (const [k, v] of Object.entries(entries)) overrides.set(k, v);
-}
-
 export function demoStock(storeId: string, product: Product): number {
   const key = `${storeId}:${product.sku}`;
-  const o = overrides.get(key);
-  if (o !== undefined) return o;
   const r = hash01(key);
   if (r < 0.05) return 0; // ~5% out of stock
   const size = STORE_SIZE[storeId] ?? 0.8;

@@ -68,14 +68,9 @@ const STRINGS = {
   sendToWallet: { ro: "Trimite lista în Wallet", en: "Send list to Wallet" },
   reserve: { ro: "Rezervă pentru ridicare", en: "Reserve for pickup" },
   newProject: { ro: "Proiect nou", en: "New project" },
-  switchMember: { ro: "Schimbă membrul", en: "Switch member" },
   searchResults: { ro: "Rezultate", en: "Results" },
   thinking: { ro: "Mă gândesc", en: "Thinking" },
   error: { ro: "Ceva n-a mers. Încearcă din nou.", en: "Something went wrong. Please try again." },
-  quick: {
-    ro: ["Variantă mai ieftină", "Vreau premium", "Ce oferte am?", "Unde e totul pe stoc?", "Adaugă sugestiile"],
-    en: ["Cheaper option", "Go premium", "What offers do I have?", "Where is everything in stock?", "Add the suggestions"],
-  },
   privacy: {
     ro: "Asistentul vede doar nivelul, punctele, magazinul și interesele tale — niciodată numele sau datele de contact.",
     en: "The assistant only sees your tier, points, store and interests — never your name or contact details.",

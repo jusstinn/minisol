@@ -538,11 +538,14 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         const width = dim(o.width ?? Math.min(1.5, wallLength(z.w, z.d, side)), "width", 0.6, wallLength(z.w, z.d, side));
         // ~17 cm per step; never more steps than the height needs.
         const maxSteps = Math.max(1, Math.ceil(l.heightM / 0.15));
-        const count = Math.round(clamp(Number(o.count ?? Math.max(1, Math.round(l.heightM / 0.17))), 1, Math.min(6, maxSteps)));
+        const asked = Math.round(Number(o.count ?? Math.max(1, Math.round(l.heightM / 0.17))));
+        const count = Math.round(clamp(asked, 1, Math.min(6, maxSteps)));
         l.steps.push({ id: nid("st"), zone: z.id, side, width, count });
+        // Fewer than asked: say why, so "3 steps" → 2 doesn't look like a mistake.
+        const why = count < asked ? { ro: ` (la ${fmt(l.heightM * 100, lang)} cm înălțime ajung ${count})`, en: ` (at ${fmt(l.heightM * 100, lang)} cm high, ${count} ${count === 1 ? "is" : "are"} enough)` } : { ro: "", en: "" };
         say(
-          `${count} ${count === 1 ? "treaptă" : "trepte"} de ${fmt(width, lang)} m pe latura de ${SIDE_NAMES[side].ro}`,
-          `${count} step${count === 1 ? "" : "s"}, ${fmt(width, lang)} m wide, on the ${SIDE_NAMES[side].en} side`,
+          `${count} ${count === 1 ? "treaptă" : "trepte"} de ${fmt(width, lang)} m pe latura de ${SIDE_NAMES[side].ro}${why.ro}`,
+          `${count} step${count === 1 ? "" : "s"}, ${fmt(width, lang)} m wide, on the ${SIDE_NAMES[side].en} side${why.en}`,
         );
         break;
       }
@@ -579,8 +582,19 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
           const segs = fenceSegments(l.points);
           const segment = clamp(Math.round(Number(o.segment ?? 0)), 0, segs.length - 1);
           const width = Number(o.width ?? 1) >= 2 ? 3 : 1;
-          if (segs[segment].length < width + 0.5) fail("Segmentul de gard e prea scurt pentru poarta asta", "That fence segment is too short for this gate");
-          l.gates.push({ id: nid("g"), kind: "gate", wall: String(segment), pos: clamp(Number(o.pos ?? 0.5), 0.1, 0.9), width, height: l.heightM });
+          const segLen = segs[segment].length;
+          if (segLen < width + 0.5) fail("Segmentul de gard e prea scurt pentru poarta asta", "That fence segment is too short for this gate");
+          // Like doors: never on top of another gate — the requested spot, else the nearest free one.
+          const taken = l.gates.filter((g) => g.wall === String(segment)).map((g) => [g.pos * segLen - g.width / 2 - 0.3, g.pos * segLen + g.width / 2 + 0.3] as const);
+          const fits = (c: number) => c - width / 2 >= 0.25 && c + width / 2 <= segLen - 0.25 && taken.every(([a, b]) => c + width / 2 <= a || c - width / 2 >= b);
+          let centre = clamp(Number(o.pos ?? 0.5), 0.1, 0.9) * segLen;
+          if (!fits(centre)) {
+            const spots: number[] = [];
+            for (let c = width / 2 + 0.25; c <= segLen - width / 2 - 0.25; c += 0.05) if (fits(c)) spots.push(c);
+            if (!spots.length) fail("Nu mai e loc pe segmentul ăsta pentru încă o poartă", "There's no room left on that segment for another gate");
+            centre = spots.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre))[0];
+          }
+          l.gates.push({ id: nid("g"), kind: "gate", wall: String(segment), pos: r2(centre / segLen), width, height: l.heightM });
           say(
             width === 3 ? `Poartă dublă de 3 m pe segmentul ${segment + 1}` : `Poartă pietonală de 1 m pe segmentul ${segment + 1}`,
             width === 3 ? `3 m double gate on segment ${segment + 1}` : `1 m pedestrian gate on segment ${segment + 1}`,

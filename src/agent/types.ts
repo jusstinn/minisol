@@ -83,6 +83,8 @@ export interface SketchChange {
   source: "agent" | "editor";
   /** Safety notes this edit introduced (e.g. a railing once the deck is above 60 cm). */
   warnings?: string[];
+  /** The project needs a different amount of something (even when the packs on the list still cover it). */
+  needsChanged?: boolean;
 }
 
 export interface SuggestionView {

@@ -187,7 +187,8 @@ function paintRoom(p: Params, lang: Lang): CalculationResult {
     b.tool("putty_knife");
     b.need("sandpaper", 3, "șlefuire reparații", "sanding patches");
   }
-  const tape = perimeter * (ceiling ? 1 : 2) + doors * 5.1 + windows * 5.4 + perimeter;
+  // Ceiling line and skirting, plus door and window frames; the ceiling line is masked either way.
+  const tape = perimeter * 2 + doors * 5.1 + windows * 5.4;
   b.need("painters_tape", tape * 1.1, "contur tavan, pervaz, plinte, tocuri", "ceiling line, sills, skirting, frames");
   b.need("protective_foil", L * W * 1.2, "acoperire pardoseală + mobilier", "covering floor + furniture");
   b.tool("paint_roller");

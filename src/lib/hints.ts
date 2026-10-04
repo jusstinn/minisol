@@ -14,7 +14,6 @@ export const HINTS_KEY = "blueprint:hints:v1";
 type Seen = Partial<Record<HintId, 1>>;
 
 let memory: Seen = {};
-const listeners = new Set<() => void>();
 
 export function readSeen(): Seen {
   if (typeof window === "undefined") return {};
@@ -32,12 +31,6 @@ export function markSeen(id: HintId): void {
   } catch {
     /* private mode: remembered for this page only */
   }
-  listeners.forEach((l) => l());
-}
-
-export function subscribeSeen(cb: () => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
 }
 
 /** The hint to show now: the first unseen one whose target is visible. */

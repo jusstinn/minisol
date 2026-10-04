@@ -17,6 +17,7 @@ import { MicButton } from "../ui/MicButton";
 import { Scramble } from "../ui/primitives";
 import type { MemberSummary } from "./WalletPass";
 import { WalletPass } from "./WalletPass";
+import SceneBoundary from "../blueprint/SceneBoundary";
 
 const Scene = dynamic(() => import("../blueprint/Scene"), { ssr: false });
 
@@ -36,6 +37,8 @@ export default function Entry({
   member,
   fromPass = false,
   signOut = false,
+  membersFailed = false,
+  onRetryMembers,
   lang,
   onLang,
   onSelect,
@@ -51,6 +54,9 @@ export default function Entry({
   fromPass?: boolean;
   /** Site sign-in is on: a "Sign out" link. */
   signOut?: boolean;
+  /** The member list couldn't be loaded: show "try again" instead of a loading card. */
+  membersFailed?: boolean;
+  onRetryMembers?: () => void;
   lang: Lang;
   onLang: (l: Lang) => void;
   onSelect: (m: MemberSummary) => void;
@@ -244,7 +250,9 @@ export default function Entry({
         <section className="flex flex-col gap-8 lg:relative lg:block lg:min-h-[640px]">
           <div className="bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:left-10 lg:h-auto">
             <div className="absolute inset-0">
-              <Scene build={heroBuild} mode="blueprint" autoRotate compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
+              <SceneBoundary resetKey={heroIdx} en={lang === "en"} dark>
+                <Scene build={heroBuild} mode="blueprint" autoRotate compact interactive={false} replayKey={heroIdx} accent={tenant.accent} />
+              </SceneBoundary>
             </div>
             <div className="pointer-events-none absolute left-5 top-5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#b9d0f7] sm:left-7 sm:top-6">
               <AnimatePresence mode="wait">
@@ -273,7 +281,18 @@ export default function Entry({
                 <div className="mb-[104px]">
                   <span className="label inline-flex rounded-full bg-card/95 px-2.5 py-1 text-ink-2 shadow-sm">{tr("pickPass", lang)} ↓</span>
                 </div>
-                <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
+                {membersFailed ? (
+                  <div className="grid aspect-[1.58/1] w-full place-items-center rounded-[18px] border-2 border-dashed border-ink/20 bg-card/70 p-6 text-center">
+                    <div>
+                      <p className="text-[14.5px] text-ink-2">{lang === "en" ? "Couldn't load the loyalty cards." : "Nu am putut încărca cardurile de fidelitate."}</p>
+                      <button onClick={onRetryMembers} className="mt-3 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-paper">
+                        {lang === "en" ? "Try again" : "Reîncearcă"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <PassStack members={members} selected={member} tenant={tenant} lang={lang} onSelect={onSelect} />
+                )}
               </>
             )}
           </div>
@@ -345,6 +364,7 @@ function PassStack({
 }
 
 function TitleBlock({ lang }: { lang: Lang }) {
+  // The server may be on another day than the visitor (UTC vs Romania): the date cell is allowed to differ.
   const date = new Date().toLocaleDateString(lang === "en" ? "en-GB" : "ro-RO");
   // Deliberately NOT a technical-drawing title block: this is an indicative sketch.
   const rows: [string, string][] = [
@@ -357,7 +377,9 @@ function TitleBlock({ lang }: { lang: Lang }) {
       {rows.map(([k, v]) => (
         <div key={k} className="flex border-b border-[#dce9ff]/25 last:border-b-0">
           <span className="w-20 border-r border-[#dce9ff]/25 px-2 py-1 text-[#8fb0e8]">{k}</span>
-          <span className="px-2 py-1 text-[#e6efff]">{v}</span>
+          <span className="px-2 py-1 text-[#e6efff]" suppressHydrationWarning>
+            {v}
+          </span>
         </div>
       ))}
     </div>

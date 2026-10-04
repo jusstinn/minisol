@@ -189,7 +189,7 @@ export default function ProductSheet({
               {error ? (
                 <div className="flex items-center gap-2 rounded-xl border border-bad/30 bg-bad/5 px-3 py-3 text-[13px] text-bad">
                   <IconWarn size={15} />
-                  {en ? "Couldn't load this product." : "Nu am putut încărca produsul."} <span className="font-mono text-[11px] opacity-70">({error})</span>
+                  {en ? "Couldn't load this product — try again in a moment." : "Nu am putut încărca produsul — mai încearcă puțin mai târziu."}
                 </div>
               ) : data ? (
                 <Body key={data.sku} data={data} context={target.context} lang={lang} />

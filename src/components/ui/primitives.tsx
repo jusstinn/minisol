@@ -1,7 +1,7 @@
 "use client";
 
-import { animate, useInView, useMotionValue, useTransform, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { animate, useMotionValue, useTransform, motion } from "motion/react";
+import { useEffect, useMemo, useState } from "react";
 import type { Lang } from "@/domain/types";
 import { money, int } from "@/lib/format";
 
@@ -126,23 +126,6 @@ export function Scramble({ text, className }: { text: string; className?: string
     return () => clearInterval(id);
   }, [text]);
   return <span className={className}>{shown}</span>;
-}
-
-/** Fades/slides children in when scrolled into view. */
-export function InView({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
-  return (
-    <motion.div
-      ref={ref}
-      className={className}
-      initial={{ opacity: 0, y: 16 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
 }
 
 /** Section header used on every board panel: index number + label + rule. */

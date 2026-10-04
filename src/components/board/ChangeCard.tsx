@@ -101,7 +101,7 @@ export default function ChangeCard({
       {!up && !down && !change.warnings?.length && (
         // Same price: say why, so an unchanged total doesn't look like a missed recalculation.
         <p className={`mx-3.5 mt-2 text-[11.5px] leading-snug ${tone}`}>
-          {change.lines.some((l) => Math.abs(l.after - l.before) > 1e-6)
+          {(change.needsChanged ?? change.lines.some((l) => Math.abs(l.after - l.before) > 1e-6))
             ? en
               ? "Same price: the packs already on your list cover the new amounts."
               : "Același preț: pachetele de pe listă acoperă și noile cantități."

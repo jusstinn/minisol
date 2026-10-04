@@ -286,6 +286,9 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
       edits.push({ op: "resize", ...(zoned ? { zone: "A" } : {}), ...(len ? { w: len } : {}), ...(wid ? { d: wid } : {}) });
     }
   }
+  // "doar reînsămânțare", "overseed it" / "gazon nou de la zero", "a new lawn".
+  if (type === "lawn" && /\b(reinsamant\w*|reinsam\w*|suprainsamant\w*|overseed\w*|refac\w*)\b/.test(t)) edits.push({ op: "set_option", key: "mode", value: "overseed" });
+  else if (type === "lawn" && /\b(de la zero|gazon nou|new lawn|from scratch)\b/.test(t)) edits.push({ op: "set_option", key: "mode", value: "new" });
   if (type === "laminate_floor" && /\b(diagonal\w*)\b/.test(t)) edits.push({ op: "set_option", key: "pattern", value: removing || /\b(drept|straight)\b/.test(t) ? "straight" : "diagonal" });
   if (type === "paint_room" || type === "tiling") {
     const h = type === "paint_room" ? tagged(t, HEIGHT_WORD, dims)?.value : undefined;
@@ -1040,8 +1043,8 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
 }
 
 /** Why a sketch edit left the price alone: the packs on the list already cover it, or nothing to buy changed. */
-export function sameReason(ch: { lines: { before: number; after: number }[] }, lang: Lang): string {
-  const moved = ch.lines.some((l) => Math.abs(l.after - l.before) > 1e-6);
+export function sameReason(ch: { lines: { before: number; after: number }[]; needsChanged?: boolean }, lang: Lang): string {
+  const moved = ch.needsChanged ?? ch.lines.some((l) => Math.abs(l.after - l.before) > 1e-6);
   if (moved) return lang === "en" ? "the packs already on your list cover the new amounts" : "pachetele de pe listă acoperă și noile cantități";
   return lang === "en" ? "the change doesn't need any more material" : "modificarea nu cere material în plus";
 }

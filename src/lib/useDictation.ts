@@ -11,7 +11,7 @@ interface RecognitionLike {
   continuous: boolean;
   onresult: ((e: { resultIndex: number; results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
   start: () => void;
   stop: () => void;
 }
@@ -27,6 +27,8 @@ export function useDictation(lang: Lang, onText: (text: string) => void) {
     () => false,
   );
   const [listening, setListening] = useState(false);
+  /** The browser (or the visitor) blocked the microphone. */
+  const [denied, setDenied] = useState(false);
   const rec = useRef<RecognitionLike | null>(null);
   const base = useRef("");
 
@@ -51,7 +53,10 @@ export function useDictation(lang: Lang, onText: (text: string) => void) {
         onText(base.current + text);
       };
       r.onend = () => setListening(false);
-      r.onerror = () => setListening(false);
+      r.onerror = (e) => {
+        setListening(false);
+        if (e?.error === "not-allowed" || e?.error === "service-not-allowed") setDenied(true);
+      };
       rec.current = r;
       r.start();
       setListening(true);
@@ -59,5 +64,5 @@ export function useDictation(lang: Lang, onText: (text: string) => void) {
     [lang, onText],
   );
 
-  return { supported, listening, start, stop };
+  return { supported, listening, denied, start, stop };
 }

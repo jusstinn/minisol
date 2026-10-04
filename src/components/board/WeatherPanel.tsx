@@ -41,6 +41,8 @@ export default function WeatherPanel({ lat, lng, city, type, lang }: { lat: numb
       `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}` +
       "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,weather_code&timezone=Europe%2FBucharest&forecast_days=7";
     const ctrl = new AbortController();
+    // A captive-portal or slow venue Wi-Fi must not leave the panel loading forever.
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     fetch(url, { signal: ctrl.signal })
       .then((r) => r.json())
       .then((d) => {
@@ -56,8 +58,12 @@ export default function WeatherPanel({ lat, lng, city, type, lang }: { lat: numb
           })),
         );
       })
-      .catch(() => setDays([]));
-    return () => ctrl.abort();
+      .catch(() => setDays([]))
+      .finally(() => clearTimeout(timer));
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
   }, [lat, lng, rule]);
 
   const best = useMemo(() => {

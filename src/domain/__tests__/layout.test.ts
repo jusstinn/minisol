@@ -247,3 +247,20 @@ describe("QA follow-ups", () => {
     expect(changes[0]).toBe("Fără tavan");
   });
 });
+
+describe("fence gates", () => {
+  it("never stack: a second gate goes to the nearest free spot", () => {
+    const fence = defaultLayout("fence", { lengthM: 20, heightM: 1.8 });
+    const two = applyOps(fence, [{ op: "add_opening", kind: "gate", segment: 0 }, { op: "add_opening", kind: "gate", segment: 0 }], "ro").layout;
+    if (two.type !== "fence") throw new Error("not a fence");
+    const [a, b] = two.gates.map((g) => g.pos * 20);
+    // Two 1 m gates: at least their width plus a post (30 cm) between them.
+    expect(Math.abs(a - b)).toBeGreaterThanOrEqual(1 + 0.3 - 1e-9);
+  });
+
+  it("refuses a gate when a short segment is full", () => {
+    const short = defaultLayout("fence", { lengthM: 4, heightM: 1.2 });
+    const one = applyOps(short, [{ op: "add_opening", kind: "gate", segment: 0, width: 3 }], "ro").layout;
+    expect(() => applyOps(one, [{ op: "add_opening", kind: "gate", segment: 0, width: 1 }], "ro")).toThrow(SketchEditError);
+  });
+});

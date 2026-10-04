@@ -7,10 +7,13 @@ import { getTenant } from "@/config/tenant";
 import { PROJECT_STARTERS } from "@/lib/i18n";
 import { parseIntent } from "@/agent/scripted";
 
-export const metadata: Metadata = {
-  title: "Blueprint — the project agent for DIY retail",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({ searchParams }: PageProps<"/pitch">): Promise<Metadata> {
+  const en = (await searchParams).lang === "en";
+  return {
+    title: en ? "Blueprint — the project agent for DIY retail" : "Blueprint — agentul de proiecte pentru retail DIY",
+    robots: { index: false, follow: false },
+  };
+}
 
 /** Real numbers for the pitch, computed by the same engine the agent uses. */
 async function examples(tenantId: string): Promise<ProjectExample[]> {

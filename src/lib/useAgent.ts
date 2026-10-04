@@ -147,6 +147,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
           }),
           signal: ctrl.signal,
         });
+        if (res.status === 401) return signedOut();
         if (!res.ok || !res.body) {
           const err = await res.json().catch(() => ({ error: res.statusText }));
           throw new Error(err.error ?? "Request failed");
@@ -360,7 +361,11 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
         const data = (await res.json().catch(() => ({}))) as { state?: SessionState; cards?: Card[]; error?: string };
         if (seq !== sketchSeq.current) return false;
         if (!res.ok || !data.state) {
-          setSketchError(data.error ?? `HTTP ${res.status}`);
+          if (res.status === 401) {
+            signedOut();
+            return false;
+          }
+          setSketchError(data.error ?? (opts.lang === "en" ? "Couldn't change the sketch — try again." : "Nu am putut modifica schița — mai încearcă."));
           return false;
         }
         undoRef.current = [...undoRef.current.slice(-19), before];
@@ -486,4 +491,12 @@ function trackTurn(turn: { mode?: string; tools: Set<string>; cards: Card[]; err
   if (!project) return;
   if (turn.cards.some((c) => c.kind === "change")) track("sketch_edited", { type: project.project.type, via });
   else if (!project.project.layoutHistory?.length) track("project_started", { type: project.project.type, via });
+}
+
+/**
+ * The site sign-in (or the pass-link session) ran out mid-conversation: reload, and the server
+ * shows the sign-in form or the "open it from your card" page. The project is saved on the device.
+ */
+function signedOut() {
+  window.location.reload();
 }

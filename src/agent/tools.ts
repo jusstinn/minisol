@@ -828,6 +828,9 @@ export async function applySketchEdit(
   };
   const newSafety = calc.safetyNotes.filter((n) => !(prev.safetyNotes ?? []).includes(n));
   if (newSafety.length) change.warnings = newSafety;
+  // Did the project need more or less of something (even if the packs on the list still cover it)?
+  const before = new Map(prevReqs.map((q) => [q.role, q.quantity]));
+  change.needsChanged = calc.requirements.some((q) => Math.abs(q.quantity - (before.get(q.role) ?? 0)) > Math.max(0.01, q.quantity * 0.005)) || prevReqs.some((q) => !calc.requirements.some((n) => n.role === q.role));
 
   return {
     state: r.state,
