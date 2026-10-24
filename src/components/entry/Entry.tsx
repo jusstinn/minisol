@@ -36,7 +36,7 @@ export default function Entry({
   members,
   member,
   fromPass = false,
-  signOut = false,
+  account,
   membersFailed = false,
   onRetryMembers,
   lang,
@@ -52,8 +52,8 @@ export default function Entry({
   member?: MemberSummary;
   /** Product mode: the member arrived through their signed pass link — show only their pass, no demo picker. */
   fromPass?: boolean;
-  /** Site sign-in is on: a "Sign out" link. */
-  signOut?: boolean;
+  /** Signed in through the site sign-in as this account: AI status, who, and "Sign out". */
+  account?: string;
   /** The member list couldn't be loaded: show "try again" instead of a loading card. */
   membersFailed?: boolean;
   onRetryMembers?: () => void;
@@ -124,9 +124,14 @@ export default function Entry({
             </button>
           ))}
         </div>
-        {signOut && <AiStatus lang={lang} />}
-        {signOut && (
-          <a href="/api/logout" className="rounded-full px-2 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 transition hover:text-ink">
+        {account && <AiStatus lang={lang} />}
+        {account && (
+          <a
+            href="/api/logout"
+            title={lang === "en" ? `Signed in as ${account} — sign out` : `Conectat ca ${account} — ieșire`}
+            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 transition hover:text-ink"
+          >
+            <span className="hidden normal-case tracking-normal text-ink-2 md:inline">{account}</span>
             {lang === "en" ? "Sign out" : "Ieșire"}
           </a>
         )}

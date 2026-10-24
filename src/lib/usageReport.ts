@@ -15,6 +15,8 @@ export interface UsageSummary {
   basket: Record<string, number>;
   replies: { total: number; live: number; scripted: number; medianMs: number | null; p90Ms: number | null; errors: number };
   reservations: { total: number; pickup: number; delivery: number; redeemedPoints: number };
+  /** Per invited account (site sign-in): visits, projects started, sketch edits, reservations. */
+  accounts: Record<string, { visits: number; projects: number; edits: number; reserved: number }>;
   other: Record<string, number>;
 }
 
@@ -58,13 +60,22 @@ export function summarizeUsage(records: UsageRecord[]): UsageSummary {
     basket: {},
     replies: { total: 0, live: 0, scripted: 0, medianMs: null, p90Ms: null, errors: 0 },
     reservations: { total: 0, pickup: 0, delivery: 0, redeemedPoints: 0 },
+    accounts: {},
     other: {},
   };
+  const accountVisits: Record<string, Set<string>> = {};
   const ops: Record<string, number> = {};
   const ms: number[] = [];
 
   for (const r of records) {
     visits.add(r.visit);
+    if (r.account) {
+      const a = (s.accounts[r.account] ??= { visits: 0, projects: 0, edits: 0, reserved: 0 });
+      (accountVisits[r.account] ??= new Set()).add(r.visit);
+      if (r.name === "project_started") a.projects++;
+      if (r.name === "sketch_edited") a.edits++;
+      if (r.name === "reserved") a.reserved++;
+    }
     if (reached[r.name]) reached[r.name].add(r.visit);
     const p = r.props;
     switch (r.name) {
@@ -104,6 +115,7 @@ export function summarizeUsage(records: UsageRecord[]): UsageSummary {
   }
 
   s.visits = visits.size;
+  for (const [k, v] of Object.entries(accountVisits)) s.accounts[k].visits = v.size;
   // A visit that did anything counts as a visit, even if its `visit` event was lost.
   const steps: [string, string][] = [
     ["visit", "Visited"],

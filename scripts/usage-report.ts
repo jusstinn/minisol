@@ -44,4 +44,12 @@ console.log(
   `Replies   ${r.total} (live ${r.live}, offline ${r.scripted}) · median ${r.medianMs ?? "—"} ms · p90 ${r.p90Ms ?? "—"} ms · errors ${r.errors}`,
 );
 console.log(`Reserved  ${s.reservations.total} (pickup ${s.reservations.pickup}, delivery ${s.reservations.delivery}, paid with points ${s.reservations.redeemedPoints})`);
-console.log(`Other     ${list(s.other)}\n`);
+console.log(`Other     ${list(s.other)}`);
+const accounts = Object.entries(s.accounts);
+if (accounts.length) {
+  console.log("\nInvited accounts (site sign-in)");
+  for (const [name, a] of accounts.sort((x, y) => y[1].visits - x[1].visits)) {
+    console.log(`  ${name.padEnd(22)} visits ${pad(a.visits, 3)} · projects ${pad(a.projects, 3)} · sketch edits ${pad(a.edits, 3)} · reserved ${pad(a.reserved, 2)}`);
+  }
+}
+console.log("");

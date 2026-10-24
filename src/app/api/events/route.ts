@@ -3,6 +3,7 @@ import { readJson } from "@/lib/body";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { MAX_BATCH, cleanUsageEvent, minuteOf } from "@/lib/usage";
 import type { UsageRecord } from "@/lib/usage";
+import { siteSignIn } from "@/lib/siteLogin";
 import { usageSink } from "@/lib/usageSink";
 
 export const runtime = "nodejs";
@@ -24,12 +25,14 @@ export async function POST(req: Request) {
   if (!body || typeof body !== "object" || !Array.isArray(body.events)) return Response.json({ error: "events required" }, { status: 400 });
 
   const tenant = getTenant(body.tenant).id;
+  const account = siteSignIn(req)?.account;
   const at = minuteOf(new Date());
   const records: UsageRecord[] = body.events
     .slice(0, MAX_BATCH)
     .map(cleanUsageEvent)
     .filter((e) => e !== null)
-    .map((e) => ({ ...e, tenant, at }));
+    // Behind the site sign-in: which invited account (decided by the server, from the cookie — never the browser).
+    .map((e) => ({ ...e, tenant, at, ...(account ? { account } : {}) }));
   if (records.length) await sink.record(records);
   return new Response(null, { status: 204 });
 }

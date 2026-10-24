@@ -109,3 +109,37 @@ describe("usage report", () => {
     expect(s.byDevice).toEqual({ phone: 1, desktop: 1 });
   });
 });
+
+describe("invited accounts", () => {
+  afterEach(() => {
+    setUsageSink(null);
+    vi.unstubAllEnvs();
+  });
+
+  it("the server tags events with the signed-in account — the browser can't claim one", async () => {
+    vi.stubEnv("SITE_LOGIN_USER", "owner");
+    vi.stubEnv("SITE_LOGIN_PASSWORD", "owner-password-long");
+    const { siteLogin, loginCookieValue } = await import("../siteLogin");
+    const cookie = `blueprint_login=${loginCookieValue(siteLogin()!, "owner").value}`;
+    const sink = memorySink();
+    setUsageSink(sink);
+    const req = (headers: Record<string, string>) =>
+      new Request("http://localhost/api/events", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify({ events: [{ name: "cart_opened", visit: V, account: "someone-else" }] }) });
+    await POST(req({ cookie, "x-forwarded-for": "10.9.9.1" }));
+    await POST(req({ "x-forwarded-for": "10.9.9.2" }));
+    expect(sink.events.map((e) => e.account)).toEqual(["owner", undefined]);
+  });
+
+  it("the report shows what each invited account did", () => {
+    const rec = (visit: string, name: UsageRecord["name"], account?: string): UsageRecord => ({ name, visit, props: {}, tenant: "hornbach", at: "2026-10-24T10:00Z", ...(account ? { account } : {}) });
+    const s = summarizeUsage([
+      rec("v1aaaaaa", "visit", "hornbach-1"),
+      rec("v1aaaaaa", "project_started", "hornbach-1"),
+      rec("v2aaaaaa", "visit", "hornbach-1"),
+      rec("v2aaaaaa", "sketch_edited", "hornbach-1"),
+      rec("v3aaaaaa", "visit", "hornbach-2"),
+      rec("v4aaaaaa", "visit"),
+    ]);
+    expect(s.accounts).toEqual({ "hornbach-1": { visits: 2, projects: 1, edits: 1, reserved: 0 }, "hornbach-2": { visits: 1, projects: 0, edits: 0, reserved: 0 } });
+  });
+});

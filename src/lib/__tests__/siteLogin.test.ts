@@ -3,40 +3,76 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as login } from "@/app/api/login/route";
 import { GET as logoutGet } from "@/app/api/logout/route";
 import { proxy } from "@/proxy";
-import { checkCredentials, loginCookieValue, loginSession, safeNext, siteLogin, siteSessionId, validLoginCookie } from "../siteLogin";
+import { randomBytes, scryptSync } from "node:crypto";
+import { SCRYPT, checkCredentials, loginCookieValue, loginSession, safeNext, siteLogin, siteSessionId, validLoginCookie } from "../siteLogin";
 
 const ENV = { SITE_LOGIN_USER: "Demo", SITE_LOGIN_PASSWORD: "correct horse battery staple" };
 
+/** A guest entry like scripts/make-users.mjs writes (same scrypt parameters). */
+function guest(login: string, password: string, until?: string): string {
+  const salt = randomBytes(16).toString("base64url");
+  const hash = scryptSync(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p }).toString("base64url");
+  return [login, salt, hash, ...(until ? [until] : [])].join(":");
+}
+
 describe("siteLogin", () => {
-  it("is off unless both user and password are set", () => {
+  it("is off unless an account is configured", () => {
     expect(siteLogin({})).toBeNull();
     expect(siteLogin({ SITE_LOGIN_USER: "a" })).toBeNull();
-    expect(siteLogin(ENV)).toMatchObject({ user: "Demo", maxAgeS: 7 * 86_400 });
+    expect(siteLogin(ENV)).toMatchObject({ accounts: [{ login: "demo", kind: "owner" }], maxAgeS: 7 * 86_400 });
     expect(siteLogin({ ...ENV, SITE_LOGIN_DAYS: "90" })?.maxAgeS).toBe(30 * 86_400);
+    expect(siteLogin({ SITE_LOGIN_USERS: guest("hornbach-1", "pw-one-long-enough") })?.accounts.map((a) => a.login)).toEqual(["hornbach-1"]);
   });
 
   it("checks credentials (user name case-insensitive, password exact)", () => {
     const l = siteLogin(ENV)!;
-    expect(checkCredentials(l, " demo ", "correct horse battery staple")).toBe(true);
-    expect(checkCredentials(l, "demo", "Correct horse battery staple")).toBe(false);
-    expect(checkCredentials(l, "other", "correct horse battery staple")).toBe(false);
-    expect(checkCredentials(l, undefined, "x")).toBe(false);
-    expect(checkCredentials(l, "demo", "x".repeat(500))).toBe(false);
+    expect(checkCredentials(l, " demo ", "correct horse battery staple")).toEqual({ ok: true, account: "demo" });
+    expect(checkCredentials(l, "demo", "Correct horse battery staple")).toEqual({ ok: false });
+    expect(checkCredentials(l, "other", "correct horse battery staple")).toEqual({ ok: false });
+    expect(checkCredentials(l, undefined, "x")).toEqual({ ok: false });
+    expect(checkCredentials(l, "demo", "x".repeat(500))).toEqual({ ok: false });
+  });
+
+  it("guest accounts: hashed passwords, an end date, revocation", () => {
+    const env = { ...ENV, SITE_LOGIN_USERS: [guest("hornbach-1", "alpha-bravo-charl"), guest("hornbach-2", "delta-echo-foxtr", "2026-11-07"), "broken:entry", ""].join(",") };
+    const l = siteLogin(env)!;
+    expect(l.accounts.map((a) => `${a.login}/${a.kind}`)).toEqual(["demo/owner", "hornbach-1/guest", "hornbach-2/guest"]);
+    const before = Date.UTC(2026, 10, 1);
+    const after = Date.UTC(2026, 10, 8, 1);
+    expect(checkCredentials(l, "Hornbach-1", "alpha-bravo-charl", before)).toEqual({ ok: true, account: "hornbach-1" });
+    expect(checkCredentials(l, "hornbach-1", "delta-echo-foxtr", before)).toEqual({ ok: false });
+    expect(checkCredentials(l, "hornbach-2", "delta-echo-foxtr", after)).toEqual({ ok: false, expired: true });
+    // The wrong password on an expired account says nothing about the expiry.
+    expect(checkCredentials(l, "hornbach-2", "nope", after)).toEqual({ ok: false });
+
+    const c2 = loginCookieValue(l, "hornbach-2", Date.UTC(2026, 10, 6));
+    expect(c2.maxAge).toBeLessThanOrEqual(2 * 86_400);
+    expect(loginSession(l, c2.value, Date.UTC(2026, 10, 6, 12))).toMatchObject({ account: "hornbach-2" });
+    expect(loginSession(l, c2.value, after)).toBeNull();
+
+    // Removing the account (or giving it a new password) signs it out everywhere.
+    const c1 = loginCookieValue(l, "hornbach-1", before);
+    const without = siteLogin({ ...ENV, SITE_LOGIN_USERS: guest("hornbach-2", "delta-echo-foxtr") })!;
+    expect(loginSession(without, c1.value, before)).toBeNull();
+    // A cookie can't be re-labelled with another account.
+    const [v, exp, sid, , sig] = c1.value.split(".");
+    const relabelled = [v, exp, sid, Buffer.from("demo").toString("base64url"), sig].join(".");
+    expect(loginSession(l, relabelled, before)).toBeNull();
   });
 
   it("signs cookies that expire and die with a password change", () => {
     const l = siteLogin(ENV)!;
     const now = Date.UTC(2026, 9, 5, 9);
-    const c = loginCookieValue(l, now);
+    const c = loginCookieValue(l, "demo", now);
     expect(validLoginCookie(l, c.value, now)).toBe(true);
     expect(validLoginCookie(l, c.value, now + 8 * 86_400_000)).toBe(false);
     expect(validLoginCookie(siteLogin({ ...ENV, SITE_LOGIN_PASSWORD: "new password" })!, c.value, now)).toBe(false);
     expect(validLoginCookie(l, c.value.replace(/.$/, (ch) => (ch === "A" ? "B" : "A")), now)).toBe(false);
-    expect(validLoginCookie(l, "v2.99999999999." + "a".repeat(16) + "." + "a".repeat(43), now)).toBe(false);
+    expect(validLoginCookie(l, "v3.99999999999." + "a".repeat(16) + ".ZGVtbw." + "a".repeat(43), now)).toBe(false);
     // Each sign-in gets its own session id (the AI limits apply per device).
-    const other = loginCookieValue(l, now);
-    expect(loginSession(l, other.value, now)).not.toBe(loginSession(l, c.value, now));
-    expect(loginSession(l, c.value, now)).toMatch(/^[A-Za-z0-9_-]{16}$/);
+    const other = loginCookieValue(l, "demo", now);
+    expect(loginSession(l, other.value, now)?.session).not.toBe(loginSession(l, c.value, now)?.session);
+    expect(loginSession(l, c.value, now)?.session).toMatch(/^[A-Za-z0-9_-]{16}$/);
   });
 
   it("only redirects to paths on this site", () => {
@@ -73,7 +109,7 @@ describe("the gate", () => {
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ ok: true, next: "/pitch" });
     const setCookie = ok.headers.get("set-cookie")!;
-    expect(setCookie).toMatch(/^blueprint_login=v2\.\d+\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax/);
+    expect(setCookie).toMatch(/^blueprint_login=v3\.\d+\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax/);
     const cookie = setCookie.split(";")[0];
 
     expect(siteSessionId(new Request(`${B}/api/chat`, { headers: { cookie } }))).toMatch(/^[A-Za-z0-9_-]{16}$/);

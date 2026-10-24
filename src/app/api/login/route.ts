@@ -16,13 +16,15 @@ export async function POST(req: Request) {
   const parsed = await readJson(req, 4_000);
   if (!parsed.ok) return parsed.res;
   const body = parsed.body as { user?: unknown; password?: unknown; next?: unknown } | null;
-  if (!body || !checkCredentials(login, body.user, body.password)) {
-    console.warn("[login] failed sign-in");
-    return Response.json({ error: "invalid" }, { status: 401 });
+  const check = body ? checkCredentials(login, body.user, body.password) : { ok: false as const };
+  if (!check.ok) {
+    console.warn(`[login] failed sign-in${"expired" in check && check.expired ? " (expired account)" : ""}`);
+    return Response.json({ error: "expired" in check && check.expired ? "expired" : "invalid" }, { status: 401 });
   }
 
-  const cookie = loginCookieValue(login);
-  const res = Response.json({ ok: true, next: safeNext(body.next) }, { headers: { "Cache-Control": "no-store" } });
+  console.info(`[login] signed in: ${check.account}`);
+  const cookie = loginCookieValue(login, check.account);
+  const res = Response.json({ ok: true, next: safeNext(body?.next) }, { headers: { "Cache-Control": "no-store" } });
   const o = loginCookieOptions(cookie.maxAge);
   res.headers.append(
     "Set-Cookie",

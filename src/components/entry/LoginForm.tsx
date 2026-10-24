@@ -12,7 +12,7 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"invalid" | "too_many" | "network" | null>(null);
+  const [error, setError] = useState<"invalid" | "expired" | "too_many" | "network" | null>(null);
   const en = lang === "en";
   const style = { "--accent": tenant.accent, "--on-accent": tenant.onAccent } as React.CSSProperties;
 
@@ -25,7 +25,7 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
       const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user, password, next }) });
       const data = (await res.json().catch(() => ({}))) as { next?: string; error?: string };
       if (!res.ok) {
-        setError(res.status === 429 ? "too_many" : "invalid");
+        setError(res.status === 429 ? "too_many" : data.error === "expired" ? "expired" : "invalid");
         setBusy(false);
         return;
       }
@@ -42,7 +42,11 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
       ? en
         ? "Wrong user name or password."
         : "Utilizator sau parolă greșită."
-      : error === "too_many"
+      : error === "expired"
+        ? en
+          ? "This access has ended — ask your contact for a new one."
+          : "Accesul acesta a expirat — cere unul nou persoanei de contact."
+        : error === "too_many"
         ? en
           ? "Too many attempts — try again in a few minutes."
           : "Prea multe încercări — mai încearcă în câteva minute."

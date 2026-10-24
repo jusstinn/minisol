@@ -69,6 +69,8 @@ export interface UsageEvent {
 /** What the sink receives. */
 export interface UsageRecord extends UsageEvent {
   tenant: string;
+  /** The invited account behind the site sign-in (set by the server), if any. */
+  account?: string;
   /** ISO time truncated to the minute. */
   at: string;
 }

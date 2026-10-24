@@ -19,3 +19,5 @@ eval-results/
 
 # agent worktrees
 .claude/worktrees/
+# guest passwords from scripts/make-users.mjs
+accounts-for-sharing*.txt

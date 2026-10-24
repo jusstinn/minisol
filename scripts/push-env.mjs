@@ -5,6 +5,7 @@
  *   npx vercel login                 # once, opens the browser
  *   node scripts/push-env.mjs --check  # only checks .env.local (shows the user name, never the password or key)
  *   node scripts/push-env.mjs        # uploads OPENAI_API_KEY, SITE_LOGIN_USER, SITE_LOGIN_PASSWORD
+ *                                    # (+ SITE_LOGIN_USERS, the guest accounts, when set)
  *
  * Each value goes to Production as a Sensitive variable (write-only in the dashboard), replacing any
  * existing one. Values travel over stdin to the official Vercel CLI — never on the command line.
@@ -14,6 +15,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const KEYS = ["OPENAI_API_KEY", "SITE_LOGIN_USER", "SITE_LOGIN_PASSWORD"];
+/** Uploaded too when set in .env.local (guest accounts from scripts/make-users.mjs). */
+const OPTIONAL = ["SITE_LOGIN_USERS"];
 const arg = (name, fallback) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : fallback);
 const project = arg("--project", "blueprint-walletloop");
 const scope = arg("--scope", "justin-stoicas-projects");
@@ -37,6 +40,8 @@ if (process.argv.includes("--check")) {
   console.log(`✓ OpenAI key: looks right (${env.OPENAI_API_KEY.length} characters, starts with ${env.OPENAI_API_KEY.slice(0, 8)}…)`);
   console.log(`✓ Sign-in user: ${env.SITE_LOGIN_USER}  (not case-sensitive)`);
   console.log(`✓ Sign-in password: ${env.SITE_LOGIN_PASSWORD.length} characters (case-sensitive — type it exactly)`);
+  const guests = (env.SITE_LOGIN_USERS ?? "").split(",").filter(Boolean);
+  console.log(`✓ Guest accounts: ${guests.length ? guests.map((g) => g.split(":")[0]).join(", ") : "none"}`);
   process.exit(0);
 }
 
@@ -49,7 +54,7 @@ if (who.status !== 0) {
 }
 
 let failed = 0;
-for (const k of KEYS) {
+for (const k of [...KEYS, ...OPTIONAL.filter((o) => env[o])]) {
   const r = vercel(["env", "add", k, "production", "--project", project, "--sensitive", "--force", "--yes"], env[k]);
   // The CLI never echoes the value; show only its status line.
   const msg = `${r.stdout ?? ""}${r.stderr ?? ""}`.split("\n").map((s) => s.trim()).filter((s) => /added|overwr|error|not found|exists/i.test(s)).pop() ?? "";
