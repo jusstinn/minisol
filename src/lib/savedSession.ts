@@ -35,6 +35,8 @@ function parse(raw: string | null): SavedSession | null {
       return !!x && typeof x.id === "string" && (x.role === "user" || x.role === "assistant") && typeof x.text === "string" && Array.isArray(x.log) && Array.isArray(x.cards);
     };
     if (!s.messages.every(okMessage)) return null;
+    // An empty answer (saved mid-reply by an older build) becomes a retryable error bubble.
+    s.messages = s.messages.map((m) => (m.role === "assistant" && !m.text && !m.cards.length && !m.error ? { ...m, error: "interrupted" } : m));
     return s;
   } catch {
     return null;
@@ -52,7 +54,13 @@ export function readSaved(tenant: string, memberId: string): SavedSession | null
 
 export function writeSaved(tenant: string, memberId: string, s: Omit<SavedSession, "v" | "savedAt">): void {
   const key = savedKey(tenant, memberId);
-  const messages = s.messages.map((m) => ({ ...m, pending: false, log: m.log.map((l) => ({ ...l, done: true })) }));
+  // An answer cut off by a reload comes back as an error bubble, so "Reîncearcă" can ask again.
+  const messages = s.messages.map((m) => ({
+    ...m,
+    pending: false,
+    ...(m.pending && !m.text && !m.error ? { error: "interrupted" } : {}),
+    log: m.log.map((l) => ({ ...l, done: true })),
+  }));
   const full: SavedSession = { v: 1, savedAt: Date.now(), ...s, messages };
   try {
     window.localStorage.setItem(key, JSON.stringify(full));
