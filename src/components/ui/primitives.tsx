@@ -32,7 +32,7 @@ export function Counter({
  * Streams text in word by word with a blur-in. Words already shown keep their
  * key so only new ones animate. Supports **bold** and line breaks.
  */
-export function RevealText({ text, className }: { text: string; className?: string }) {
+export function RevealText({ text, className, animate = true }: { text: string; className?: string; animate?: boolean }) {
   const tokens = useMemo(() => tokenize(text), [text]);
   return (
     <div className={className}>
@@ -42,7 +42,7 @@ export function RevealText({ text, className }: { text: string; className?: stri
         ) : tk.type === "space" ? (
           <span key={i}> </span>
         ) : (
-          <span key={i} className={`word-in ${tk.bold ? "font-semibold text-ink" : ""}`}>
+          <span key={i} className={`${animate ? "word-in" : ""} ${tk.bold ? "font-semibold text-ink" : ""}`}>
             {tk.text}
           </span>
         ),

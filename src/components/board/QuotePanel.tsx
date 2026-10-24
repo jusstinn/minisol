@@ -101,7 +101,7 @@ export default function QuotePanel({
       />
 
       {/* totals */}
-      <div className="mt-5 grid gap-5 sm:grid-cols-[1fr_auto]">
+      <div data-tour="total" className="mt-5 grid gap-5 sm:grid-cols-[1fr_auto]">
         <div>
           <div className="label">{tr("total", lang)}</div>
           <div className="flex items-baseline gap-2">

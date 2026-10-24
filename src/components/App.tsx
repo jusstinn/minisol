@@ -30,7 +30,7 @@ export default function App({
   const [members, setMembers] = useState<MemberSummary[]>(passMember ? [passMember] : []);
   const [memberId, setMemberId] = useState<string | undefined>(passMember?.memberId ?? initialMember);
   const [lang, setLang] = useState<Lang>(initialLang ?? "ro");
-  const [session, setSession] = useState<{ prompt: string; key: number; resume?: boolean; shared?: string } | null>(null);
+  const [session, setSession] = useState<{ prompt: string; key: number; resume?: boolean; shared?: string; tour?: boolean } | null>(null);
   const saved = useSavedSummary(tenant.id, memberId);
   const fromPass = Boolean(passMember);
   // A project sent from another device ("#p=…" link) waits here until the member is known.
@@ -86,7 +86,8 @@ export default function App({
     <div style={style} className="min-h-dvh" data-app-root>
       <AnimatePresence mode="wait">
         {!session || !member ? (
-          <motion.div key="entry" exit={{ opacity: 0, y: -24, filter: "blur(6px)" }} transition={{ duration: 0.45, ease: [0.7, 0, 0.84, 0] }}>
+          // A short, plain fade: the workspace (often a whole restored session) mustn't wait behind a long blurred exit.
+          <motion.div key="entry" exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
             <Entry
               account={account}
               membersFailed={membersFailed}
@@ -105,13 +106,14 @@ export default function App({
                 setLang(m.language);
               }}
               onStart={(prompt) => setSession({ prompt, key: Date.now() })}
+              onTour={() => setSession({ prompt: "", key: Date.now(), tour: true })}
               saved={saved}
               onResume={() => setSession({ prompt: "", key: Date.now(), resume: true })}
               onForget={() => memberId && clearSaved(tenant.id, memberId)}
             />
           </motion.div>
         ) : (
-          <motion.div key={`ws-${session.key}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+          <motion.div key={`ws-${session.key}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <Workspace
               tenant={tenant}
               member={member}
@@ -120,6 +122,7 @@ export default function App({
               initialPrompt={session.prompt}
               resume={session.resume}
               shared={session.shared}
+              tour={session.tour}
               onExit={() => setSession(null)}
             />
           </motion.div>

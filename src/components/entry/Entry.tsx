@@ -43,6 +43,7 @@ export default function Entry({
   onLang,
   onSelect,
   onStart,
+  onTour,
   saved,
   onResume,
   onForget,
@@ -61,6 +62,8 @@ export default function Entry({
   onLang: (l: Lang) => void;
   onSelect: (m: MemberSummary) => void;
   onStart: (prompt: string) => void;
+  /** Start the guided tour (a real project, explained step by step). */
+  onTour?: () => void;
   /** A project saved in this browser for this member. */
   saved?: SavedSummary | null;
   onResume?: () => void;
@@ -220,6 +223,19 @@ export default function Entry({
 
           {/* starters */}
           <div className="mt-5 flex max-w-[680px] flex-wrap gap-2">
+            {onTour && (
+              <motion.button
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                onClick={() => member && onTour()}
+                disabled={!member}
+                className="flex items-center gap-2 rounded-full bg-ink py-1.5 pl-2 pr-3.5 text-[13.5px] font-semibold text-paper transition hover:-translate-y-0.5 hover:bg-accent hover:text-on-accent disabled:opacity-40"
+              >
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-accent text-on-accent">▶</span>
+                {lang === "en" ? "Guided tour · 3 min" : "Tur ghidat · 3 min"}
+              </motion.button>
+            )}
             {PROJECT_STARTERS.map((s, i) => {
               const Icon = PROJECT_ICONS[s.icon];
               return (

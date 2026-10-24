@@ -29,6 +29,8 @@ import type { NextStep } from "@/lib/nextSteps";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
 import type { PanelTarget } from "./MobileTabs";
 import { UploadsProvider } from "../blueprint/uploads/UploadsContext";
+import Tour from "./Tour";
+import type { TourActions } from "./Tour";
 
 export default function Workspace({
   tenant,
@@ -38,6 +40,7 @@ export default function Workspace({
   initialPrompt,
   resume,
   shared,
+  tour,
   onExit,
 }: {
   tenant: Tenant;
@@ -49,9 +52,13 @@ export default function Workspace({
   resume?: boolean;
   /** Reopen a project sent from another device (share-link token). */
   shared?: string;
+  /** Run the guided tour (a real project, explained step by step). */
+  tour?: boolean;
   onExit: () => void;
 }) {
-  const [offline, setOffline] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo"));
+  // The tour runs on the offline assistant (instant, identical every time, no AI quota).
+  const [touring, setTouring] = useState(Boolean(tour));
+  const [offline, setOffline] = useState(() => Boolean(tour) || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo")));
   const agent = useAgent({ memberId: member.memberId, tenant: tenant.id, lang, forceScripted: offline, restore: resume });
   const [highlight, setHighlight] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -87,6 +94,16 @@ export default function Workspace({
   const chips = useNextSteps(agent.board, agent.messages, lang, tenant);
   const sketchMode = useSketchMode(tenant);
 
+  const tourActions = useMemo<TourActions>(
+    () => ({
+      send: (t) => void agent.send(t, "chat"),
+      openCart: (open) => setCartOpen(open),
+      reveal: (panel) => showPanelRef.current(panel, {}),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [agent.send],
+  );
+
   /** The assistant asked to show a panel: scroll to it on desktop, open its tab on phones. */
   const showPanel = (target: PanelTarget | null, c: UiCommand) => {
     if (isDesktop) {
@@ -106,7 +123,11 @@ export default function Workspace({
     // Never pull the customer away from a message they're writing: flag the tab instead.
     if (typing.current) tabs.notify(tab);
     else tabs.select(tab, to);
-  };
+  };  const showPanelRef = useRef(showPanel);
+  useEffect(() => {
+    showPanelRef.current = showPanel;
+  });
+
 
   return (
     // Product sheets open from the list, options, cart and search results; stock is shown for the quote's store.
@@ -257,7 +278,22 @@ export default function Workspace({
 
       {!isDesktop && <MobileTabBar tabs={tabs} board={agent.board} lang={lang} busy={agent.busy} />}
       {/* First-run hints on the sketch, the list and the chat (once each, never blocking). */}
-      <CoachMarks enabled={Boolean(quote) && !agent.busy && !cartOpen} lang={lang} projectType={project?.type} sketchDrawn={Boolean(project && (sketchMode === "auto" || project.sketched))} />
+      {touring && (
+        <Tour
+          lang={lang}
+          retailer={tenant.name}
+          isDesktop={isDesktop}
+          has={(k) => Boolean(agent.board[k])}
+          actions={tourActions}
+          onExit={(tryLive) => {
+            setTouring(false);
+            setCartOpen(false);
+            // Their own project next: with the live AI.
+            if (tryLive) setOffline(false);
+          }}
+        />
+      )}
+      <CoachMarks enabled={Boolean(quote) && !agent.busy && !cartOpen && !touring} lang={lang} projectType={project?.type} sketchDrawn={Boolean(project && (sketchMode === "auto" || project.sketched))} />
       {quote && (
         <CartDrawer
           open={cartOpen}
@@ -312,13 +348,16 @@ function Rail({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
   const scrolledFor = useRef<ChatMessage[] | null>(null);
+  // Messages restored with a saved session show at once (no word-by-word reveal of a whole history).
+  const [restored] = useState(() => new Set(messages.map((m) => m.id)));
 
   useEffect(() => {
     const el = scrollRef.current;
     // While hidden, catch up when the conversation is shown again.
     if (!el || hidden || scrolledFor.current === messages) return;
+    const first = scrolledFor.current === null;
     scrolledFor.current = messages;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    el.scrollTo({ top: el.scrollHeight, behavior: first ? "auto" : "smooth" });
   }, [messages, hidden]);
 
   const drafting = text.trim().length > 0;
@@ -365,7 +404,7 @@ function Rail({
           ) : (
             <div key={m.id} className="space-y-3">
               <ConstructionLog message={m} />
-              {m.text && <RevealText text={m.text} className="text-[15.5px] leading-[1.6] text-ink-2" />}
+              {m.text && <RevealText text={m.text} animate={!restored.has(m.id)} className="text-[15.5px] leading-[1.6] text-ink-2" />}
               {m.verified && m.verified.checked > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}

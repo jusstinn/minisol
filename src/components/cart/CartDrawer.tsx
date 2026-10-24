@@ -103,6 +103,7 @@ export default function CartDrawer({
             <motion.aside
               ref={dialogRef}
               role="dialog"
+              data-tour="cart"
               aria-modal="true"
               aria-labelledby="cart-title"
               initial={{ x: "100%" }}
