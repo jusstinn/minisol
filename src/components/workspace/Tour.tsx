@@ -13,7 +13,7 @@ import type { PanelTarget } from "./MobileTabs";
  * each part of the screen with what it does for the customer — and for the retailer.
  */
 
-type Board = "project" | "quote" | "plan" | "change";
+type Board = "project" | "quote" | "plan" | "change" | "budget";
 
 interface Step {
   /** Element to light up (the last visible match); none → a centred card. */
@@ -36,10 +36,13 @@ export interface TourActions {
   reveal: (panel: PanelTarget) => void;
   /** Draw the 3D sketch (retailers set to draw it only on request). */
   openSketch: () => void;
+  /** Phones: back to the conversation (where the budget card is). */
+  showChat: () => void;
 }
 
 const DECK = { ro: "Vreau o terasă din lemn de 4 x 3 m în curte, pe pământ.", en: "I want to build a 4 x 3 m wooden deck in my garden, on soil." };
 const STEPS_EDIT = { ro: "adaugă 2 trepte în față", en: "add 2 steps at the front" };
+const BUDGET = { ro: "Am un buget de 3.000 lei", en: "My budget is 3,000 lei" };
 
 function steps(lang: Lang, retailer: string): Step[] {
   const en = lang === "en";
@@ -110,10 +113,23 @@ function steps(lang: Lang, retailer: string): Step[] {
       ],
     },
     {
+      anchor: '[data-tour="budget"]',
+      enter: (t) => {
+        t.showChat();
+        t.send(en ? BUDGET.en : BUDGET.ro);
+      },
+      ready: (has) => has("budget"),
+      title: ["7 · Are un buget? Varianta care încape", "7 · A budget? The version that fits"],
+      body: [
+        "Am scris «am un buget de 3.000 lei». Motorul de prețuri caută varianta cea mai bună care încape: altă gamă, fără extra, apoi o terasă mai mică — cu prețuri reale. Clientul apasă «Aplică» și schița se adaptează. Un client cu buget mic tot cumpără.",
+        "I wrote “my budget is 3,000 lei”. The pricing engine finds the best version that fits: another range, no extras, then a smaller deck — with real prices. One tap on “Apply” and the sketch follows. A customer on a tight budget still buys.",
+      ],
+    },
+    {
       anchor: '[data-panel="plan"]',
       panel: "plan",
       ready: (has) => has("plan"),
-      title: ["7 · Planul pas cu pas", "7 · The step-by-step plan"],
+      title: ["8 · Planul pas cu pas", "8 · The step-by-step plan"],
       body: [
         `Pași, durate, sfaturi și avertismente de siguranță pentru proiectul lui. Pentru ${retailer} pot fi șabloanele voastre aprobate, cu sfaturile AI marcate separat.`,
         `Steps, durations, tips and safety warnings for their project. For ${retailer} these can be your approved templates, with the AI tips labelled separately.`,
@@ -122,7 +138,7 @@ function steps(lang: Lang, retailer: string): Step[] {
     {
       anchor: '[data-tour="cart"]',
       enter: (t) => t.openCart(true),
-      title: ["8 · Click & Collect, în cardul din Wallet", "8 · Click & Collect, on the Wallet card"],
+      title: ["9 · Click & Collect, în cardul din Wallet", "9 · Click & Collect, on the Wallet card"],
       body: [
         "Rezervă pentru ridicare (magazin, interval) sau livrare. Lista ajunge pe spatele cardului de fidelitate, sortată pe culoare — clientul o are în magazin, fără aplicație.",
         "Reserve for pickup (store, time slot) or delivery. The list lands on the back of the loyalty card, sorted by aisle — the customer has it in store, no app needed.",

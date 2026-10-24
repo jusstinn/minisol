@@ -52,7 +52,7 @@ export default function BudgetCard({ card, lang, onSend, disabled }: { card: Ext
   const without = b.without?.length ? (en ? ` Without the ${andList(b.without, "and")}.` : ` Fără ${andList(b.without, "și")}.`) : "";
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 overflow-hidden rounded-2xl border border-rule bg-paper-2/60">
+    <motion.div data-tour="budget" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 overflow-hidden rounded-2xl border border-rule bg-paper-2/60">
       <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
         <IconWallet size={13} />
         {en ? "Your budget" : "Bugetul tău"} · {int(b.amount, lang)} lei
