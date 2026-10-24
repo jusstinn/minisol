@@ -99,6 +99,32 @@ describe("follow-ups on an existing project", () => {
   });
 });
 
+describe("camera presets (chat phrases)", () => {
+  it.each([
+    ["arată-mi de sus", "top"],
+    ["vedere de sus", "top"],
+    ["top view", "top"],
+    ["din față", "front"],
+    ["from the front", "front"],
+    ["din lateral", "side"],
+    ["din profil", "side"],
+    ["side view", "side"],
+    ["la nivelul ochilor", "eye"],
+    ["ca și cum aș sta acolo", "eye"],
+    ["eye level", "eye"],
+    ["fă-mi un tur", "tour"],
+    ["walk me around", "tour"],
+    ["give me a tour", "tour"],
+  ])("%s → camera %s", (msg, camera) => {
+    expect(parseIntent(msg, on("deck"))).toMatchObject({ kind: "view", command: { camera } });
+  });
+
+  it("works for every project type, not just decks", () => {
+    expect(parseIntent("arată-mi de sus", on("tiling"))).toMatchObject({ kind: "view", command: { camera: "top" } });
+    expect(parseIntent("give me a tour", on("fence"))).toMatchObject({ kind: "view", command: { camera: "tour" } });
+  });
+});
+
 describe("adding things and answering 'da'", () => {
   it("'adaugă o treaptă' is one step (singular 'treaptă' used to fall through to 'add every extra')", () => {
     expect(parseIntent("adaugă o treaptă în față", on("deck"))).toMatchObject({ kind: "sketch", edits: [{ op: "add_steps", count: 1 }] });

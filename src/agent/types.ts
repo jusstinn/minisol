@@ -39,6 +39,9 @@ export interface UiCommand {
   /** Show totals paid partly with points. */
   redeemPoints?: boolean;
   replay?: boolean;
+  /** Ease the 3D sketch's camera to this framing: today's 3/4 view, straight down, the front/side
+   *  elevations, eye level, or a slow fly-around tour. */
+  camera?: "iso" | "top" | "front" | "side" | "eye" | "tour";
 }
 
 export interface ProjectSnapshot {

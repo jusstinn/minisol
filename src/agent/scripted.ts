@@ -364,6 +364,17 @@ const MATERIAL_WORDS: [MaterialRole, RegExp][] = [
   ["topsoil", /\b(pamant\w*|topsoil|soil)\b/],
 ];
 
+/** "de sus", "top view", "from above" — a straight-down camera, like the floor plan. */
+const CAMERA_TOP = /\b(de sus|vedere de sus|top view|from above|straight down|bird.?s.?eye)\b/;
+/** "din față", "from the front" — the front (south) elevation. */
+const CAMERA_FRONT = /\b(din fata|vedere din fata|front view|front elevation|from the front)\b/;
+/** "din lateral", "din profil", "side view" — the side (east) elevation. */
+const CAMERA_SIDE = /\b(din lateral|din profil|vedere laterala|side view|side elevation|from the side)\b/;
+/** "la nivelul ochilor", "ca și cum aș sta acolo", "eye level" — standing just outside, looking in. */
+const CAMERA_EYE = /\b(nivelul ochilor|ca si cum as (sta|fi) acolo|eye level|eye.height|as if (i was|you were) standing( there)?|standing right there)\b/;
+/** "fă-mi un tur", "walk me around", "give me a tour" — a slow fly-around. */
+const CAMERA_TOUR = /\b(fa\w* un tur|\btur\b|give me a tour|walk me around|fly.?around)\b/;
+
 /** "Show me the joists", "exploded view", "open the cart", "pay with points" → a screen command. */
 export function parseView(t: string): UiCommand | null {
   const show = /\b(arat\w*|show|evidentiaz\w*|highlight|unde (e|sunt|se vad)|where (is|are)|vreau sa vad|let me see|see|vezi|deschide|open)\b/.test(t);
@@ -371,6 +382,11 @@ export function parseView(t: string): UiCommand | null {
   if (/\b(explodat\w*|exploded|pe straturi|layers?)\b/.test(t)) c.view = "exploded";
   else if (/\b(vedere reala|realist\w*|real view|realistic|in culori)\b/.test(t)) c.view = "real";
   else if (/\b(blueprint|vedere plan|vedere tehnica)\b/.test(t)) c.view = "blueprint";
+  if (CAMERA_TOP.test(t)) c.camera = "top";
+  else if (CAMERA_FRONT.test(t)) c.camera = "front";
+  else if (CAMERA_SIDE.test(t)) c.camera = "side";
+  else if (CAMERA_EYE.test(t)) c.camera = "eye";
+  else if (CAMERA_TOUR.test(t)) c.camera = "tour";
   if (/\b(editor\w*|de mana|manual|by hand|myself)\b/.test(t) && /\b(modific\w*|edit\w*|deschide|open|schimb\w*)\b/.test(t)) c.editor = true;
   if (show && /\b(cos\w*|cart|basket)\b/.test(t)) c.panel = "cart";
   if (/\b(wallet|portofel)\b/.test(t) && /\b(trimite|send|pune|put|arat\w*|show|deschide|open)\b/.test(t)) c.panel = "wallet";
@@ -916,6 +932,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       "control_view",
       {
         view: c.view ?? null,
+        camera: c.camera ?? null,
         highlight: c.highlight === null ? "none" : (c.highlight ?? null),
         editor: c.editor ?? null,
         panel: c.panel ?? null,
@@ -936,6 +953,12 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
       c.panel === "plan" ? (en ? "Here's the step-by-step plan." : "Iată planul pas cu pas.") : "",
       c.redeemPoints === true ? (en ? "Totals now show part of the price paid with your points." : "Totalurile arată acum plata parțială cu punctele tale.") : "",
       c.redeemPoints === false ? (en ? "Totals no longer use your points." : "Totalurile nu mai folosesc punctele.") : "",
+      c.camera === "top" ? (en ? "Here's the sketch straight from above, like the floor plan." : "Iată schița direct de sus, ca planul.") : "",
+      c.camera === "front" ? (en ? "Here's the front elevation." : "Iată vederea din față.") : "",
+      c.camera === "side" ? (en ? "Here's the side elevation." : "Iată vederea din lateral.") : "",
+      c.camera === "eye" ? (en ? "Here's the eye-level view, as if you were standing right there." : "Iată vederea la nivelul ochilor, ca și cum ai fi chiar acolo.") : "",
+      c.camera === "tour" ? (en ? "Here's a slow tour around your project." : "Iată un tur lent în jurul proiectului tău.") : "",
+      c.camera === "iso" ? (en ? "Back to the default view." : "Înapoi la vederea implicită.") : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -990,7 +1013,7 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
     }
     if ((intent.kind === "choose" || intent.kind === "remove") && intent.view && Object.values(intent.view).some((v) => v !== undefined)) {
       const c = intent.view;
-      yield* runTool("control_view", { view: c.view ?? null, highlight: null, editor: c.editor ?? null, panel: c.panel ?? null, product: null, redeemPoints: c.redeemPoints ?? null }, 200);
+      yield* runTool("control_view", { view: c.view ?? null, camera: c.camera ?? null, highlight: null, editor: c.editor ?? null, panel: c.panel ?? null, product: null, redeemPoints: c.redeemPoints ?? null }, 200);
     }
     if (!op && !storeId) {
       reply =

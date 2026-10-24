@@ -245,19 +245,20 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     name: "control_view",
     description:
-      "Change what the customer SEES (no data changes): the 3D sketch view (blueprint / real / exploded layers), highlight one material in the sketch and the list (a role id from the shopping list, e.g. deck_joist, fence_post, wall_tiles; null clears), open the plan editor, scroll to a panel (sketch, list, stock, offers, plan), open the cart or the wallet shopping list, open a product's technical sheet, show the total paid with points. Use it whenever the customer asks to see, show, open or point out something. Set unused fields to null.",
+      "Change what the customer SEES (no data changes): the 3D sketch view (blueprint / real / exploded layers), the sketch's camera (iso 3/4 view, straight-down top, front/side elevations, eye level, or a slow fly-around tour), highlight one material in the sketch and the list (a role id from the shopping list, e.g. deck_joist, fence_post, wall_tiles; null clears), open the plan editor, scroll to a panel (sketch, list, stock, offers, plan), open the cart or the wallet shopping list, open a product's technical sheet, show the total paid with points. Use it whenever the customer asks to see, show, open or point out something. Set unused fields to null.",
     strict: true,
     parameters: {
       type: "object",
       properties: {
         view: { type: ["string", "null"], enum: ["blueprint", "real", "exploded", null] },
+        camera: { type: ["string", "null"], enum: ["iso", "top", "front", "side", "eye", "tour", null], description: "Ease the sketch's camera to this framing: iso (3/4, default), top (straight down), front (south elevation), side (east elevation), eye (eye level, just outside looking in), tour (slow fly-around)" },
         highlight: { type: ["string", "null"], description: "Role id to highlight (e.g. deck_joist), \"none\" to clear, null to leave as is" },
         editor: { type: ["boolean", "null"], description: "Open (true) / close (false) the plan editor" },
         panel: { type: ["string", "null"], enum: ["sketch", "list", "stock", "offers", "plan", "cart", "wallet", null] },
         product: { type: ["string", "null"], description: "SKU whose technical sheet to open" },
         redeemPoints: { type: ["boolean", "null"], description: "Show totals paid partly with points (true) or not (false)" },
       },
-      required: ["view", "highlight", "editor", "panel", "product", "redeemPoints"],
+      required: ["view", "camera", "highlight", "editor", "panel", "product", "redeemPoints"],
       additionalProperties: false,
     },
   },
@@ -1095,6 +1096,7 @@ const handlers: Record<string, Handler> = {
   async control_view(args, ctx) {
     const ui: UiCommand = {};
     if (args.view === "blueprint" || args.view === "real" || args.view === "exploded") ui.view = args.view;
+    if (args.camera === "iso" || args.camera === "top" || args.camera === "front" || args.camera === "side" || args.camera === "eye" || args.camera === "tour") ui.camera = args.camera;
     if (args.highlight === "none") ui.highlight = null;
     else if (typeof args.highlight === "string" && args.highlight) {
       const role = args.highlight as MaterialRole;

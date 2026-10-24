@@ -525,7 +525,7 @@ function UiBridge({
     if (c.highlight !== undefined) onHighlight(c.highlight);
     if (c.panel === "cart" || c.panel === "wallet") onCart();
     if (c.product) sheet?.open(c.product);
-    const target = c.panel && c.panel !== "cart" && c.panel !== "wallet" ? c.panel : c.view || c.editor || c.highlight ? "sketch" : null;
+    const target = c.panel && c.panel !== "cart" && c.panel !== "wallet" ? c.panel : c.view || c.editor || c.highlight || c.camera ? "sketch" : null;
     onPanel(target, c);
     // Run once per command.
     // eslint-disable-next-line react-hooks/exhaustive-deps
