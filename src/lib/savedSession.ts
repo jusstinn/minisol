@@ -27,7 +27,14 @@ function parse(raw: string | null): SavedSession | null {
   if (!raw) return null;
   try {
     const s = JSON.parse(raw) as SavedSession;
-    if (s?.v !== 1 || !Array.isArray(s.messages) || !s.board || !s.state || Date.now() - s.savedAt > MAX_AGE_MS) return null;
+    if (s?.v !== 1 || !Array.isArray(s.messages) || !s.board || typeof s.board !== "object" || !s.state || Date.now() - s.savedAt > MAX_AGE_MS) return null;
+    // Saved by another build: check what the app reads before trusting it (a bad entry is ignored, not fatal).
+    if (!Array.isArray(s.state.basket)) return null;
+    const okMessage = (m: unknown) => {
+      const x = m as { id?: unknown; role?: unknown; text?: unknown; log?: unknown; cards?: unknown };
+      return !!x && typeof x.id === "string" && (x.role === "user" || x.role === "assistant") && typeof x.text === "string" && Array.isArray(x.log) && Array.isArray(x.cards);
+    };
+    if (!s.messages.every(okMessage)) return null;
     return s;
   } catch {
     return null;
@@ -102,10 +109,15 @@ export function useSavedSummary(tenant: string, memberId: string | undefined): S
     () => null,
   );
   return useMemo(() => {
-    const s = parse(raw);
-    if (!s || !s.messages.length) return null;
-    const title = s.board.project?.project.title ?? s.messages.find((m) => m.role === "user")?.text ?? "";
-    return { title, total: s.board.quote?.quote.total, lines: s.state.basket.length, savedAt: s.savedAt };
+    try {
+      const s = parse(raw);
+      if (!s || !s.messages.length) return null;
+      const title = s.board.project?.project?.title ?? s.messages.find((m) => m.role === "user")?.text ?? "";
+      const total = s.board.quote?.quote?.total;
+      return { title: String(title).slice(0, 120), total: typeof total === "number" ? total : undefined, lines: s.state.basket.length, savedAt: s.savedAt };
+    } catch {
+      return null;
+    }
   }, [raw]);
 }
 

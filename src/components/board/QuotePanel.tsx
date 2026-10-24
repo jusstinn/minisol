@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ChoiceGroup, OwnedToolView, ProductOptionView, QualityOption, SuggestionView } from "@/agent/types";
 import type { BasketItem, Quote, QuoteLine } from "@/domain/quote";
 import { MATERIAL_ROLES, type CategoryId, type Lang, type MaterialRole, type QualityTier } from "@/domain/types";
@@ -559,12 +559,20 @@ function StockDot({ status, lang }: { status: QuoteLine["stock"]["status"]; lang
 }
 
 function SentToast({ kind, lang, storeName, onDone }: { kind: "wallet" | "reserve"; lang: Lang; storeName: string; onDone: () => void }) {
+  // One timer per toast, cleared if it goes earlier (animation callbacks fire on enter *and* exit).
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  useEffect(() => {
+    const t = setTimeout(() => done.current(), 3600);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10 }}
-      onAnimationComplete={() => setTimeout(onDone, 3200)}
       className="mt-4 flex items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-paper"
     >
       <span className="stamp grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-on-accent">

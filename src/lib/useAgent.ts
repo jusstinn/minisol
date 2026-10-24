@@ -43,6 +43,8 @@ export interface Board {
   change?: CardOf<"change">;
   /** Most recently updated panel, for scroll-into-view + highlight. */
   last?: Card["kind"];
+  /** That update came from the customer's own hand (a +/− tap, undo): highlight it, don't scroll. */
+  byUser?: boolean;
   version: number;
 }
 
@@ -68,7 +70,8 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   // Pick up a saved project (same browser, same member) instead of starting fresh.
   const [restored] = useState(() => (opts.restore ? readSaved(opts.tenant, opts.memberId) : null));
   const [messages, setMessages] = useState<ChatMessage[]>(() => restored?.messages ?? []);
-  const [board, setBoard] = useState<Board>(() => (restored ? { ...restored.board, version: restored.board.version + 1 } : { version: 0 }));
+  // A restored session opens where it was: nothing to scroll to or flash.
+  const [board, setBoard] = useState<Board>(() => (restored ? { ...restored.board, last: undefined, version: restored.board.version + 1 } : { version: 0 }));
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<{ mode: "live" | "scripted"; reason?: string } | null>(null);
   const stateRef = useRef<SessionState>(restored?.state ?? { basket: [] });
@@ -76,6 +79,8 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   /** The server's signature over historyRef (unchanged items only; see agent/historySeal.ts). */
   const historySigRef = useRef<string | undefined>(restored?.historySig);
   const abortRef = useRef<AbortController | null>(null);
+  // Leaving the workspace cancels an answer still streaming.
+  useEffect(() => () => abortRef.current?.abort(), []);
   const [pointsDelta, setPointsDelta] = useState<number | null>(null);
   const [ui, setUi] = useState<UiSignal | null>(null);
 
@@ -105,7 +110,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     setBoard((b) => {
       const next = card.kind === "quote" && !card.choices && b.quote?.choices ? { ...card, choices: b.quote.choices } : card;
       // A turn that brings a new sketch keeps it on screen; the plan below doesn't steal the scroll.
-      return { ...b, [card.kind]: next, last: heroShown ? b.last : card.kind, version: b.version + 1 };
+      return { ...b, [card.kind]: next, last: heroShown ? b.last : card.kind, byUser: false, version: b.version + 1 };
     });
     if (card.kind === "quote") setPointsDelta(card.quote.points.earned);
   }, []);
@@ -164,7 +169,13 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
             const line = buf.slice(0, nl).trim();
             buf = buf.slice(nl + 1);
             if (!line) continue;
-            const ev = JSON.parse(line) as AgentEvent;
+            // One bad line must not drop the rest of the answer (state, history, done).
+            let ev: AgentEvent;
+            try {
+              ev = JSON.parse(line) as AgentEvent;
+            } catch {
+              continue;
+            }
             switch (ev.type) {
               case "text":
                 patchAssistant(aId, (m) => ({ ...m, text: m.text + ev.delta, log: m.log.map((l) => ({ ...l, done: true })) }));
@@ -268,6 +279,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
               }
             : { kind: "quote", id: uid(), quote, suggestions: [], owned: [], look },
           last: "quote",
+          byUser: true,
           version: b.version + 1,
         }));
         setPointsDelta(quote.points.earned);
@@ -401,7 +413,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     stateRef.current = prev.state;
     pendingRef.current = null;
     repriceSeq.current++;
-    setBoard((b) => ({ ...prev.board, change: undefined, last: "project", version: b.version + 1 }));
+    setBoard((b) => ({ ...prev.board, change: undefined, last: "project", byUser: true, version: b.version + 1 }));
     if (prev.board.quote) setPointsDelta(prev.board.quote.quote.points.earned);
   }, []);
 

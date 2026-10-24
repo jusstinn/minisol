@@ -136,7 +136,7 @@ export default function Board(props: Props) {
       {empty && <EmptyBoard lang={lang} />}
       {board.project && (
         <div data-panel="sketch">
-          <Flash on={sketchInFocus(board)} v={board.version}>
+          <Flash on={sketchInFocus(board)} v={board.version} scroll={!board.byUser}>
             {renderCard(board.project)}
           </Flash>
         </div>
@@ -145,7 +145,7 @@ export default function Board(props: Props) {
         <div className="grid items-start gap-5 2xl:grid-cols-[1.4fr_1fr]">
           {board.quote && (
             <div data-panel="list">
-              <Flash on={board.last === "quote"} v={board.version}>
+              <Flash on={board.last === "quote"} v={board.version} scroll={!board.byUser}>
                 {renderCard(board.quote)}
               </Flash>
             </div>
@@ -196,13 +196,14 @@ export default function Board(props: Props) {
 }
 
 /** Scrolls the most recently updated panel into view and flashes an accent outline. */
-function Flash({ on, v, children }: { on: boolean; v: number; children: React.ReactNode }) {
+function Flash({ on, v, scroll = true, children }: { on: boolean; v: number; scroll?: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (on && ref.current && window.matchMedia("(min-width: 1024px)").matches) {
+    // The customer's own taps (+/−, undo) don't move the page under their finger.
+    if (on && scroll && ref.current && window.matchMedia("(min-width: 1024px)").matches) {
       ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [on, v]);
+  }, [on, v, scroll]);
   return (
     <motion.div ref={ref} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} className="relative min-w-0">
       {children}
