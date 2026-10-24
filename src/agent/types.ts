@@ -230,6 +230,8 @@ export interface BudgetView {
   size?: string;
   /** A fence done in stages: this is the first one. */
   stage?: boolean;
+  /** Furniture left out of the sketch and the list to fit ("masă", "grătar"). */
+  without?: string[];
   /** Already applied to the sketch and the list. */
   applied?: boolean;
   /** The message the card's button sends to apply it. */

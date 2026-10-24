@@ -113,6 +113,21 @@ describe("fitting a project to a budget, end to end (offline agent)", () => {
     expect(fits.text).toMatch(/already fits/);
   }, 30_000);
 
+  it("the demo flow: steps, WPC and furniture survive a smaller deck", async () => {
+    let r = await run("Vreau o terasă din lemn de 4 x 3 m în curte, pe pământ.", empty);
+    for (const msg of ["adaugă 2 trepte în față", "alege varianta din WPC", "pune o masă și un grătar pe terasă"]) r = await run(msg, r.state);
+    const b = await run("Am doar 2.000 lei", r.state);
+    const view = budgetOf(b.cards)!;
+    // The table and the BBQ alone are ~1.200 lei: they go first, then the deck gets smaller.
+    expect(view).toMatchObject({ fit: "smaller", without: ["masă", "grătar"] });
+    expect(b.text).toContain("fără masă și grătar, costă");
+    expect(b.verified?.ok).toBe(true);
+    const applied = await run(view.applyText!, r.state);
+    expect(quoteOf(applied.cards).quote.total).toBeLessThanOrEqual(2000);
+    expect(applied.state.project?.layout).toMatchObject({ steps: [expect.anything()] });
+    expect(applied.state.project?.layout?.items ?? []).toHaveLength(0);
+  }, 60_000);
+
   it("a room can't shrink: it says what the leanest version costs", async () => {
     const first = await run("Vreau să vopsesc dormitorul de 4 x 3,5 m, înălțime 2,6 m", empty);
     const r = await run("Am un buget de 100 lei", first.state);

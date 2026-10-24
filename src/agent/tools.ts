@@ -6,7 +6,7 @@ import type { Fit } from "./budgetFit";
 import { AISLES } from "@/data/stores";
 import { CalculatorInputError, PROJECT_PARAM_DOCS, PROJECT_TYPES, calculateProject } from "@/domain/calculators";
 import type { CalculationResult, ProjectType } from "@/domain/calculators";
-import { ITEM_KINDS } from "@/domain/items";
+import { FURNISHINGS, ITEMS, ITEM_KINDS, lowerFirst } from "@/domain/items";
 import { SIDES, SketchEditError, applyOps, defaultLayout, describeLayout, fenceSegments, isZoned, layoutParams } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
 import { distanceKm } from "@/domain/geo";
@@ -1018,18 +1018,25 @@ const handlers: Record<string, Handler> = {
     const layout0 = project.layout ?? defaultLayout(project.type, project.inputs);
     const current = (await priceBasket(ctx, ctx.state.basket, storeId)).total;
 
+    // Furniture a tight budget can leave out (the table, the BBQ), removed from the sketch too.
+    const furniture = (layout0.items ?? []).filter((it) => FURNISHINGS.has(it.kind));
+    const unfurnish: SketchOp[] = furniture.map((it) => ({ op: "remove_item", id: it.id }));
     // Every candidate is the real re-pricing the customer would get (same picks, same rules).
-    const variantRun = (scale: number, q: QualityTier, lean: boolean, note?: string) => {
+    const variantRun = (scale: number, q: QualityTier, lean: boolean, bare: boolean, note?: string) => {
       const ops = scale < 1 ? shrinkOps(layout0, scale) : [];
-      return ops ? applySketchEdit(ctx, ops, "agent", { quality: q, lean, note }) : null;
+      return ops ? applySketchEdit(ctx, [...(bare ? unfurnish : []), ...ops], "agent", { quality: q, lean, note }) : null;
     };
-    const fit = await fitBudget({ amount, current, quality, canShrink: shrinkOps(layout0, 0.5) != null }, async (o) => {
-      const r = await variantRun(o.scale, o.quality, o.lean);
+    const fit = await fitBudget({ amount, current, quality, canShrink: shrinkOps(layout0, 0.5) != null, furnished: furniture.length > 0 }, async (o) => {
+      const r = await variantRun(o.scale, o.quality, o.lean, o.bare === true);
       const q = r && !r.error ? r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote") : undefined;
       return q ? { total: q.quote.total } : null;
     });
 
-    const view = budgetView(fit, amount, current, layout0, ctx.lang);
+    const bare = (fit.kind === "lean" || fit.kind === "smaller") && fit.bare === true;
+    const view = {
+      ...budgetView(fit, amount, current, layout0, ctx.lang),
+      ...(bare ? { without: [...new Set(furniture.map((it) => lowerFirst(ctx.lang === "en" ? ITEMS[it.kind].labelEn : ITEMS[it.kind].label)))] } : {}),
+    };
     const card = (applied: boolean): Card => ({ kind: "budget", id: cardId("budget"), budget: { ...view, applied, applyText: applied ? undefined : view.applyText } });
     const display = {
       budget: lei(amount, ctx.lang),
@@ -1043,6 +1050,7 @@ const handlers: Record<string, Handler> = {
       withoutOptionalExtras: fit.kind === "lean" || fit.kind === "smaller",
       size: view.size,
       firstStageOfFence: view.stage,
+      leftOutOfSketch: view.without,
     };
 
     if (args.apply === true && (fit.kind === "tier" || fit.kind === "lean" || fit.kind === "smaller")) {
@@ -1050,7 +1058,7 @@ const handlers: Record<string, Handler> = {
         fit.kind === "tier"
           ? t(ctx.lang, `Varianta ${QUALITY_RO[fit.quality]}, ca să încapă în ${int(amount)} lei`, `The ${fit.quality} range, to fit ${int(amount, "en")} lei`)
           : t(ctx.lang, `Varianta economică, doar cu strictul necesar, ca să încapă în ${int(amount)} lei`, `The budget range, essentials only, to fit ${int(amount, "en")} lei`);
-      const r = await variantRun(fit.kind === "smaller" ? fit.scale : 1, fit.kind === "tier" ? fit.quality : "budget", fit.kind !== "tier", note);
+      const r = await variantRun(fit.kind === "smaller" ? fit.scale : 1, fit.kind === "tier" ? fit.quality : "budget", fit.kind !== "tier", bare, note);
       if (!r || r.error) return { forModel: { error: "The fitted version could not be applied.", ...(r?.forModel as object) } };
       return {
         state: r.state,
