@@ -9,6 +9,8 @@ import * as THREE from "three";
 import type { Build, Part, Vec3 } from "./builders";
 import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
 import type { CameraPreset } from "./cameraPresets";
+import Lighting from "./Lighting";
+import type { SunLight } from "./sunLighting";
 
 export type ViewMode = "blueprint" | "real" | "exploded";
 export type { CameraPreset };
@@ -593,6 +595,11 @@ export interface SceneProps {
   presetSeq?: number;
   /** The cinematic tour finished its lap on its own — switch the toolbar's selection back to "iso". */
   onTourEnd?: () => void;
+  /** The "Simulare" sun/time-of-day scrubber's current look (REAL mode only; null is today's fixed sun). */
+  sun?: SunLight | null;
+  /** The "Simulează montajul" scrubber's current `build.layers` index: later layers dim to a ghost
+   *  (reusing the same highlight/dim path as `highlightLayer`), the current one lights up. */
+  buildSimLayer?: number | null;
 }
 
 export default function Scene({
@@ -612,6 +619,8 @@ export default function Scene({
   preset = "iso",
   presetSeq = 0,
   onTourEnd,
+  sun = null,
+  buildSimLayer = null,
 }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
@@ -646,8 +655,13 @@ export default function Scene({
   const edges: EdgeBudget = !lite ? "all" : build.parts.length > MANY_PARTS ? "major" : "products";
   const shadows = mode === "real" && !lite;
 
+  // `isolate`: without a local stacking context the backdrop tint below would paint behind the
+  // sheet's own background instead of just behind the (transparent) canvas.
   return (
-    <div className="relative h-full w-full">
+    <div className="relative isolate h-full w-full">
+    {mode === "real" && sun?.bg && (
+      <div className="pointer-events-none absolute inset-0 -z-10 transition-colors duration-700" style={{ background: sun.bg }} />
+    )}
     <Canvas
       // Antialiasing is fixed when the context is created: a new quality level gets a new canvas.
       key={String(lite)}
@@ -659,27 +673,28 @@ export default function Scene({
       style={{ touchAction: interactive ? "none" : "auto" }}
     >
       <Driver shared={shared} mode={mode} />
-      <ambientLight intensity={mode === "real" ? 0.75 : 1} />
-      <directionalLight position={[6, 10, 4]} intensity={mode === "real" ? 1.6 : 0.4} castShadow={!lite} shadow-mapSize={[2048, 2048]}>
-        <orthographicCamera attach="shadow-camera" args={[-12, 12, 12, -12, 0.1, 50]} />
-      </directionalLight>
-      <hemisphereLight args={["#fff6e8", "#8a7a66", mode === "real" ? 0.5 : 0.2]} />
+      <Lighting mode={mode} lite={lite} sun={sun} />
 
       <World build={build} epoch={current.epoch} shared={shared}>
-      {build.parts.map((p) => (
-        <PartMesh
-          key={`${current.epoch}:${p.id}`}
-          part={p}
-          anim={current.anims.get(p.id) ?? noAnim}
-          mode={mode}
-          highlighted={Boolean(highlightLayer) && p.layer === highlightLayer}
-          dimmed={Boolean(highlightLayer) && p.layer !== highlightLayer && !p.context}
-          layerIndex={layerIndex.get(p.layer) ?? 0}
-          shared={shared}
-          accent={accent}
-          edges={edges}
-        />
-      ))}
+      {build.parts.map((p) => {
+        const li = layerIndex.get(p.layer);
+        const simGhost = buildSimLayer != null && !p.context && li !== undefined && li > buildSimLayer;
+        const simCurrent = buildSimLayer != null && !p.context && li !== undefined && li === buildSimLayer;
+        return (
+          <PartMesh
+            key={`${current.epoch}:${p.id}`}
+            part={p}
+            anim={current.anims.get(p.id) ?? noAnim}
+            mode={mode}
+            highlighted={(Boolean(highlightLayer) && p.layer === highlightLayer) || simCurrent}
+            dimmed={(Boolean(highlightLayer) && p.layer !== highlightLayer && !p.context) || simGhost}
+            layerIndex={li ?? 0}
+            shared={shared}
+            accent={accent}
+            edges={edges}
+          />
+        );
+      })}
       {ghosts.map((p) => (
         <PartMesh
           key={`ghost:${current.epoch}:${p.id}`}

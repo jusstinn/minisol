@@ -8,6 +8,8 @@ import type { Tenant } from "@/config/tenant";
 import { exposedEdges, fenceSegments } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
 import type { Look } from "@/domain/look";
+import type { Location } from "@/domain/sun";
+import { DEFAULT_LOCATION } from "@/domain/sun";
 import type { Lang } from "@/domain/types";
 import { dec, unitText } from "@/lib/format";
 import { tr } from "@/lib/i18n";
@@ -17,9 +19,12 @@ import { buildScene } from "../blueprint/builders";
 import CameraMenu from "../blueprint/CameraMenu";
 import { CAMERA_PRESETS } from "../blueprint/cameraPresets";
 import type { CameraPreset } from "../blueprint/cameraPresets";
+import NightLights from "../blueprint/NightLights";
 import type { ViewMode } from "../blueprint/Scene";
+import SimulationPanel from "../blueprint/SimulationPanel";
+import type { SunLight } from "../blueprint/sunLighting";
 import { useUploads } from "../blueprint/uploads/useUploads";
-import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
+import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconSun, IconUndo, IconUsers, IconWarn } from "../ui/icons";
 import ChangeCard, { Rolling, signed } from "./ChangeCard";
 import SceneBoundary from "../blueprint/SceneBoundary";
 import { useSketchMode } from "../workspace/NextStepChips";
@@ -54,6 +59,7 @@ export default function BlueprintPanel({
   look,
   lite,
   paused,
+  location,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -71,6 +77,8 @@ export default function BlueprintPanel({
   lite?: LiteGraphics;
   /** Mounted in a hidden phone tab: don't render frames. */
   paused?: boolean;
+  /** Where the "Simulare" sun scrubber computes solar position for (defaults to Bucharest). */
+  location?: Location;
 }) {
   const sketchMode = useSketchMode(tenant);
   const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
@@ -84,7 +92,23 @@ export default function BlueprintPanel({
   if (sketchMode === "on_demand" && !project.sketched && sketch) {
     return <SketchCta project={project} lang={lang} inline={inline} onOpen={sketch.open} />;
   }
-  return <SketchView project={project} tenant={tenant} lang={lang} highlight={highlight} onHighlight={onHighlight} inline={inline} sketch={sketch} change={change} ui={ui} look={look} lite={lite} paused={paused} />;
+  return (
+    <SketchView
+      project={project}
+      tenant={tenant}
+      lang={lang}
+      highlight={highlight}
+      onHighlight={onHighlight}
+      inline={inline}
+      sketch={sketch}
+      change={change}
+      ui={ui}
+      look={look}
+      lite={lite}
+      paused={paused}
+      location={location}
+    />
+  );
 }
 
 function SketchView({
@@ -100,6 +124,7 @@ function SketchView({
   look,
   lite,
   paused,
+  location = DEFAULT_LOCATION,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -113,6 +138,7 @@ function SketchView({
   look?: Look;
   lite?: LiteGraphics;
   paused?: boolean;
+  location?: Location;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -123,6 +149,19 @@ function SketchView({
   const [seenLayout, setSeenLayout] = useState(project.layout);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [diff, setDiff] = useState<{ added: number; changed: number; removed: number; at: number } | null>(null);
+  // The "Simulare" panel: mutually exclusive with the plan editor (both use the same right-column
+  // slot on desktop), and with the sun/build sub-simulations themselves (see SimulationPanel).
+  const [simOpen, setSimOpen] = useState(false);
+  const [simSun, setSimSun] = useState<SunLight | null>(null);
+  const [simBuildLayer, setSimBuildLayer] = useState<number | null>(null);
+  const toggleSim = () => {
+    const next = !simOpen;
+    setSimOpen(next);
+    if (next) {
+      setEditing(false);
+      if (mode !== "real") setMode("real");
+    }
+  };
   // The sketch's camera: which preset, and a sequence bumped on every explicit pick (even
   // re-picking the same one, e.g. "tour" again after grabbing the camera stopped it).
   const [cam, setCam] = useState<{ preset: CameraPreset; seq: number }>({ preset: "iso", seq: 0 });
@@ -162,7 +201,10 @@ function SketchView({
   }
   const layout = preview ?? project.layout;
   const build = useMemo(() => buildScene(project.type, project.inputs, lang, layout, look), [project.type, project.inputs, lang, layout, look]);
-  const dark = mode !== "real";
+  // PLAN/EXPLODED are always the dark "blueprint" theme; REAL normally isn't — except once the sun
+  // simulation has it showing night: the chrome (title, controls, cards) follows the sketch's own
+  // backdrop so text stays legible either way.
+  const dark = mode !== "real" || Boolean(simOpen && simSun?.isNight);
   const canEdit = Boolean(sketch && project.layout);
   // The customer's own 3D model / architect's plan (see blueprint/uploads).
   const up = useUploads({ lang, dark, mode, lite, inline, build, projectType: project.type, enabled: canEdit, openEditor: setEditing });
@@ -276,7 +318,14 @@ function SketchView({
             focusLeft={(editing || Boolean(floatingChange)) && !inline}
             lite={lite}
             paused={paused}
-            extra={up.sceneExtra}
+            extra={
+              <>
+                {up.sceneExtra}
+                {simSun?.isNight && layout && <NightLights layout={layout} limit={lite ? 2 : 6} strength={0.55 + simSun.nightFactor * 0.6} />}
+              </>
+            }
+            sun={simSun}
+            buildSimLayer={simBuildLayer}
             preset={cam.preset}
             presetSeq={cam.seq}
             onTourEnd={() => chooseCamera("iso")}
@@ -284,8 +333,9 @@ function SketchView({
           </SceneBoundary>
         </div>
 
-        {/* title block — kept clear of the controls column on the right (≈7.5 rem on phones, ≈18 rem with labels from sm) */}
-        <div className="pointer-events-none absolute left-4 right-[9.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
+        {/* title block — kept clear of the controls column on the right (the "Simulare" toggle made
+            that column one icon wider, ≈12.5 rem on phones now, ≈18 rem with labels from sm) */}
+        <div className="pointer-events-none absolute left-4 right-[12.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
           <div className={`flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
             <span>{en ? "Indicative sketch" : "Schiță orientativă"}</span>
             <span
@@ -347,7 +397,10 @@ function SketchView({
           <div className="flex gap-1.5">
             {canEdit && (
               <button
-                onClick={() => setEditing((e) => !e)}
+                onClick={() => {
+                  setEditing((e) => !e);
+                  setSimOpen(false);
+                }}
                 aria-pressed={editing}
                 aria-label={editing ? (en ? "Done editing" : "Gata cu modificările") : en ? "Edit sketch" : "Modifică schița"}
                 className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full px-2 font-mono sm:px-3 text-[10.5px] uppercase tracking-wider backdrop-blur transition ${
@@ -358,6 +411,18 @@ function SketchView({
                 <span className={inline ? "sr-only" : "hidden sm:inline"}>{editing ? (en ? "Done" : "Gata") : en ? "Edit sketch" : "Modifică"}</span>
               </button>
             )}
+            <button
+              onClick={toggleSim}
+              aria-pressed={simOpen}
+              aria-label={tr("simulate", lang)}
+              title={tr("simulate", lang)}
+              className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full px-2 font-mono sm:px-3 text-[10.5px] uppercase tracking-wider backdrop-blur transition ${
+                simOpen ? "bg-accent text-on-accent" : dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
+              }`}
+            >
+              <IconSun size={14} />
+              <span className={inline ? "sr-only" : "hidden sm:inline"}>{tr("simulate", lang)}</span>
+            </button>
             {up.button}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
@@ -441,7 +506,7 @@ function SketchView({
           <div className="absolute bottom-5 right-5 top-[118px] hidden w-[min(380px,44%)] flex-col justify-end gap-3 sm:flex">
             <AnimatePresence mode="popLayout">{dock}</AnimatePresence>
             <AnimatePresence mode="popLayout">
-              {floatingChange && !editing && (
+              {floatingChange && !editing && !simOpen && (
                 <ChangeCard
                   key={floatingChange.id}
                   change={floatingChange.change}
@@ -453,7 +518,26 @@ function SketchView({
                 />
               )}
             </AnimatePresence>
-            {!editing && !floatingChange && <Estimate project={project} lang={lang} dark={dark} />}
+            {!editing && !floatingChange && !simOpen && <Estimate project={project} lang={lang} dark={dark} />}
+            <AnimatePresence>
+              {simOpen && !editing && (
+                <SimulationPanel
+                  lang={lang}
+                  dark={dark}
+                  mode={mode}
+                  layout={layout}
+                  layers={build.layers}
+                  hoursMin={project.estimate.hoursMin}
+                  hoursMax={project.estimate.hoursMax}
+                  location={location}
+                  lite={lite}
+                  onSun={setSimSun}
+                  onBuildLayer={setSimBuildLayer}
+                  onSwitchReal={() => setMode("real")}
+                  onClose={() => setSimOpen(false)}
+                />
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
@@ -462,6 +546,26 @@ function SketchView({
         <>
           <AnimatePresence>{dock}</AnimatePresence>
           <AnimatePresence>{inlineChange && <ChangeCard key={inlineChange.id} change={inlineChange.change} lang={lang} compact onUndo={sketch?.canUndo ? sketch.undo : undefined} />}</AnimatePresence>
+          <AnimatePresence>
+            {simOpen && !editing && (
+              <SimulationPanel
+                lang={lang}
+                dark={dark}
+                compact
+                mode={mode}
+                layout={layout}
+                layers={build.layers}
+                hoursMin={project.estimate.hoursMin}
+                hoursMax={project.estimate.hoursMax}
+                location={location}
+                lite={lite}
+                onSun={setSimSun}
+                onBuildLayer={setSimBuildLayer}
+                onSwitchReal={() => setMode("real")}
+                onClose={() => setSimOpen(false)}
+              />
+            )}
+          </AnimatePresence>
         </>
       )}
     </div>

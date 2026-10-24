@@ -272,6 +272,25 @@ export const IconCamTour = ({ size, ...p }: P) => (
   </svg>
 );
 
+/* Simulation glyphs — sun/shadows and the play/pause transport for both scrubbers. */
+export const IconSun = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="12" cy="12" r="4.2" />
+    <path d="M12 2.5v3M12 18.5v3M3.5 12h3M17.5 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+  </svg>
+);
+export const IconPlay = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M6 4.5v15l13-7.5z" fill="currentColor" stroke="none" />
+  </svg>
+);
+export const IconPause = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="5.5" y="4.5" width="4.5" height="15" rx="0.8" fill="currentColor" stroke="none" />
+    <rect x="14" y="4.5" width="4.5" height="15" rx="0.8" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 /** Blueprint wordmark glyph: a square with dimension ticks. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {
   return (
