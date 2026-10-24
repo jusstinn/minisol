@@ -114,6 +114,9 @@ const STRINGS = {
   },
   vatIncluded: { ro: "Prețurile includ TVA.", en: "Prices include VAT." },
   demoNote: { ro: "Demo · date de catalog și stoc fictive", en: "Demo · fictional catalogue & stock data" },
+  photoRender: { ro: "Randare foto", en: "Photo render" },
+  photoRendering: { ro: "Se randează…", en: "Rendering…" },
+  photoRenderFailed: { ro: "Randarea foto n-a mers. Încearcă din nou.", en: "The photo render didn't work. Please try again." },
 } as const;
 
 type Key = keyof typeof STRINGS;

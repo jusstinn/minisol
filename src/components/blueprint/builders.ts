@@ -8,6 +8,7 @@ import { PAVING_BUILDUP, pavingDepth } from "@/domain/paving";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import type { Finish } from "./textures";
 
 /**
  * Procedural 3D "assemblies" drawn from the project layout — the same layout the
@@ -31,6 +32,8 @@ export interface Part {
   opacity?: number;
   /** Structural context (walls, slab) — not something you buy. */
   context?: boolean;
+  /** The REAL view's procedural material (see textures.ts) — flat colour without it. */
+  finish?: Finish;
 }
 
 export interface DimLine {
@@ -134,6 +137,7 @@ function outlineWalls(zones: Zone[], wallH: number, parts: Part[]) {
       delay: 0.05 * i,
       grow: "rise",
       context: true,
+      finish: { kind: "plaster" },
     });
   });
 }
@@ -144,7 +148,8 @@ function openingPart(o: Opening, L: number, W: number, H: number, delay: number)
   const h = Math.min(o.height, H);
   const y = o.kind === "window" ? Math.min(H - h / 2 - 0.1, 0.9 + h / 2) : h / 2;
   const color = o.kind === "window" ? C.window : C.door;
-  const base = { id: `op-${o.id}`, layer: "structure", color, delay, grow: "fade" as const, context: true };
+  const finish: Finish | undefined = o.kind === "window" ? undefined : { kind: "wood" };
+  const base = { id: `op-${o.id}`, layer: "structure", color, delay, grow: "fade" as const, context: true, finish };
   switch (o.wall as Side) {
     case "n":
       return { ...base, pos: [along(L), y, -W / 2 + 0.012], size: [o.width, h, 0.012] };
@@ -159,11 +164,12 @@ function openingPart(o: Opening, L: number, W: number, H: number, delay: number)
 
 function roomShell(L: number, W: number, H: number, lowH: number, parts: Part[]) {
   const t = 0.1;
-  parts.push({ id: "slab", layer: "structure", pos: [0, -0.03, 0], size: [L + 2 * t, 0.06, W + 2 * t], color: C.slab, delay: 0, grow: "fade", context: true });
-  parts.push({ id: "wall-back", layer: "structure", pos: [0, H / 2, -W / 2 - t / 2], size: [L + 2 * t, H, t], color: C.wall, delay: 0, grow: "rise", context: true });
-  parts.push({ id: "wall-left", layer: "structure", pos: [-L / 2 - t / 2, H / 2, 0], size: [t, H, W], color: C.wall, delay: 0.1, grow: "rise", context: true });
-  parts.push({ id: "wall-front", layer: "structure", pos: [0, lowH / 2, W / 2 + t / 2], size: [L + 2 * t, lowH, t], color: C.wall, delay: 0.15, grow: "rise", context: true });
-  parts.push({ id: "wall-right", layer: "structure", pos: [L / 2 + t / 2, lowH / 2, 0], size: [t, lowH, W], color: C.wall, delay: 0.2, grow: "rise", context: true });
+  const wall: Finish = { kind: "plaster" };
+  parts.push({ id: "slab", layer: "structure", pos: [0, -0.03, 0], size: [L + 2 * t, 0.06, W + 2 * t], color: C.slab, delay: 0, grow: "fade", context: true, finish: { kind: "concrete" } });
+  parts.push({ id: "wall-back", layer: "structure", pos: [0, H / 2, -W / 2 - t / 2], size: [L + 2 * t, H, t], color: C.wall, delay: 0, grow: "rise", context: true, finish: wall });
+  parts.push({ id: "wall-left", layer: "structure", pos: [-L / 2 - t / 2, H / 2, 0], size: [t, H, W], color: C.wall, delay: 0.1, grow: "rise", context: true, finish: wall });
+  parts.push({ id: "wall-front", layer: "structure", pos: [0, lowH / 2, W / 2 + t / 2], size: [L + 2 * t, lowH, t], color: C.wall, delay: 0.15, grow: "rise", context: true, finish: wall });
+  parts.push({ id: "wall-right", layer: "structure", pos: [L / 2 + t / 2, lowH / 2, 0], size: [t, lowH, W], color: C.wall, delay: 0.2, grow: "rise", context: true, finish: wall });
 }
 
 /** Height a wall is drawn at in the cut-away room (back/left full, front/right low). */
@@ -184,11 +190,24 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
   const supColor = look.deck_support?.color ?? C.support;
   const supH = Math.max(0.03, top - boardT - joistH);
   const alongX = l.direction === "x";
+  // WPC composite or aluminium read as a different material in the 3D sketch; everything else
+  // (pin tratat, larice…) is wood.
+  const boardFinish: Finish = /wpc/i.test(look.deck_board?.name ?? "") ? { kind: "wpc" } : { kind: "wood" };
+  const joistFinish: Finish = /aluminiu/i.test(look.deck_joist?.name ?? "") ? { kind: "metal" } : { kind: "wood" };
 
   l.zones.forEach((z, zi) => {
     const zd = zi * 0.6; // later zones build a little later
     if (l.base !== "concrete_slab") {
-      parts.push({ id: `${z.id}-membrane`, layer: "weed_membrane", pos: [z.x + z.w / 2, 0.003, z.z + z.d / 2], size: [z.w + 0.2, 0.006, z.d + 0.2], color: C.membrane, delay: zd, grow: "fade" });
+      parts.push({
+        id: `${z.id}-membrane`,
+        layer: "weed_membrane",
+        pos: [z.x + z.w / 2, 0.003, z.z + z.d / 2],
+        size: [z.w + 0.2, 0.006, z.d + 0.2],
+        color: C.membrane,
+        delay: zd,
+        grow: "fade",
+        finish: { kind: "membrane" },
+      });
     }
     const run = alongX ? z.w : z.d;
     const across = alongX ? z.d : z.w;
@@ -203,15 +222,33 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
         if ((i * S + j) % stepS !== 0) continue;
         const v = (j * across) / (S - 1);
         const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
-        parts.push({ id: `${z.id}-sup-${i}-${j}`, layer: "deck_support", pos: [px, supH / 2, pz], size: [0.1, supH, 0.1], color: supColor, delay: zd + 0.3 + (k++ * 0.8) / ((J * S) / stepS), grow: "rise" });
+        parts.push({ id: `${z.id}-sup-${i}-${j}`, layer: "deck_support", pos: [px, supH / 2, pz], size: [0.1, supH, 0.1], color: supColor, delay: zd + 0.3 + (k++ * 0.8) / ((J * S) / stepS), grow: "rise", finish: { kind: "metal" } });
       }
       const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
-      parts.push({ id: `${z.id}-joist-${i}`, layer: "deck_joist", pos: jp, size: alongX ? [joistW, joistH, across] : [across, joistH, joistW], color: joistColor, delay: zd + 1.2 + i * (1 / J), grow: "drop" });
+      parts.push({
+        id: `${z.id}-joist-${i}`,
+        layer: "deck_joist",
+        pos: jp,
+        size: alongX ? [joistW, joistH, across] : [across, joistH, joistW],
+        color: joistColor,
+        delay: zd + 1.2 + i * (1 / J),
+        grow: "drop",
+        finish: joistFinish,
+      });
     }
     for (let r = 0; r < R; r++) {
       const v = Math.min(bw / 2 + r * pitch, across - bw / 2);
       const bp: Vec3 = alongX ? [z.x + run / 2, top - boardT / 2, z.z + v] : [z.x + v, top - boardT / 2, z.z + run / 2];
-      parts.push({ id: `${z.id}-board-${r}`, layer: "deck_board", pos: bp, size: alongX ? [run, boardT, bw] : [bw, boardT, run], color: boardColors[r % boardColors.length], delay: zd + 2.4 + r * (2 / R), grow: "slide" });
+      parts.push({
+        id: `${z.id}-board-${r}`,
+        layer: "deck_board",
+        pos: bp,
+        size: alongX ? [run, boardT, bw] : [bw, boardT, run],
+        color: boardColors[r % boardColors.length],
+        delay: zd + 2.4 + r * (2 / R),
+        grow: "slide",
+        finish: boardFinish,
+      });
     }
   });
 
@@ -232,13 +269,13 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
         cx = st.side === "e" ? z.x + z.w + out : z.x - out;
         size = [0.29, boardT, st.width];
       }
-      parts.push({ id: `${st.id}-tread-${k}`, layer: "deck_board", pos: [cx, y - boardT / 2, cz], size, color: boardColors[k % boardColors.length], delay: 0.3 + k * 0.25, grow: "drop" });
+      parts.push({ id: `${st.id}-tread-${k}`, layer: "deck_board", pos: [cx, y - boardT / 2, cz], size, color: boardColors[k % boardColors.length], delay: 0.3 + k * 0.25, grow: "drop", finish: boardFinish });
       const riserH = Math.max(0.02, y - boardT);
       const stringers = 2 + Math.floor(st.width / 0.6);
       for (let s = 0; s < stringers; s++) {
         const off = -st.width / 2 + (s * st.width) / (stringers - 1);
         const p: Vec3 = st.side === "s" || st.side === "n" ? [cx + off, riserH / 2, cz] : [cx, riserH / 2, cz + off];
-        parts.push({ id: `${st.id}-str-${k}-${s}`, layer: "deck_joist", pos: p, size: [0.045, riserH, 0.045], color: joistColor, delay: 0.15 + k * 0.25, grow: "rise" });
+        parts.push({ id: `${st.id}-str-${k}-${s}`, layer: "deck_joist", pos: p, size: [0.045, riserH, 0.045], color: joistColor, delay: 0.15 + k * 0.25, grow: "rise", finish: joistFinish });
       }
     }
   }
@@ -267,13 +304,23 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): B
   const gateColor = look.fence_gate?.color ?? C.gate;
   const segs = fenceSegments(l.points);
   const section = 1.89;
+  const postFinish: Finish = /aluminiu/i.test(look.fence_post?.name ?? "") ? { kind: "metal" } : { kind: "wood", axes: "xy" };
   let postIdx = 0;
   let panelIdx = 0;
   const placePost = (x: number, z: number, id: string, gatePost = false) => {
     const i = postIdx++;
-    parts.push({ id: `foot-${id}`, layer: "post_concrete", pos: [x, -0.3, z], size: [0.28, 0.6, 0.28], color: C.concrete, delay: i * 0.05, grow: "pop" });
-    parts.push({ id: `post-${id}`, layer: "fence_post", pos: [x, (H + 0.1) / 2, z], size: [gatePost ? 0.11 : 0.09, H + 0.1, gatePost ? 0.11 : 0.09], color: postColor, delay: 0.5 + i * 0.07, grow: "rise" });
-    parts.push({ id: `cap-${id}`, layer: "post_cap", pos: [x, H + 0.12, z], size: [0.12, 0.03, 0.12], color: "#3b3b3b", delay: 3.2 + i * 0.03, grow: "drop" });
+    parts.push({ id: `foot-${id}`, layer: "post_concrete", pos: [x, -0.3, z], size: [0.28, 0.6, 0.28], color: C.concrete, delay: i * 0.05, grow: "pop", finish: { kind: "concrete" } });
+    parts.push({
+      id: `post-${id}`,
+      layer: "fence_post",
+      pos: [x, (H + 0.1) / 2, z],
+      size: [gatePost ? 0.11 : 0.09, H + 0.1, gatePost ? 0.11 : 0.09],
+      color: postColor,
+      delay: 0.5 + i * 0.07,
+      grow: "rise",
+      finish: postFinish,
+    });
+    parts.push({ id: `cap-${id}`, layer: "post_cap", pos: [x, H + 0.12, z], size: [0.12, 0.03, 0.12], color: "#3b3b3b", delay: 3.2 + i * 0.03, grow: "drop", finish: { kind: "metal" } });
   };
 
   segs.forEach((seg, si) => {
@@ -300,6 +347,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): B
         color: gateColor,
         delay: 2.2,
         grow: "slide",
+        finish: { kind: "fence" },
       });
       // The hinge-side post is the previous run's last post (or the corner); add the latch post.
       const p2 = at(Math.min(seg.length, c + g.width / 2 + 0.045));
@@ -327,6 +375,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): B
             color: panelColors[idx % panelColors.length],
             delay: 1.4 + idx * 0.08,
             grow: "slide",
+            finish: { kind: "fence" },
           });
         }
         const end = at(t1);
@@ -375,10 +424,10 @@ function paintRoom(l: Extract<Layout, { type: "paint_room" }>, lang: Lang, look:
   parts.push({ id: "foil", layer: "protective_foil", pos: [0, 0.004, 0], size: [L - 0.1, 0.006, W - 0.1], color: C.foil, delay: 0.4, grow: "fade", opacity: 0.7 });
   parts.push({ id: "tape-back", layer: "painters_tape", pos: [0, H - 0.015, -W / 2 + 0.006], size: [L, 0.03, 0.01], color: C.tape, delay: 0.8, grow: "slide" });
   parts.push({ id: "tape-left", layer: "painters_tape", pos: [-L / 2 + 0.006, H - 0.015, 0], size: [0.01, 0.03, W], color: C.tape, delay: 0.9, grow: "slide" });
-  parts.push({ id: "paint-back", layer: "interior_paint", pos: [0, H / 2, -W / 2 + 0.004], size: [L, H - 0.04, 0.008], color: paint, delay: 1.3, grow: "rise" });
-  parts.push({ id: "paint-left", layer: "interior_paint", pos: [-L / 2 + 0.004, H / 2, 0], size: [0.008, H - 0.04, W], color: paint, delay: 2.0, grow: "rise" });
+  parts.push({ id: "paint-back", layer: "interior_paint", pos: [0, H / 2, -W / 2 + 0.004], size: [L, H - 0.04, 0.008], color: paint, delay: 1.3, grow: "rise", finish: { kind: "plaster" } });
+  parts.push({ id: "paint-left", layer: "interior_paint", pos: [-L / 2 + 0.004, H / 2, 0], size: [0.008, H - 0.04, W], color: paint, delay: 2.0, grow: "rise", finish: { kind: "plaster" } });
   l.openings.forEach((o, i) => parts.push(openingPart(o, L, W, drawnHeight(o.wall as Side, H, low), 0.3 + i * 0.05)));
-  if (l.ceiling) parts.push({ id: "ceiling", layer: "interior_paint", pos: [0, H + 0.01, 0], size: [L, 0.01, W], color: paint, delay: 2.8, grow: "fade", opacity: 0.22 });
+  if (l.ceiling) parts.push({ id: "ceiling", layer: "interior_paint", pos: [0, H + 0.01, 0], size: [L, 0.01, W], color: paint, delay: 2.8, grow: "fade", opacity: 0.22, finish: { kind: "plaster" } });
   return {
     parts,
     dims: [
@@ -411,7 +460,7 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, lo
   l.zones.forEach((z, zi) => {
     const zd = zi * 0.5;
     const c: Vec3 = [z.x + z.w / 2, 0, z.z + z.d / 2];
-    parts.push({ id: `${z.id}-slab`, layer: "structure", pos: [c[0], -0.03, c[2]], size: [z.w, 0.06, z.d], color: C.slab, delay: zd, grow: "fade", context: true });
+    parts.push({ id: `${z.id}-slab`, layer: "structure", pos: [c[0], -0.03, c[2]], size: [z.w, 0.06, z.d], color: C.slab, delay: zd, grow: "fade", context: true, finish: { kind: "concrete" } });
     if (l.subfloor !== "wood") parts.push({ id: `${z.id}-vapor`, layer: "vapor_barrier", pos: [c[0], 0.002, c[2]], size: [z.w, 0.003, z.d], color: C.vapor, delay: zd + 0.3, grow: "fade", opacity: 0.8 });
     parts.push({ id: `${z.id}-underlay`, layer: "underlay", pos: [c[0], 0.006, c[2]], size: [z.w, 0.004, z.d], color: C.underlay, delay: zd + 0.7, grow: "slide" });
     const rows = Math.ceil(z.d / pw);
@@ -431,6 +480,9 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, lo
             color: plankColors[(r * 3 + k) % plankColors.length],
             delay: zd + 1.2 + r * (2.4 / rows) + k * 0.04,
             grow: "drop",
+            // `plankL` may be a multiple of the real plank length `pl` (drawn bigger for very
+            // large rooms); the grain still repeats at the real length.
+            finish: { kind: "wood", unit: [pl, pw] },
           });
         }
         x += plankL;
@@ -451,6 +503,7 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, lo
       color: skirtColor,
       delay: 3.8 + i * 0.05,
       grow: "slide",
+      finish: { kind: "wood", axes: "xy" },
     });
   });
   l.openings.forEach((o, i) => {
@@ -459,7 +512,16 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, lo
     const horizontal = side === "n" || side === "s";
     const px = horizontal ? z.x + o.pos * z.w : side === "w" ? z.x : z.x + z.w;
     const pz = horizontal ? (side === "n" ? z.z : z.z + z.d) : z.z + o.pos * z.d;
-    parts.push({ id: `tp-${o.id}`, layer: "transition_profile", pos: [px, 0.02, pz], size: horizontal ? [o.width, 0.012, 0.05] : [0.05, 0.012, o.width], color: C.profile, delay: 4 + i * 0.1, grow: "pop" });
+    parts.push({
+      id: `tp-${o.id}`,
+      layer: "transition_profile",
+      pos: [px, 0.02, pz],
+      size: horizontal ? [o.width, 0.012, 0.05] : [0.05, 0.012, o.width],
+      color: C.profile,
+      delay: 4 + i * 0.1,
+      grow: "pop",
+      finish: { kind: "metal" },
+    });
   });
   return {
     parts,
@@ -485,14 +547,16 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
   roomShell(L, W, H, low, parts);
   l.openings.forEach((o, i) => parts.push(openingPart(o, L, W, drawnHeight(o.wall as Side, H, low), 0.3 + i * 0.05)));
   if (l.roomType === "bathroom") {
-    parts.push({ id: "wp", layer: "waterproofing", pos: [0, 0.003, 0], size: [L, 0.005, W], color: C.waterproof, delay: 0.3, grow: "fade" });
-    parts.push({ id: "wp-back", layer: "waterproofing", pos: [0, 0.1, -W / 2 + 0.003], size: [L, 0.2, 0.005], color: C.waterproof, delay: 0.4, grow: "rise" });
+    parts.push({ id: "wp", layer: "waterproofing", pos: [0, 0.003, 0], size: [L, 0.005, W], color: C.waterproof, delay: 0.3, grow: "fade", finish: { kind: "membrane" } });
+    parts.push({ id: "wp-back", layer: "waterproofing", pos: [0, 0.1, -W / 2 + 0.003], size: [L, 0.2, 0.005], color: C.waterproof, delay: 0.4, grow: "rise", finish: { kind: "membrane", axes: "xy" } });
   }
   // The tiles actually chosen: 33 × 33, 60 × 60, 20 × 120 wood-look planks… (long side along the room).
   const ft = look.floor_tiles;
   let [sx, sz] = ft?.w && ft.l ? [Math.max(ft.w, ft.l), Math.min(ft.w, ft.l)] : l.largeFormat ? [0.6, 0.6] : [0.3, 0.3];
+  const floorTileUnit: [number, number] = [sx, sz];
   const floorColors = ft ? shades(ft.color, 2, 0.04) : C.tileFloor;
-  // Very small formats would mean thousands of parts: draw them larger, same proportions.
+  // Very small formats would mean thousands of parts: draw them larger, same proportions — the
+  // grout pattern below still repeats at the real (pre-scale) tile format.
   const fScale = Math.max(1, Math.sqrt((L * W) / (sx * sz) / 500));
   sx *= fScale;
   sz *= fScale;
@@ -516,6 +580,7 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
           color: floorColors[(i + j) % floorColors.length],
           delay: 0.9 + (i + j) * (1.6 / (nx + nz)),
           grow: "drop",
+          finish: { kind: "tile", unit: floorTileUnit },
         });
       }
     }
@@ -523,6 +588,7 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
   const wt = look.wall_tiles;
   // Elongated wall tiles (metro 10 × 20, 30 × 60) are laid horizontally, others as listed (w × h).
   let [tw, th] = wt?.w && wt.l ? (wt.l >= 1.9 * wt.w ? [wt.l, wt.w] : [wt.w, wt.l]) : [0.6, 0.3];
+  const wallTileUnit: [number, number] = [tw, th];
   const wallColors = wt ? shades(wt.color, 2, 0.03) : C.tileWall;
   const perimeter = 2 * (L + W);
   const wScale = Math.max(1, Math.sqrt((perimeter * 2.1) / (tw * th) / 700));
@@ -549,6 +615,8 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
           color: wallColors[(r + c) % wallColors.length],
           delay: 2.4 + r * 0.16 + c * 0.02,
           grow: "pop",
+          // The wall's long span is along x for the n/s walls but along z for e/w ones.
+          finish: { kind: "tile", unit: wallTileUnit, axes: horizontal ? "xy" : "zy" },
         });
       }
     }
@@ -578,9 +646,9 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang, 
   const parts: Part[] = [];
   const boardColor = look.drywall_board?.color ?? C.board;
   const woolColor = look.mineral_wool?.color ?? C.wool;
-  parts.push({ id: "floor", layer: "structure", pos: [0, -0.03, 0], size: [L + 1.2, 0.06, 2.4], color: C.slab, delay: 0, grow: "fade", context: true });
-  parts.push({ id: "uw-bottom", layer: "uw_profile", pos: [0, 0.02, 0], size: [L, 0.04, 0.075], color: C.stud, delay: 0.2, grow: "slide" });
-  parts.push({ id: "uw-top", layer: "uw_profile", pos: [0, H - 0.02, 0], size: [L, 0.04, 0.075], color: C.stud, delay: 0.4, grow: "slide" });
+  parts.push({ id: "floor", layer: "structure", pos: [0, -0.03, 0], size: [L + 1.2, 0.06, 2.4], color: C.slab, delay: 0, grow: "fade", context: true, finish: { kind: "concrete" } });
+  parts.push({ id: "uw-bottom", layer: "uw_profile", pos: [0, 0.02, 0], size: [L, 0.04, 0.075], color: C.stud, delay: 0.2, grow: "slide", finish: { kind: "metal" } });
+  parts.push({ id: "uw-top", layer: "uw_profile", pos: [0, H - 0.02, 0], size: [L, 0.04, 0.075], color: C.stud, delay: 0.4, grow: "slide", finish: { kind: "metal" } });
   const doors = l.openings.map((o) => ({ id: o.id, x: -L / 2 + o.pos * L, w: o.width }));
   const inDoor = (x: number, pad = 0) => doors.some((d) => x > d.x - d.w / 2 - pad && x < d.x + d.w / 2 + pad);
   const xs: number[] = [];
@@ -591,9 +659,10 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang, 
   const studs = xs.filter((x, i) => i === 0 || Math.abs(x - xs[i - 1]) > 0.005);
   studs.forEach((x, i) => {
     if (inDoor(x, -0.01)) return;
-    parts.push({ id: `cw-${Math.round(x * 100)}`, layer: "cw_profile", pos: [x, H / 2, 0], size: [0.05, H - 0.08, 0.075], color: C.stud, delay: 0.7 + i * 0.08, grow: "rise" });
+    parts.push({ id: `cw-${Math.round(x * 100)}`, layer: "cw_profile", pos: [x, H / 2, 0], size: [0.05, H - 0.08, 0.075], color: C.stud, delay: 0.7 + i * 0.08, grow: "rise", finish: { kind: "metal" } });
   });
-  for (const d of doors) parts.push({ id: `header-${d.id}`, layer: "uw_profile", pos: [d.x, 2.05, 0], size: [d.w, 0.04, 0.075], color: C.stud, delay: 1.6, grow: "slide" });
+  for (const d of doors)
+    parts.push({ id: `header-${d.id}`, layer: "uw_profile", pos: [d.x, 2.05, 0], size: [d.w, 0.04, 0.075], color: C.stud, delay: 1.6, grow: "slide", finish: { kind: "metal" } });
   if (l.insulation) {
     for (let i = 0; i < xs.length - 1; i++) {
       const a = xs[i] + 0.03;
@@ -613,7 +682,17 @@ function drywall(l: Extract<Layout, { type: "drywall_partition" }>, lang: Lang, 
       const overDoor = doors.find((d) => mid > d.x - 0.6 && mid < d.x + 0.6);
       const boardH = overDoor ? H - 2.1 : H;
       const y = overDoor ? H - boardH / 2 : H / 2;
-      parts.push({ id: `gk-${side}-${i}`, layer: "drywall_board", pos: [mid, y, z], size: [b - a - 0.004, boardH, 0.0125], color: boardColor, delay: 3.0 + side * 0.9 + i * 0.12, grow: "slide", opacity: side === 0 ? 0.92 : 1 });
+      parts.push({
+        id: `gk-${side}-${i}`,
+        layer: "drywall_board",
+        pos: [mid, y, z],
+        size: [b - a - 0.004, boardH, 0.0125],
+        color: boardColor,
+        delay: 3.0 + side * 0.9 + i * 0.12,
+        grow: "slide",
+        opacity: side === 0 ? 0.92 : 1,
+        finish: { kind: "plaster", axes: "xy" },
+      });
     }
   }
   return {
@@ -638,8 +717,8 @@ function lawn(l: Extract<Layout, { type: "lawn" }>, lang: Lang): Build {
   const parts: Part[] = [];
   l.zones.forEach((z, i) => {
     const c: Vec3 = [z.x + z.w / 2, 0, z.z + z.d / 2];
-    parts.push({ id: `${z.id}-soil`, layer: "structure", pos: [c[0], -0.1, c[2]], size: [z.w, 0.2, z.d], color: C.soil, delay: i * 0.4, grow: "rise", context: true });
-    parts.push({ id: `${z.id}-topsoil`, layer: "topsoil", pos: [c[0], 0.01, c[2]], size: [z.w, 0.02, z.d], color: C.topsoil, delay: 0.6 + i * 0.4, grow: "slide" });
+    parts.push({ id: `${z.id}-soil`, layer: "structure", pos: [c[0], -0.1, c[2]], size: [z.w, 0.2, z.d], color: C.soil, delay: i * 0.4, grow: "rise", context: true, finish: { kind: "soil" } });
+    parts.push({ id: `${z.id}-topsoil`, layer: "topsoil", pos: [c[0], 0.01, c[2]], size: [z.w, 0.02, z.d], color: C.topsoil, delay: 0.6 + i * 0.4, grow: "slide", finish: { kind: "soil" } });
   });
   const area = l.zones.reduce((s, z) => s + z.w * z.d, 0);
   return {
@@ -671,6 +750,7 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   // The pavers actually in the basket: format (long side along x), thickness and colour.
   const pv = look.pavers;
   let [sx, sz] = pv?.w && pv.l ? [Math.max(pv.w, pv.l), Math.min(pv.w, pv.l)] : [0.2, 0.1];
+  const paverUnit: [number, number] = [sx, sz];
   const t = Math.min(0.12, pv?.t ?? spec.paver);
   const paverColors = shades(pv?.color ?? C.paver, 3, 0.05);
   const baseColor = look.paving_base?.color ?? C.gravel;
@@ -681,7 +761,8 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const kerbH = Math.min(0.4, look.paving_edging?.h ?? 0.2);
   const sandTop = top - t;
   const sandBottom = Math.max(0.03, sandTop - spec.sand);
-  // Small formats over a big area would mean thousands of parts: draw them larger, same proportions.
+  // Small formats over a big area would mean thousands of parts: draw them larger, same
+  // proportions — the joint pattern below still repeats at the real (pre-scale) paver format.
   const area = l.zones.reduce((s, z) => s + z.w * z.d, 0);
   const k = Math.max(1, Math.sqrt(area / (sx * sz) / 600));
   sx *= k;
@@ -693,9 +774,9 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
     const zd = zi * 0.6;
     const cx = z.x + z.w / 2;
     const cz = z.z + z.d / 2;
-    parts.push({ id: `${z.id}-membrane`, layer: "weed_membrane", pos: [cx, 0.003, cz], size: [z.w + 0.1, 0.006, z.d + 0.1], color: C.membrane, delay: zd + 0.2, grow: "fade" });
-    parts.push({ id: `${z.id}-base`, layer: "paving_base", pos: [cx, (0.006 + sandBottom) / 2, cz], size: [z.w, sandBottom - 0.006, z.d], color: baseColor, delay: zd + 0.5, grow: "rise" });
-    parts.push({ id: `${z.id}-sand`, layer: "paving_sand", pos: [cx, (sandBottom + sandTop) / 2, cz], size: [z.w, sandTop - sandBottom, z.d], color: sandColor, delay: zd + 1.1, grow: "slide" });
+    parts.push({ id: `${z.id}-membrane`, layer: "weed_membrane", pos: [cx, 0.003, cz], size: [z.w + 0.1, 0.006, z.d + 0.1], color: C.membrane, delay: zd + 0.2, grow: "fade", finish: { kind: "membrane" } });
+    parts.push({ id: `${z.id}-base`, layer: "paving_base", pos: [cx, (0.006 + sandBottom) / 2, cz], size: [z.w, sandBottom - 0.006, z.d], color: baseColor, delay: zd + 0.5, grow: "rise", finish: { kind: "gravel" } });
+    parts.push({ id: `${z.id}-sand`, layer: "paving_sand", pos: [cx, (sandBottom + sandTop) / 2, cz], size: [z.w, sandTop - sandBottom, z.d], color: sandColor, delay: zd + 1.1, grow: "slide", finish: { kind: "sand" } });
     const rows = Math.ceil(z.d / sz - 1e-9);
     for (let r = 0; r < rows; r++) {
       const z0 = z.z + r * sz;
@@ -715,11 +796,12 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
           color: paverColors[(r * 2 + c) % paverColors.length],
           delay: zd + 1.6 + r * (2 / rows) + Math.min(0.6, c * 0.01),
           grow: "drop",
+          finish: { kind: "paver", unit: paverUnit },
         });
       }
     }
     // Swept into the joints: seen between the pavers, and as its own sheet when exploded.
-    parts.push({ id: `${z.id}-joints`, layer: "joint_sand", pos: [cx, top - 0.015, cz], size: [z.w - 0.01, 0.01, z.d - 0.01], color: jointColor, delay: zd + 4.2, grow: "fade" });
+    parts.push({ id: `${z.id}-joints`, layer: "joint_sand", pos: [cx, top - 0.015, cz], size: [z.w - 0.01, 0.01, z.d - 0.01], color: jointColor, delay: zd + 4.2, grow: "fade", finish: { kind: "sand" } });
   });
 
   // Kerbs just outside the outline on a concrete bed, and the ground the whole thing is dug into.
@@ -741,12 +823,12 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
     const box = (off: number, w: number): [number, number, number, number] => (horizontal ? [mid, line + off, len, w] : [line + off, mid, w, len]);
     if (l.edging) {
       const [kx, kz, kw, kd] = box(0, kerbT);
-      parts.push({ id: `kerb-${key}`, layer: "paving_edging", pos: [kx, bedH + kerbH / 2, kz], size: [kw, kerbH, kd], color: kerbColor, delay: 3.4 + i * 0.06, grow: "rise" });
+      parts.push({ id: `kerb-${key}`, layer: "paving_edging", pos: [kx, bedH + kerbH / 2, kz], size: [kw, kerbH, kd], color: kerbColor, delay: 3.4 + i * 0.06, grow: "rise", finish: { kind: "concrete" } });
       const [bx, bz, bw, bd] = box((out * 0.03), kerbT + 0.08);
-      parts.push({ id: `bed-${key}`, layer: "kerb_concrete", pos: [bx, (0.006 + bedH) / 2, bz], size: [bw, bedH - 0.006, bd], color: C.concrete, delay: 3.1 + i * 0.06, grow: "rise" });
+      parts.push({ id: `bed-${key}`, layer: "kerb_concrete", pos: [bx, (0.006 + bedH) / 2, bz], size: [bw, bedH - 0.006, bd], color: C.concrete, delay: 3.1 + i * 0.06, grow: "rise", finish: { kind: "concrete" } });
     }
     const [sxp, szp, sw, sd] = box(out * (ring + 0.2 - kerbT / 2), 0.4);
-    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw + 0.8, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35 });
+    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw + 0.8, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35, finish: { kind: "soil" } });
     parts.push({ id: `turf-${key}`, layer: "structure", pos: [sxp, top - 0.002, szp], size: [sw + 0.8, 0.012, sd], color: C.lawnEdge, delay: 0, grow: "fade", context: true, opacity: 0.6 });
   });
 

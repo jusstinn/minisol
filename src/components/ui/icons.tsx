@@ -271,6 +271,13 @@ export const IconCamTour = ({ size, ...p }: P) => (
     <path d="M10 8.3l6 3.7-6 3.7z" fill="currentColor" stroke="none" />
   </svg>
 );
+/** "Randare foto": a camera glyph for the photo-render export button. */
+export const IconPhoto = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" />
+    <circle cx="12" cy="13.5" r="3.4" />
+  </svg>
+);
 
 /** Blueprint wordmark glyph: a square with dimension ticks. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {

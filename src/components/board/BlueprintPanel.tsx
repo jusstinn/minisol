@@ -17,7 +17,8 @@ import { buildScene } from "../blueprint/builders";
 import CameraMenu from "../blueprint/CameraMenu";
 import { CAMERA_PRESETS } from "../blueprint/cameraPresets";
 import type { CameraPreset } from "../blueprint/cameraPresets";
-import type { ViewMode } from "../blueprint/Scene";
+import PhotoRenderButton from "../blueprint/PhotoRender";
+import type { CaptureFn, ViewMode } from "../blueprint/Scene";
 import { useUploads } from "../blueprint/uploads/useUploads";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
 import ChangeCard, { Rolling, signed } from "./ChangeCard";
@@ -127,6 +128,8 @@ function SketchView({
   // re-picking the same one, e.g. "tour" again after grabbing the camera stopped it).
   const [cam, setCam] = useState<{ preset: CameraPreset; seq: number }>({ preset: "iso", seq: 0 });
   const chooseCamera = useCallback((p: CameraPreset) => setCam((c) => ({ preset: p, seq: c.seq + 1 })), []);
+  // Imperative handle to the live Canvas for "Randare foto" (set once the renderer is ready).
+  const captureRef = useRef<CaptureFn | null>(null);
   // Desktop shortcut: 1–6 pick a camera preset, but only with the pointer over the sketch and
   // while the customer isn't typing somewhere else on the page.
   const hoverSketch = useRef(false);
@@ -280,6 +283,9 @@ function SketchView({
             preset={cam.preset}
             presetSeq={cam.seq}
             onTourEnd={() => chooseCamera("iso")}
+            onCaptureReady={(fn) => {
+              captureRef.current = fn;
+            }}
           />
           </SceneBoundary>
         </div>
@@ -360,6 +366,7 @@ function SketchView({
             )}
             {up.button}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
+            <PhotoRenderButton captureRef={captureRef} mode={mode} setMode={setMode} title={project.title} measurements={project.measurements} tenant={tenant} lang={lang} dark={dark} />
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>

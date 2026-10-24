@@ -55,6 +55,8 @@ export const USAGE_EVENTS = {
   sizes_used: { how: e(["preset", "estimate"]) },
   /** A budget fitted to the project ("am 3.000 lei"): what the engine found. */
   budget_fit: { fit: e(["fits", "tier", "lean", "smaller", "over"]), applied: flag },
+  /** "Randare foto": a high-resolution REAL-view PNG exported from the sketch. */
+  render_exported: {},
 } satisfies Record<string, Record<string, Prop>>;
 
 export type UsageName = keyof typeof USAGE_EVENTS;
