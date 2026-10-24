@@ -250,6 +250,22 @@ the start screen offers to continue it.
 `"approved"` always shows the retailer-reviewed template, with the model's tips in a separate
 AI section.
 
+### Realistic view, photo render and simulations
+
+- **REAL view** (`blueprint/textures.ts`): procedural PBR materials generated on a canvas once per
+  finish (wood, WPC, tiles with grout, pavers, gravel, sand, soil, concrete, plaster, metal,
+  membrane, fence boards) and scaled to real-world size from each part's dimensions; ACES tone
+  mapping, a no-download Lightformer environment, and a shadow camera fitted to the build. Phones
+  (`lite`) keep flat materials.
+- **Randare foto** (`PhotoRender.tsx`): a 2× capture (up to 3000 px) cropped to the model, on the
+  view's backdrop, with a footer (title, size, retailer, date, "indicative sketch", never a price);
+  downloaded on desktop, shared through the Web Share API on phones.
+- **Simulare** (`SimulationPanel.tsx`): *Sun & shadows* computes the sun's position (NOAA algorithm,
+  `domain/sun.ts`) for Bucharest on the chosen day and time; the light, sky and shadows follow, and
+  after sunset the lamps placed in the sketch turn on (`NightLights.tsx`). *Build* replays the
+  construction layer by layer, with later layers as ghosts and an hours/day counter from the
+  project's estimate.
+
 ### Put anything in the sketch
 
 "Pune o toaletă lângă ușă, un lavoar pe peretele din stânga cu o oglindă deasupra și o plafonieră" —

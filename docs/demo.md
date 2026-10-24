@@ -29,7 +29,9 @@ Live AI tips:
 | `adaugă 2 trepte în față` | The change card: what changed, line by line, with the price difference. New parts glow in the sketch. |
 | `alege varianta din WPC` | The boards are re-sized for this project. The assistant says the oil isn't needed with WPC, even though an offer makes it free. |
 | `pune o masă și un grătar pe terasă` | Furniture placed in the sketch, with the sellable items added to the list. |
-| Tap **REAL**, then **EXPLODAT** in the sketch | The realistic view, then the exploded view (layers apart). |
+| Tap **REAL**, then **EXPLODAT** in the sketch | The realistic view (wood grain, tiles and pavers at their real size, soft shadows), then the exploded view (layers apart). |
+| Tap ☀ **Simulare** in the sketch toolbar | The sun over Bucharest for the chosen day: drag the time and the shadows move, sunrise and sunset are shown, and at night the lamps placed in the sketch light up. The **Montaj** tab replays the build layer by layer with a day counter. |
+| Tap the camera-photo button (**Randare foto**) | A high-resolution picture of the project, cropped and branded (title, size, retailer, date, "Schiță orientativă"), downloaded on a laptop or shared from a phone. No prices in it. |
 | `arată-mi grinzile` | The joists are highlighted in the sketch and in the list. |
 | `arată-mi de sus`, then `fă-mi un tur` | The camera glides to the top view, then flies one lap around the deck. The camera button in the sketch toolbar has all six views. |
 | `Am doar 2.000 lei` | The budget card: the largest deck that fits in the budget range, priced by the engine. Tap **Aplică** and the sketch and list follow. |
