@@ -211,7 +211,27 @@ export type Card =
   | { kind: "plan"; id: string; plan: PlanView }
   | { kind: "change"; id: string; change: SketchChange }
   /** Typical sizes + a pace estimator, for customers who don't know their measurements. */
-  | { kind: "sizes"; id: string; projectType: ProjectType; help: SizeHelp };
+  | { kind: "sizes"; id: string; projectType: ProjectType; help: SizeHelp }
+  /** "I have 3,000 lei": the best version of the project that fits, priced by the engine. */
+  | { kind: "budget"; id: string; budget: BudgetView };
+
+export interface BudgetView {
+  amount: number;
+  /** The list's total when the budget was given. */
+  current: number;
+  fit: "fits" | "tier" | "lean" | "smaller" | "over";
+  /** The version that fits — or, when nothing does, the leanest full-size version. */
+  total: number;
+  quality?: QualityTier;
+  /** A smaller version's size ("3,4 × 2,6 m", "12 m"). */
+  size?: string;
+  /** A fence done in stages: this is the first one. */
+  stage?: boolean;
+  /** Already applied to the sketch and the list. */
+  applied?: boolean;
+  /** The message the card's button sends to apply it. */
+  applyText?: string;
+}
 
 export type AgentEvent =
   | { type: "mode"; mode: "live" | "scripted"; reason?: string }

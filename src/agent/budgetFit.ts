@@ -1,5 +1,5 @@
-import type { ProjectType } from "@/domain/calculators";
-import type { BasketItem } from "@/domain/quote";
+import { fenceSegments, isZoned } from "@/domain/layout";
+import type { Layout, SketchOp } from "@/domain/layout";
 import type { QualityTier } from "@/domain/types";
 
 /**
@@ -14,80 +14,71 @@ import type { QualityTier } from "@/domain/types";
  * Pure orchestration over a `price` callback, so it's testable without the catalogue.
  */
 
-export interface Priced {
-  total: number;
-  basket: BasketItem[];
-}
-
-/** Price the project with these inputs, at this quality, with or without the optional extras. */
-export type Pricer = (o: { inputs: Record<string, unknown>; quality: QualityTier; optional: boolean }) => Promise<Priced>;
+/**
+ * Price the project at `scale` (1 = as drawn; 0.5 = half the area, or half the fence),
+ * at this quality, `lean` = without the optional extras. null when that size can't be drawn.
+ */
+export type Pricer = (o: { scale: number; quality: QualityTier; lean: boolean }) => Promise<{ total: number } | null>;
 
 export type Fit =
   | { kind: "fits"; total: number }
-  | { kind: "tier"; quality: QualityTier; total: number; basket: BasketItem[] }
-  | { kind: "lean"; quality: "budget"; total: number; basket: BasketItem[] }
-  | { kind: "smaller"; quality: "budget"; inputs: Record<string, unknown>; total: number; basket: BasketItem[]; scale: number }
+  | { kind: "tier"; quality: QualityTier; total: number }
+  | { kind: "lean"; total: number }
+  | { kind: "smaller"; scale: number; total: number; /** The leanest full-size version. */ minimum: number }
   | { kind: "over"; minimum: number };
 
 const ORDER: QualityTier[] = ["premium", "standard", "budget"];
-const r1 = (v: number) => Math.floor(v * 10) / 10;
+/** Below a quarter of the size it's no longer the same project. */
+const MIN_SCALE = 0.25;
+const floor1 = (v: number) => Math.floor(v * 10 + 1e-9) / 10;
 
-/** The inputs scaled down by `s` (area or length), or null when this project can't sensibly shrink. */
-export function scaled(type: ProjectType, inputs: Record<string, unknown>, s: number): Record<string, unknown> | null {
-  const num = (k: string) => (typeof inputs[k] === "number" ? (inputs[k] as number) : undefined);
-  if (type === "lawn") {
-    const a = num("areaM2");
-    return a ? { ...inputs, areaM2: Math.max(5, Math.floor(a * s)) } : null;
+/**
+ * The sketch edits that make this project `s` times as big (area for surfaces, length for a fence),
+ * keeping its proportions — or null when it can't sensibly shrink (rooms and walls are the size
+ * they are; an L-shape has no single "smaller").
+ */
+export function shrinkOps(layout: Layout, s: number): SketchOp[] | null {
+  if (layout.type === "fence") {
+    const total = fenceSegments(layout.points).reduce((sum, x) => sum + x.length, 0);
+    return total > 0 ? [{ op: "resize", w: Math.max(2, floor1(total * s)) }] : null;
   }
-  if (type === "fence") {
-    const l = num("lengthM");
-    return l ? { ...inputs, lengthM: Math.max(2, r1(l * s)) } : null;
-  }
-  if (type === "deck" || type === "paving") {
-    const l = num("lengthM");
-    const w = num("widthM");
-    if (!l || !w || Array.isArray(inputs.zones)) return null; // L/U shapes: no single "smaller" answer
+  if ((layout.type === "deck" || layout.type === "paving" || layout.type === "lawn") && isZoned(layout) && layout.zones.length === 1) {
+    const z = layout.zones[0];
     const k = Math.sqrt(s);
-    const rest = { ...inputs };
-    delete rest.areaM2;
-    return { ...rest, lengthM: Math.max(1, r1(l * k)), widthM: Math.max(1, r1(w * k)) };
+    return [{ op: "resize", zone: z.id, w: Math.max(1, floor1(z.w * k)), d: Math.max(1, floor1(z.d * k)) }];
   }
-  // Rooms and walls are the size they are.
   return null;
 }
 
-export async function fitBudget(
-  o: { amount: number; current: number; type: ProjectType; inputs: Record<string, unknown>; quality: QualityTier },
-  price: Pricer,
-): Promise<Fit> {
+export async function fitBudget(o: { amount: number; current: number; quality: QualityTier; canShrink: boolean }, price: Pricer): Promise<Fit> {
   if (o.current <= o.amount) return { kind: "fits", total: o.current };
 
-  // 2. The best tier that fits (only tiers at or below the current quality: "fit my budget" isn't "upgrade me").
-  const below = ORDER.slice(ORDER.indexOf(o.quality));
-  for (const q of below) {
-    if (q === o.quality) continue;
-    const p = await price({ inputs: o.inputs, quality: q, optional: true });
-    if (p.total <= o.amount) return { kind: "tier", quality: q, total: p.total, basket: p.basket };
+  // 2. The best tier that fits (only tiers below the current one: "fit my budget" isn't "upgrade me").
+  for (const q of ORDER.slice(ORDER.indexOf(o.quality) + 1)) {
+    const p = await price({ scale: 1, quality: q, lean: false });
+    if (p && p.total <= o.amount) return { kind: "tier", quality: q, total: p.total };
   }
 
   // 3. Leanest: budget tier, essentials only.
-  const lean = await price({ inputs: o.inputs, quality: "budget", optional: false });
-  if (lean.total <= o.amount) return { kind: "lean", quality: "budget", total: lean.total, basket: lean.basket };
+  const lean = await price({ scale: 1, quality: "budget", lean: true });
+  const minimum = lean?.total ?? o.current;
+  if (lean && lean.total <= o.amount) return { kind: "lean", total: lean.total };
 
   // 4. Smaller (or in stages): the largest scale that fits, by bisection on the real prices.
-  if (!scaled(o.type, o.inputs, 0.5)) return { kind: "over", minimum: lean.total };
-  let lo = 0.1;
+  if (!o.canShrink) return { kind: "over", minimum };
+  let lo = MIN_SCALE;
   let hi = 1;
-  let best: { s: number; inputs: Record<string, unknown>; p: Priced } | null = null;
-  for (let k = 0; k < 9; k++) {
+  let best: { s: number; total: number } | null = null;
+  const floor = await price({ scale: lo, quality: "budget", lean: true });
+  if (!floor || floor.total > o.amount) return { kind: "over", minimum };
+  best = { s: lo, total: floor.total };
+  for (let k = 0; k < 8; k++) {
     const s = (lo + hi) / 2;
-    const inputs = scaled(o.type, o.inputs, s)!;
-    const p = await price({ inputs, quality: "budget", optional: false });
-    if (p.total <= o.amount) {
-      best = { s, inputs, p };
+    const p = await price({ scale: s, quality: "budget", lean: true });
+    if (p && p.total <= o.amount) {
+      best = { s, total: p.total };
       lo = s;
     } else hi = s;
   }
-  if (!best) return { kind: "over", minimum: lean.total };
-  return { kind: "smaller", quality: "budget", inputs: best.inputs, total: best.p.total, basket: best.p.basket, scale: Math.round(best.s * 100) / 100 };
+  return { kind: "smaller", scale: best.s, total: best.total, minimum };
 }

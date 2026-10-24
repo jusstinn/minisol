@@ -1,11 +1,13 @@
 import type { DataSources } from "@/adapters/types";
 import type { Tenant } from "@/config/tenant";
 import { scriptedPlan } from "./scripted-plans";
+import { fitBudget, shrinkOps } from "./budgetFit";
+import type { Fit } from "./budgetFit";
 import { AISLES } from "@/data/stores";
 import { CalculatorInputError, PROJECT_PARAM_DOCS, PROJECT_TYPES, calculateProject } from "@/domain/calculators";
 import type { CalculationResult, ProjectType } from "@/domain/calculators";
 import { ITEM_KINDS } from "@/domain/items";
-import { SIDES, SketchEditError, applyOps, defaultLayout, describeLayout, layoutParams } from "@/domain/layout";
+import { SIDES, SketchEditError, applyOps, defaultLayout, describeLayout, fenceSegments, isZoned, layoutParams } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
 import { distanceKm } from "@/domain/geo";
 import { LOYALTY } from "@/domain/loyalty";
@@ -23,7 +25,7 @@ import { explainEditError } from "@/lib/editErrors";
 import type { CategoryId, Customer, Lang, MaterialRole, Offer, Product, QualityTier, Requirement } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { dec, int, lei } from "@/lib/format";
-import type { Card, ChoiceGroup, OwnedToolView, ProjectSnapshot, QualityOption, SessionState, SketchChange, StockStoreView, SuggestedItem, SuggestionView, UiCommand } from "./types";
+import type { BudgetView, Card, ChoiceGroup, OwnedToolView, ProjectSnapshot, QualityOption, SessionState, SketchChange, StockStoreView, SuggestedItem, SuggestionView, UiCommand } from "./types";
 
 export interface ToolContext {
   sources: DataSources;
@@ -302,6 +304,22 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: "function" as const,
+    name: "fit_budget",
+    description:
+      "The customer gives a budget for the CURRENT project (\"am 3.000 lei\", \"my budget is 2,500 lei\", \"max 1500 lei\"). The pricing engine finds the best version that fits: a cheaper quality tier, then without the optional extras, then (deck, paving, lawn, fence) the largest size — or first stage — that fits; otherwise what the leanest version costs. apply false: shows the customer a card with the result and an Apply button. apply true: applies it to the sketch and the list — only when the customer agreed or explicitly asked you to make it fit. Never estimate a budget fit yourself.",
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: {
+        amountRon: { type: "number", description: "The budget in lei (RON)." },
+        apply: { type: "boolean" },
+      },
+      required: ["amountRon", "apply"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function" as const,
     name: "present_plan",
     description:
       "Show the member a step-by-step project plan card. Call after calculate_project. Steps must be practical and specific to their project and products; tips should be pro tips; include safety warnings when relevant. Write in the member's language.",
@@ -344,6 +362,7 @@ export const TOOL_STATUS: Record<string, { ro: string; en: string }> = {
   check_stock: { ro: "Verific stocul în magazine", en: "Checking stock in stores" },
   get_offers: { ro: "Caut ofertele tale personalizate", en: "Finding your personal offers" },
   present_plan: { ro: "Desenez planul proiectului", en: "Drawing up your project plan" },
+  fit_budget: { ro: "Potrivesc proiectul în buget", en: "Fitting the project to your budget" },
 };
 
 // ───────────────────────────── helpers ─────────────────────────────
@@ -694,6 +713,14 @@ async function priceProject(ctx: ToolContext, calc: CalculationResult, o: Projec
   };
 }
 
+/** A re-pricing of the same project: another quality tier, and/or only the essentials. */
+interface PriceVariant {
+  quality?: QualityTier;
+  lean?: boolean;
+  /** What was done, for the change card ("Varianta economică"). */
+  note?: string;
+}
+
 const signedLei = (v: number, lang: Lang) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${lei(Math.abs(v), lang)}`;
 
 /**
@@ -706,11 +733,13 @@ export async function applySketchEdit(
   ctx: ToolContext,
   edits: EditOp[],
   source: SketchChange["source"],
+  /** Re-price at another quality tier and/or without the optional extras (fit_budget). */
+  variant?: PriceVariant,
 ): Promise<ToolResult & { error?: string; /** The refusal in the customer's language. */ errorText?: string }> {
   const prev = ctx.state.project;
   if (!prev) return { error: "no_project", forModel: { error: "There is no project yet — call calculate_project first." } };
   const layout0 = prev.layout ?? defaultLayout(prev.type, prev.inputs);
-  if (!edits.length) return { error: "no_edits", forModel: { error: "No edits given.", sketch: describeLayout(layout0) } };
+  if (!edits.length && !variant) return { error: "no_edits", forModel: { error: "No edits given.", sketch: describeLayout(layout0) } };
   const history = prev.layoutHistory ?? [];
   const undo = edits.some((e) => e.op === "undo");
   if (undo && !history.length) {
@@ -723,7 +752,10 @@ export async function applySketchEdit(
   try {
     edited = undo
       ? { layout: history[history.length - 1], changes: [ctx.lang === "en" ? "Went back to the previous version of the sketch" : "Am revenit la versiunea anterioară a schiței"] }
-      : applyOps(layout0, edits as SketchOp[], ctx.lang);
+      : edits.length
+        ? applyOps(layout0, edits as SketchOp[], ctx.lang)
+        : { layout: layout0, changes: [] };
+    if (variant?.note) edited.changes.push(variant.note);
     calc = calculateProject(prev.type, { ...prev.inputs, ...layoutParams(edited.layout) }, ctx.lang);
   } catch (e) {
     if (e instanceof SketchEditError || e instanceof CalculatorInputError) {
@@ -758,7 +790,8 @@ export async function applySketchEdit(
   const stillSuggested = new Set((ctx.state.suggestions ?? []).map((sg) => sg.role));
   const optionalBefore = new Set(prevReqs.filter((r) => r.optional).map((r) => r.role));
   const storeId = ctx.state.storeId ?? ctx.customer.homeStoreId;
-  const quality = ctx.state.quality ?? "standard";
+  const quality0 = ctx.state.quality ?? "standard";
+  const quality = variant?.quality ?? quality0;
   const [quote0, r] = await Promise.all([
     priceBasket(ctx, basket0, storeId),
     priceProject(ctx, calc, {
@@ -768,11 +801,13 @@ export async function applySketchEdit(
       layout: edited.layout,
       revision: (prev.revision ?? 0) + 1,
       sketched: true,
-      preferSkus,
+      // Another tier means that tier's products, not the ones picked at this one.
+      preferSkus: quality === quality0 ? preferSkus : undefined,
       excludeRoles: removedByCustomer,
-      keepOptional,
-      carry,
-      layoutHistory: undo ? history.slice(0, -1) : [...history, layout0].slice(-10),
+      // Lean: the essentials only — no extras, no hand-added lines.
+      keepOptional: variant?.lean ? new Set() : keepOptional,
+      carry: variant?.lean ? [] : carry,
+      layoutHistory: undo ? history.slice(0, -1) : edits.length ? [...history, layout0].slice(-10) : history,
       suggestRole: (role) => stillSuggested.has(role) || !optionalBefore.has(role),
     }),
   ]);
@@ -852,6 +887,26 @@ export async function applySketchEdit(
         "The sketch redrew itself (new parts glow) and a change card shows every material and price difference. Reply in 1–2 sentences: what changed and display.difference / display.totalAfter verbatim. Mention a safety note only if it is new (e.g. railings above 60 cm).",
     },
   };
+}
+
+const QUALITY_RO: Record<QualityTier, string> = { budget: "economică", standard: "standard", premium: "premium" };
+
+/** The budget card: what fits, at what size, and the message that applies it. */
+function budgetView(fit: Fit, amount: number, current: number, layout0: Layout, lang: Lang): BudgetView {
+  const base = { amount, current };
+  if (fit.kind === "fits") return { ...base, fit: "fits", total: fit.total };
+  if (fit.kind === "over") return { ...base, fit: "over", total: fit.minimum };
+  const applyText = t(lang, `Aplică varianta pentru bugetul de ${int(amount)} lei`, `Apply the version for my ${int(amount, "en")} lei budget`);
+  if (fit.kind === "tier") return { ...base, fit: "tier", total: fit.total, quality: fit.quality, applyText };
+  if (fit.kind === "lean") return { ...base, fit: "lean", total: fit.total, quality: "budget", applyText };
+  let size: string | undefined;
+  const ops = shrinkOps(layout0, fit.scale);
+  if (ops) {
+    const out = applyOps(layout0, ops, lang).layout;
+    if (out.type === "fence") size = `${dec(fenceSegments(out.points).reduce((s, x) => s + x.length, 0), lang, 1)} m`;
+    else if (isZoned(out)) size = `${dec(out.zones[0].w, lang, 1)} × ${dec(out.zones[0].d, lang, 1)} m`;
+  }
+  return { ...base, fit: "smaller", total: fit.total, quality: "budget", size, stage: layout0.type === "fence", applyText };
 }
 
 // ───────────────────────────── handlers ─────────────────────────────
@@ -950,6 +1005,78 @@ const handlers: Record<string, Handler> = {
       e.op === "set_option" && e.option != null ? { ...e, value: e.option } : e,
     ) as unknown as EditOp[];
     return applySketchEdit(ctx, edits, "agent");
+  },
+
+  async fit_budget(args, ctx) {
+    const project = ctx.state.project;
+    if (!project || !ctx.state.basket.length) return { forModel: { error: "There is no project yet — calculate the customer's project first, then fit it to the budget." } };
+    const amount = typeof args.amountRon === "number" ? Math.round(args.amountRon * 100) / 100 : NaN;
+    if (!Number.isFinite(amount) || amount < 50 || amount > 1_000_000) return { forModel: { error: "The budget must be an amount in lei between 50 and 1,000,000." } };
+    const storeId = ctx.state.storeId ?? ctx.customer.homeStoreId;
+    const quality = ctx.state.quality ?? "standard";
+    const layout0 = project.layout ?? defaultLayout(project.type, project.inputs);
+    const current = (await priceBasket(ctx, ctx.state.basket, storeId)).total;
+
+    // Every candidate is the real re-pricing the customer would get (same picks, same rules).
+    const variantRun = (scale: number, q: QualityTier, lean: boolean, note?: string) => {
+      const ops = scale < 1 ? shrinkOps(layout0, scale) : [];
+      return ops ? applySketchEdit(ctx, ops, "agent", { quality: q, lean, note }) : null;
+    };
+    const fit = await fitBudget({ amount, current, quality, canShrink: shrinkOps(layout0, 0.5) != null }, async (o) => {
+      const r = await variantRun(o.scale, o.quality, o.lean);
+      const q = r && !r.error ? r.cards?.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote") : undefined;
+      return q ? { total: q.quote.total } : null;
+    });
+
+    const view = budgetView(fit, amount, current, layout0, ctx.lang);
+    const card = (applied: boolean): Card => ({ kind: "budget", id: cardId("budget"), budget: { ...view, applied, applyText: applied ? undefined : view.applyText } });
+    const display = {
+      budget: lei(amount, ctx.lang),
+      currentTotal: lei(current, ctx.lang),
+      ...(fit.kind === "over" || fit.kind === "smaller" ? { leanestFullSize: lei(fit.minimum, ctx.lang) } : {}),
+      ...(fit.kind !== "over" ? { fittedTotal: lei(fit.total, ctx.lang), leftOver: lei(Math.round((amount - fit.total) * 100) / 100, ctx.lang) } : {}),
+    };
+    const what = {
+      fit: fit.kind,
+      quality: fit.kind === "tier" ? fit.quality : fit.kind === "lean" || fit.kind === "smaller" ? "budget" : quality,
+      withoutOptionalExtras: fit.kind === "lean" || fit.kind === "smaller",
+      size: view.size,
+      firstStageOfFence: view.stage,
+    };
+
+    if (args.apply === true && (fit.kind === "tier" || fit.kind === "lean" || fit.kind === "smaller")) {
+      const note =
+        fit.kind === "tier"
+          ? t(ctx.lang, `Varianta ${QUALITY_RO[fit.quality]}, ca să încapă în ${int(amount)} lei`, `The ${fit.quality} range, to fit ${int(amount, "en")} lei`)
+          : t(ctx.lang, `Varianta economică, doar cu strictul necesar, ca să încapă în ${int(amount)} lei`, `The budget range, essentials only, to fit ${int(amount, "en")} lei`);
+      const r = await variantRun(fit.kind === "smaller" ? fit.scale : 1, fit.kind === "tier" ? fit.quality : "budget", fit.kind !== "tier", note);
+      if (!r || r.error) return { forModel: { error: "The fitted version could not be applied.", ...(r?.forModel as object) } };
+      return {
+        state: r.state,
+        cards: [...(r.cards ?? []), card(true)],
+        ui: { panel: "sketch" },
+        forModel: {
+          applied: what,
+          display,
+          change: (r.forModel as { display?: unknown }).display,
+          quote: (r.forModel as { quote?: unknown }).quote,
+          uiNote: "Applied: the sketch, the list and a change card show it. Reply in 1–2 sentences with display.fittedTotal and what changed (tier, extras left out, smaller size or first stage). The customer can say \"undo\" for the size; the quality can be switched back from the list.",
+        },
+      };
+    }
+    return {
+      cards: [card(false)],
+      forModel: {
+        result: what,
+        display,
+        uiNote:
+          fit.kind === "fits"
+            ? "The list already fits: say so with display.currentTotal and display.leftOver."
+            : fit.kind === "over"
+              ? "Nothing fits: say what the leanest version costs (display.leanestFullSize) and offer to plan it in stages or to save on single items."
+              : "The customer sees a card with this version and an Apply button. In 1–2 sentences say what fits and for how much (display.fittedTotal); ask if you should apply it. Nothing has changed yet.",
+      },
+    };
   },
 
   async suggest_sizes(args, ctx) {

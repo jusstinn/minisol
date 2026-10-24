@@ -103,6 +103,8 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   /** Kinds of card delivered in the current turn (so a new project keeps the sketch in view). */
   const turnKinds = useRef(new Set<Card["kind"]>());
   const putCard = useCallback((card: Card) => {
+    // Lives in the conversation; the board shows what it changed (project, list, change).
+    if (card.kind === "budget") return;
     // A basket changed by modify_basket no longer matches the tier comparison (that card has none),
     // but the per-job options still belong to the same project, so they carry over.
     const heroShown = turnKinds.current.has("project") && (card.kind === "quote" || card.kind === "plan" || card.kind === "offers" || card.kind === "stock" || card.kind === "products");

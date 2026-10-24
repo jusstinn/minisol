@@ -18,9 +18,9 @@ import type { PanelTarget } from "./MobileTabs";
 export default function CardChips({ cards, board, lang, onOpen }: { cards: Card[]; board: Board; lang: Lang; onOpen: (target: PanelTarget) => void }) {
   // A sketch edit brings a project, a quote and a change card: the change (first) says what the project card would.
   const hasChange = cards.some((c) => c.kind === "change");
-  // The sizes card is a question, rendered in the conversation itself — no chip.
+  // The sizes and budget cards are rendered in the conversation itself — no chip.
   const shown = cards
-    .filter((c): c is ChipCard => c.kind !== "sizes" && !(hasChange && c.kind === "project"))
+    .filter((c): c is ChipCard => c.kind !== "sizes" && c.kind !== "budget" && !(hasChange && c.kind === "project"))
     .sort((a, b) => Number(b.kind === "change") - Number(a.kind === "change"));
   if (!shown.length) return null;
   return (
@@ -43,7 +43,7 @@ interface ChipView {
   meta?: React.ReactNode;
 }
 
-type ChipCard = Exclude<Card, { kind: "sizes" }>;
+type ChipCard = Exclude<Card, { kind: "sizes" } | { kind: "budget" }>;
 
 function view(card: ChipCard, board: Board, lang: Lang): ChipView {
   const en = lang === "en";

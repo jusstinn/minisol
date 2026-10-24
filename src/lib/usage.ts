@@ -21,9 +21,9 @@ const EDIT_OPS = [
 const BASKET_OPS = ["add", "remove", "set_qty", "replace", "choose", "dismiss_suggestion", "add_suggestions", "quality", "move_store"] as const;
 const TOOLS = [
   "get_customer_context", "calculate_project", "edit_sketch", "modify_basket", "control_view", "suggest_sizes",
-  "search_products", "check_stock", "get_offers", "present_plan",
+  "search_products", "check_stock", "get_offers", "present_plan", "fit_budget",
 ] as const;
-const CARDS = ["project", "quote", "stock", "offers", "products", "plan", "change", "sizes"] as const;
+const CARDS = ["project", "quote", "stock", "offers", "products", "plan", "change", "sizes", "budget"] as const;
 
 type Prop =
   | { kind: "enum"; values: readonly string[] }
@@ -53,6 +53,8 @@ export const USAGE_EVENTS = {
   share_created: {},
   upload_added: { kind: e(["plan", "model", "photo"]) },
   sizes_used: { how: e(["preset", "estimate"]) },
+  /** A budget fitted to the project ("am 3.000 lei"): what the engine found. */
+  budget_fit: { fit: e(["fits", "tier", "lean", "smaller", "over"]), applied: flag },
 } satisfies Record<string, Record<string, Prop>>;
 
 export type UsageName = keyof typeof USAGE_EVENTS;

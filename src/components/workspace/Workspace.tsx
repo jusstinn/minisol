@@ -15,6 +15,7 @@ import { WalletPass } from "../entry/WalletPass";
 import CartDrawer from "../cart/CartDrawer";
 import { CartActionsContext } from "../cart/cartActions";
 import SizesCard from "./SizesCard";
+import BudgetCard from "./BudgetCard";
 import { ProductSheetProvider, useProductSheet } from "../board/ProductSheet";
 import type { UiCommand } from "@/agent/types";
 import type { UiSignal } from "@/lib/useAgent";
@@ -436,7 +437,8 @@ function Rail({
                 </div>
               )}
               {m.cards.map((c) => c.kind === "sizes" && <SizesCard key={c.id} card={c} lang={lang} onSend={(t) => onSend(t, "sizes")} disabled={busy} />)}
-              {m.cards.some((c) => c.kind !== "sizes") && renderInlineBoard(m)}
+              {m.cards.map((c) => c.kind === "budget" && <BudgetCard key={c.id} card={c} lang={lang} onSend={(t) => onSend(t, "chip")} disabled={busy} />)}
+              {m.cards.some((c) => c.kind !== "sizes" && c.kind !== "budget") && renderInlineBoard(m)}
             </div>
           ),
         )}

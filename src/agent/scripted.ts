@@ -13,7 +13,7 @@ import { dec, km, lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
 import { TOOL_STATUS, executeTool, priceBasket } from "./tools";
 import type { ToolContext } from "./tools";
-import type { AgentEvent, Card, SessionState, UiCommand } from "./types";
+import type { AgentEvent, BudgetView, Card, SessionState, UiCommand } from "./types";
 import { verifyReply } from "./verify";
 
 /**
@@ -24,7 +24,9 @@ import { verifyReply } from "./verify";
  */
 
 type Intent =
-  | { kind: "project"; type: ProjectType; params: Record<string, unknown>; quality?: QualityTier; missing?: string }
+  | { kind: "project"; type: ProjectType; params: Record<string, unknown>; quality?: QualityTier; missing?: string; budget?: number }
+  /** "Am un buget de 3.000 lei" for the current project; `apply`: "aplică", "make it fit". */
+  | { kind: "budget"; amount: number; apply: boolean }
   | { kind: "sketch"; edits: (Partial<SketchOp> | { op: "undo" })[] }
   | { kind: "view"; command: UiCommand }
   | { kind: "sizes"; type?: ProjectType }
@@ -413,11 +415,29 @@ function projectTypeFromHistory(history: unknown[] | undefined): ProjectType | u
   return undefined;
 }
 
+const AMOUNT = String.raw`(\d{1,3}(?:[.,\s]\d{3})+|\d+)(?:[.,](\d{1,2}))?`;
+const BUDGET_CUE = /\b(buget\w*|budget|dispun|cheltui\w*|maxim(?:um)?|max|pana (?:in|la)|sub|nu mai mult de|mai mult de|am doar|am numai|am|i have|i've got|i can spend|spend|up to|under|no more than|afford)\b/;
+const BUDGET_APPLY = /\b(aplic\w*|apply|incadr\w*|sa incapa|make it fit|fit it)\b/;
+
+/** The budget in a message ("buget de 3.000 lei", "am doar 2500 lei", "my budget is 3,000"), or undefined. */
+export function parseBudget(t: string): number | undefined {
+  // "buget(ul) de 3.000" may leave out the currency; any other cue needs "lei".
+  const m =
+    t.match(new RegExp(String.raw`\b(?:buget\w*|budget)\b\D{0,24}?${AMOUNT}`)) ??
+    (BUDGET_CUE.test(t) ? t.match(new RegExp(String.raw`${AMOUNT}\s*(?:de\s+)?(?:lei|ron)\b`)) : null);
+  if (!m) return undefined;
+  const v = Number(m[1].replace(/[.,\s]/g, "")) + (m[2] ? Number(m[2].padEnd(2, "0")) / 100 : 0);
+  return v >= 50 && v <= 1_000_000 ? v : undefined;
+}
+
 export function parseIntent(raw: string, state: SessionState): Intent {
   const t = fold(raw);
-  const quality: QualityTier | undefined = /\b(ieftin\w*|cheap\w*|budget|economic\w*)\b/.test(t)
+  const budget = parseBudget(t);
+  // "My budget is 3,000 lei" isn't a request for the budget range.
+  const tq = budget ? t.replace(/\bbudget\b/g, "") : t;
+  const quality: QualityTier | undefined = /\b(ieftin\w*|cheap\w*|budget|economic\w*)\b/.test(tq)
     ? "budget"
-    : /\b(premium|durabil\w*|best|cel mai bun|top|calitate)\b/.test(t)
+    : /\b(premium|durabil\w*|best|cel mai bun|top|calitate)\b/.test(tq)
       ? "premium"
       : undefined;
   const unsafe = UNSAFE.find(([, re]) => re.test(t));
@@ -428,6 +448,11 @@ export function parseIntent(raw: string, state: SessionState): Intent {
   // "I don't know the size" → typical sizes + pace estimator (type may come from an earlier message).
   if (/\b(nu stiu|nu cunosc|habar n-am|n-am masurat|nu am masurat|don'?t know|do not know|not sure|no idea)\b/.test(t) && !/\d/.test(t)) {
     return { kind: "sizes", type: type ?? state.project?.type };
+  }
+
+  // A budget for the project on screen (a new project with a budget is fitted right after it's drawn).
+  if (budget && (!type || type === state.project?.type || !state.project)) {
+    if (state.project || !type) return { kind: "budget", amount: budget, apply: BUDGET_APPLY.test(t) };
   }
 
   const sameProject = state.project && (!type || type === state.project.type || /\b(arat\w*|show|evidentiaz\w*|highlight|scoate\w*|remove|alege\w*|choose)\b/.test(t));
@@ -563,7 +588,7 @@ export function parseIntent(raw: string, state: SessionState): Intent {
   // Naming the current project without new dimensions ("terasa mea e pe pământ") is a follow-up we
   // didn't understand, not a new project: don't throw the sketch away for the sizes card.
   if (missing && state.project?.type === type) return { kind: "unknown" };
-  return { kind: "project", type, params, quality, missing };
+  return { kind: "project", type, params, quality, missing, budget };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -784,6 +809,30 @@ export async function* runScriptedAgent(opts: ScriptedOptions): AsyncGenerator<A
         },
       };
       reply = projectReply(quoteCard.quote, quoteCard, state.project.title, lang, state.suggestions);
+      if (intent.budget) {
+        const br = yield* runTool("fit_budget", { amountRon: intent.budget, apply: false }, 500);
+        const b = br.cards?.find((c): c is Extract<Card, { kind: "budget" }> => c.kind === "budget")?.budget;
+        if (b) {
+          extraAmounts.push(...budgetAmounts(b));
+          reply += `\n\n${budgetReply(b, lang)}`;
+        }
+      }
+    }
+  } else if (intent.kind === "budget") {
+    if (!state.project) {
+      reply =
+        lang === "en"
+          ? `Got it — **${int(intent.amount, lang)} lei**. What would you like to build or renovate, and roughly how big? I'll find the best version that fits.`
+          : `Am reținut — **${int(intent.amount, lang)} lei**. Ce vrei să construiești sau să renovezi, și cam ce dimensiuni are? Găsesc varianta cea mai bună care încape.`;
+    } else {
+      const r = yield* runTool("fit_budget", { amountRon: intent.amount, apply: intent.apply }, 700);
+      const b = r.cards?.find((c): c is Extract<Card, { kind: "budget" }> => c.kind === "budget")?.budget;
+      if (b) {
+        extraAmounts.push(...budgetAmounts(b));
+        reply = budgetReply(b, lang);
+      } else {
+        reply = lang === "en" ? "I couldn't fit the project to that budget right now — try again in a moment?" : "Nu am putut potrivi proiectul în buget acum — încerci din nou peste puțin?";
+      }
     }
   } else if (intent.kind === "project") {
     yield* runTool("suggest_sizes", { projectType: intent.type }, 250);
@@ -1058,4 +1107,49 @@ export function sameReason(ch: { lines: { before: number; after: number }[]; nee
   const moved = ch.needsChanged ?? ch.lines.some((l) => Math.abs(l.after - l.before) > 1e-6);
   if (moved) return lang === "en" ? "the packs already on your list cover the new amounts" : "pachetele de pe listă acoperă și noile cantități";
   return lang === "en" ? "the change doesn't need any more material" : "modificarea nu cere material în plus";
+}
+
+/** Every amount a budget reply may state (the checker's list). */
+function budgetAmounts(b: BudgetView): number[] {
+  return [b.amount, b.current, b.total, Math.round(Math.abs(b.amount - b.total) * 100) / 100];
+}
+
+const QUALITY_NAME: Record<QualityTier, { ro: string; en: string }> = {
+  budget: { ro: "economică", en: "budget" },
+  standard: { ro: "standard", en: "standard" },
+  premium: { ro: "premium", en: "premium" },
+};
+
+/** The offline reply for a budget card: what fits, for how much, and the next step. */
+export function budgetReply(b: BudgetView, lang: Lang): string {
+  const en = lang === "en";
+  const A = `**${lei(b.amount, lang)}**`;
+  const T = `**${lei(b.total, lang)}**`;
+  const q = b.quality ? QUALITY_NAME[b.quality][lang] : "";
+  if (b.fit === "fits") {
+    return en
+      ? `Good news: your list (${T}) already fits your ${A} budget, with **${lei(b.amount - b.total, lang)}** to spare.`
+      : `Vești bune: lista ta (${T}) încape deja în bugetul de ${A} — îți mai rămân **${lei(b.amount - b.total, lang)}**.`;
+  }
+  if (b.fit === "over") {
+    return en
+      ? `Even the leanest version costs ${T}, **${lei(b.total - b.amount, lang)}** over ${A}. We could do it in stages, or save on single items — tell me which.`
+      : `Nici varianta cea mai economică nu încape: costă ${T}, cu **${lei(b.total - b.amount, lang)}** peste ${A}. O putem face în etape sau economisi la unele produse — spune-mi cum preferi.`;
+  }
+  const what =
+    b.fit === "tier"
+      ? en ? `the same sketch in the ${q} range` : `aceeași schiță în varianta ${q}`
+      : b.fit === "lean"
+        ? en ? "the budget range with just the essentials (the extras stay as suggestions)" : "varianta economică, doar cu strictul necesar (extra-urile rămân sugestii)"
+        : b.stage
+          ? en ? `a first stage of **${b.size}** of fence, in the budget range` : `o primă etapă de **${b.size}** de gard, în varianta economică`
+          : en ? `a **${b.size}** version in the budget range` : `o variantă de **${b.size}**, în varianta economică`;
+  if (b.applied) {
+    return en
+      ? `Done — I switched to ${what}: new total ${T}, within your ${A}. The sketch and the list are updated.`
+      : `Gata — am trecut la ${what}: total nou ${T}, în bugetul de ${A}. Schița și lista sunt actualizate.`;
+  }
+  return en
+    ? `With ${A}: ${what} costs ${T}. Tap **Apply** on the card and I'll update the sketch and the list.`
+    : `Cu ${A}: ${what} costă ${T}. Apasă **Aplică** pe card și actualizez schița și lista.`;
 }

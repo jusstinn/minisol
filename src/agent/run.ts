@@ -50,6 +50,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let turnText = "";
   let lastQuote: Extract<Card, { kind: "quote" }> | undefined;
   let lastChange: Extract<Card, { kind: "change" }> | undefined;
+  let lastBudget: Extract<Card, { kind: "budget" }> | undefined;
   const toolCtx = () => ({ sources: opts.sources, customer: opts.customer, state, lang, now, tenant: opts.tenant });
 
   // ── Fast first answer ──────────────────────────────────────────────────────
@@ -145,6 +146,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         for (const card of result.cards ?? []) {
           if (card.kind === "quote") lastQuote = card;
           if (card.kind === "change") lastChange = card;
+          if (card.kind === "budget") lastBudget = card;
           yield { type: "card", card };
         }
         if (result.ui) yield { type: "ui", command: result.ui };
@@ -192,6 +194,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     Math.round(opts.customer.points * LOYALTY.pointValueRon * 100) / 100,
     // A sketch edit: the total before it and the differences (whole and per line).
     ...(lastChange ? [lastChange.change.totalBefore, Math.abs(lastChange.change.delta), ...lastChange.change.lines.map((l) => Math.abs(l.deltaRon))] : []),
+    // A budget: the amount, the list before, the version that fits and what's left (or how much over).
+    ...(lastBudget ? [lastBudget.budget.amount, lastBudget.budget.current, lastBudget.budget.total, Math.abs(lastBudget.budget.amount - lastBudget.budget.total)] : []),
   ];
   // No list this turn but the customer has one: check against it (priced now, nothing shown).
   let verifyQuote = lastQuote?.quote;
