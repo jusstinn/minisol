@@ -337,6 +337,11 @@ Phone (390 × 844): [project received](docs/screenshots/interaction-share-receiv
 [chat hint](docs/screenshots/interaction-hint-phone-chat.png) ·
 [English chips](docs/screenshots/interaction-en-chips-phone.png).
 
+- **Store sheet** (`src/components/print/StoreSheet.tsx`): the printer button in the header prints the
+  project on A4 (or saves it as PDF from the browser's dialog) — the sketch seen from above with its
+  dimensions (`planDrawing.ts` flattens the 3D parts, so every project type works), the list grouped
+  by aisle with tick boxes and stock warnings, a QR for the till and one that reopens the project on
+  a phone, the steps and the safety notes. Nothing leaves the browser.
 - **Context-aware next steps** (`src/lib/nextSteps.ts`, pure): 3–5 chips from the board — fix first
   (move the list to the nearest store that has everything; *Anulează* right after a change), then a
   reshape per project (steps / L-shape for decks, gate / corner / height for fences, wall tiles to
