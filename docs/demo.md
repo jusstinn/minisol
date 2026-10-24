@@ -90,3 +90,20 @@ tabs under the chat.
   list, prices and plan still work.
 - **"Too many attempts" at sign-in:** wait 10 minutes, or sign in from another network.
 - **A clean slate between audiences:** **Proiect nou** at the top right.
+
+## Letting the retailer's team try it on their own
+
+1. Make an account for each person:
+   ```bash
+   node scripts/make-users.mjs hornbach-1 hornbach-2 hornbach-3 --days 30
+   ```
+2. Upload the accounts:
+   ```bash
+   node scripts/push-env.mjs
+   ```
+3. Redeploy.
+4. Send each person their lines from `accounts-for-sharing.txt` and this link:
+   `https://blueprint-walletloop.vercel.app/?retailer=hornbach` (the HORNBACH branding).
+5. Suggest they start with **Tur ghidat · 3 min** on the start screen, then try a project of their own.
+6. A week later, see who tried it: export the logs and run `npx tsx scripts/usage-report.ts`. It
+   lists each account's visits, projects, sketch changes and reservations.

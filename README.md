@@ -45,6 +45,35 @@ The signed-in start screen shows **AI live** or **AI offline**, with the reason 
 `/api/health` gives the same answer as JSON. The tested demo script is in
 [docs/demo.md](docs/demo.md).
 
+### Accounts for the retailer's team
+
+Besides your own sign-in, guest accounts can be set to end on a date:
+
+```bash
+node scripts/make-users.mjs hornbach-1 hornbach-2 hornbach-3 --days 30
+node scripts/push-env.mjs
+```
+
+Then redeploy. What the scripts do:
+
+- The passwords are strong, random and never printed. They go to `accounts-for-sharing.txt` (gitignored), ready to send.
+- Only scrypt hashes go into `SITE_LOGIN_USERS`.
+- `--list` shows the accounts; `--remove hornbach-2` revokes one (push and redeploy).
+- An account past its last day sees "this access has ended".
+
+Each sign-in is its own session for the AI limits. Usage events carry the account, so
+`scripts/usage-report.ts` shows what each invited account did: visits, projects, sketch changes and
+reservations.
+
+### Guided tour
+
+**Tur ghidat · 3 min** on the start screen is for people evaluating Blueprint on their own:
+
+- It runs a real deck project with the offline assistant: instant, identical every time, no AI quota.
+- It stops at each part of the screen to explain what it does for the customer and for the retailer: the request, the 3D sketch, the checked list, the offers, the stock, a recalculated change, the plan, Click & Collect, and what the retailer gains.
+- It then hands over to the live AI.
+- It works on phones too, opening the right tab at each step.
+
 ## Quick start
 
 ```bash
