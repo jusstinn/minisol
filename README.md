@@ -220,6 +220,15 @@ in its instructions:
 | "L-shape", "3 steps at the front", "a gate", "undo" | `edit_sketch` (with layout history) |
 | "show me the joists", "exploded view", "open the cart", "pay with points", "open the plan editor" | `control_view` → a `ui` event the client applies (sketch view/highlight, panels, cart, product sheet) |
 | "I don't know the size" | `suggest_sizes` → typical sizes + pace estimator |
+| "from above", "eye level", "walk me around" | `control_view` `camera` → the sketch glides to a preset (3/4, top, front, side, eye level, a cinematic tour) |
+| "am un buget de 3.000 lei", "my budget is 2,500 lei" | `fit_budget` → a budget card with the best version that fits and an **Apply** button |
+
+**Budget fitting** (`src/agent/budgetFit.ts`). The pricing engine, never the model, finds what fits,
+in order: the current list; a cheaper quality tier (never an upgrade); the budget tier with only the
+essentials; for a deck, paving or lawn the largest size with the same proportions (a fence gets a
+first stage), found by bisection on real prices; otherwise what the leanest version costs. Nothing
+changes until the customer taps **Apply**, which redraws the sketch and the list through the normal
+sketch-edit path, with a change card.
 
 **Fast first answer.** Before the model starts, the server loads the member profile and, when the
 message clearly describes a complete project, calculates it deterministically: the sketch and
