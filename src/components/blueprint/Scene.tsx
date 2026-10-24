@@ -7,13 +7,17 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Build, Part, Vec3 } from "./builders";
+import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
+import type { CameraPreset } from "./cameraPresets";
 
 export type ViewMode = "blueprint" | "real" | "exploded";
+export type { CameraPreset };
 
 const PART_DUR = 0.55;
 const MORPH_DUR = 0.7;
 const GLOW_DUR = 1.8;
 const EXPLODE_GAP = 0.55;
+const PRESET_GLIDE_S = 0.7;
 const REMOVED = "#ff5a4f";
 /** Every part is a scaled unit box, so an edit can morph a part's size smoothly. */
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -430,63 +434,129 @@ function LabelProjector({ labels, els, shared }: { labels: OverlayLabel[]; els: 
   return null;
 }
 
-function CameraRig({ build, compact, epoch, focusLeft }: { build: Build; compact: boolean; epoch: number; focusLeft: boolean }) {
+function CameraRig({
+  build,
+  compact,
+  epoch,
+  focusLeft,
+  preset,
+  presetSeq,
+  reduced,
+  anim,
+  onTourEnd,
+}: {
+  build: Build;
+  compact: boolean;
+  epoch: number;
+  focusLeft: boolean;
+  preset: CameraPreset;
+  /** Bumped on every explicit preset pick (even picking the same one again) so a grab from an earlier tour lets go. */
+  presetSeq: number;
+  reduced: boolean;
+  /** Shared with the canvas' OrbitControls: grabbing the camera stops a tour (and any in-flight glide) in its tracks. */
+  anim: { current: { grabbed: boolean } };
+  /** The cinematic tour finished its lap on its own (not interrupted) — let the toolbar settle back on "iso". */
+  onTourEnd?: () => void;
+}) {
   const { camera, controls, size } = useThree() as unknown as {
     camera: THREE.PerspectiveCamera;
-    controls: { target: THREE.Vector3; update: () => void } | null;
+    controls: { target: THREE.Vector3; minPolarAngle: number; update: () => void } | null;
     size: { width: number; height: number };
   };
   const framed = useRef<{ epoch: number; compact: boolean } | null>(null);
-  /** After an edit the camera eases to the new framing instead of jumping (and keeps the user's angle). */
-  const glide = useRef<{ dist: number; target: THREE.Vector3 } | null>(null);
+  const lastSeq = useRef<number | undefined>(undefined);
+  /** A one-shot ease between two frames (a new preset, an edit's re-fit, a resize…). */
+  const glide = useRef<{ from: THREE.Vector3; to: THREE.Vector3; fromTarget: THREE.Vector3; toTarget: THREE.Vector3; fromFov: number; toFov: number; elapsed: number } | null>(null);
+  /** The tour's own clock (0–1, one lap), independent of the glide above. */
+  const tour = useRef<number | null>(null);
+
+  /** The screen framing for one preset: the pure math, scaled for the compact layout and the plan editor's title block. */
+  const frameFor = (p: CameraPreset) => {
+    // While the plan editor covers the right side, the model has ~55% of the width.
+    const aspect = (size.width / Math.max(1, size.height)) * (focusLeft ? 0.54 : 1);
+    const f = cameraFor(p, { extent: build.extent }, aspect);
+    const target = new THREE.Vector3(...f.target);
+    const position = new THREE.Vector3(...f.position).sub(target).multiplyScalar(compact ? 1.05 : 0.95).add(target);
+    return { position, target, fov: f.fov };
+  };
+  const tourFrameAt = (phase: number) => {
+    const aspect = (size.width / Math.max(1, size.height)) * (focusLeft ? 0.54 : 1);
+    const f = tourFrame({ extent: build.extent }, aspect, phase);
+    const target = new THREE.Vector3(...f.target);
+    const position = new THREE.Vector3(...f.position).sub(target).multiplyScalar(compact ? 1.05 : 0.95).add(target);
+    return { position, target, fov: f.fov };
+  };
 
   useLayoutEffect(() => {
     // A hidden canvas (a phone tab in the background) measures 0 × 0: keep the current framing.
     if (size.width < 10 || size.height < 10) return;
     const [L, H, W] = build.extent;
-    // Fit the bounding sphere into both the vertical and the horizontal field of view.
-    const radius = 0.5 * Math.sqrt(L * L + H * H + W * W) + 0.4;
-    const aspect = size.width / Math.max(1, size.height);
-    const vfov = (camera.fov * Math.PI) / 180;
-    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
-    // While the plan editor covers the right side, the model has ~55% of the width.
-    const dist = (radius / Math.sin(Math.min(vfov, hfov * (focusLeft ? 0.54 : 1)) / 2)) * (compact ? 1.05 : 0.95);
-    const target = new THREE.Vector3(0, H * 0.25, 0);
     camera.near = 0.05;
-    camera.far = Math.max(400, dist * 4);
+    camera.far = Math.max(400, (0.5 * Math.sqrt(L * L + H * H + W * W) + 0.4) * 20);
     // On the board the title block sits top-left: shift the projection (not the orbit pivot)
     // so the model renders lower-right and still spins around its own centre; when editing,
     // shift it left of the plan editor instead.
     if (compact) camera.clearViewOffset();
     else camera.setViewOffset(size.width, size.height, focusLeft ? size.width * 0.235 : -size.width * 0.09, -size.height * 0.07, size.width, size.height);
-    camera.updateProjectionMatrix();
+    // `top` needs to go almost all the way to the pole; everything else keeps the old floor
+    // (so a free orbit never flips past vertical by accident).
+    if (controls) controls.minPolarAngle = preset === "top" ? 0.02 : 0.2;
+
+    const next = frameFor(preset);
     const f = framed.current;
-    const same = f && f.epoch === epoch && f.compact === compact;
+    const same = Boolean(f && f.epoch === epoch && f.compact === compact);
     framed.current = { epoch, compact };
-    if (same && controls) {
-      glide.current = { dist, target };
+
+    if (same && controls && !reduced) {
+      glide.current = { from: camera.position.clone(), to: next.position, fromTarget: controls.target.clone(), toTarget: next.target, fromFov: camera.fov, toFov: next.fov, elapsed: 0 };
       return;
     }
     glide.current = null;
-    const dir = new THREE.Vector3(0.9, 0.75, 1).normalize();
-    camera.position.copy(dir.multiplyScalar(dist)).add(target);
+    tour.current = null;
+    camera.position.copy(next.position);
+    camera.fov = next.fov;
+    camera.updateProjectionMatrix();
     if (controls) {
-      controls.target.copy(target);
+      controls.target.copy(next.target);
       controls.update();
     }
-  }, [build, camera, controls, compact, epoch, focusLeft, size.width, size.height]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [build, camera, controls, compact, epoch, focusLeft, preset, reduced, size.width, size.height]);
 
-  const off = useMemo(() => new THREE.Vector3(), []);
+  // Re-picking a preset (even the one already active) lets go of an earlier grab, so the tour
+  // (or a fresh glide) can run again.
+  useLayoutEffect(() => {
+    if (presetSeq === lastSeq.current) return;
+    lastSeq.current = presetSeq;
+    anim.current.grabbed = false;
+  }, [presetSeq, anim]);
+
   useFrame((_, delta) => {
     const g = glide.current;
-    if (!g || !controls) return;
-    const k = Math.min(1, delta * 2.6);
-    controls.target.lerp(g.target, k);
-    off.copy(camera.position).sub(controls.target);
-    const cur = off.length();
-    const next = cur + (g.dist - cur) * k;
-    camera.position.copy(controls.target).add(off.setLength(next));
-    if (Math.abs(next - g.dist) < 0.01 && controls.target.distanceTo(g.target) < 0.005) glide.current = null;
+    if (g) {
+      g.elapsed += delta;
+      const t = Math.min(1, g.elapsed / PRESET_GLIDE_S);
+      const e = easeInOut(t);
+      camera.position.copy(g.from).lerp(g.to, e);
+      camera.fov = lerp(g.fromFov, g.toFov, e);
+      camera.updateProjectionMatrix();
+      if (controls) controls.target.copy(g.fromTarget).lerp(g.toTarget, e);
+      if (t >= 1) glide.current = null;
+      return;
+    }
+    if (preset !== "tour" || reduced || anim.current.grabbed) return;
+    const phase = Math.min(1, (tour.current ?? 0) + delta / TOUR_LAP_SECONDS);
+    tour.current = phase;
+    if (phase >= 1) {
+      tour.current = null;
+      onTourEnd?.();
+      return;
+    }
+    const f = tourFrameAt(phase);
+    camera.position.copy(f.position);
+    camera.fov = f.fov;
+    camera.updateProjectionMatrix();
+    if (controls) controls.target.copy(f.target);
   });
   return null;
 }
@@ -517,13 +587,38 @@ export interface SceneProps {
   extra?: React.ReactNode;
   /** Kept mounted but not visible (phone tabs): stop rendering, keep the state. */
   paused?: boolean;
+  /** Which framing the camera eases to ("iso" — today's 3/4 view — by default). */
+  preset?: CameraPreset;
+  /** Bump to re-apply `preset` even when it's unchanged (e.g. picking "tour" again after grabbing the camera). */
+  presetSeq?: number;
+  /** The cinematic tour finished its lap on its own — switch the toolbar's selection back to "iso". */
+  onTourEnd?: () => void;
 }
 
-export default function Scene({ build, mode, highlightLayer, autoRotate = true, replayKey, accent = "#ff5b1f", compact = false, interactive = true, onDiff, focusLeft = false, lite = false, extra, paused = false }: SceneProps) {
+export default function Scene({
+  build,
+  mode,
+  highlightLayer,
+  autoRotate = true,
+  replayKey,
+  accent = "#ff5b1f",
+  compact = false,
+  interactive = true,
+  onDiff,
+  focusLeft = false,
+  lite = false,
+  extra,
+  paused = false,
+  preset = "iso",
+  presetSeq = 0,
+  onTourEnd,
+}: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   const shared = useMemo(() => ({ clock, explode, reduced, offset: new THREE.Vector3() }), [reduced]);
+  /** Shared with the canvas' OrbitControls: grabbing the camera stops a tour (and any in-flight glide). */
+  const camAnim = useRef({ grabbed: false });
 
   // Diff the new build against the previous one (React's "adjust state on prop change" pattern).
   const [track, setTrack] = useState<Track>(() => fullTrack(build, replayKey, 0));
@@ -617,8 +712,21 @@ export default function Scene({ build, mode, highlightLayer, autoRotate = true, 
         maxPolarAngle={Math.PI / 2.05}
         minDistance={1.5}
         maxDistance={120}
+        onStart={() => {
+          camAnim.current.grabbed = true;
+        }}
       />
-      <CameraRig build={build} compact={compact} epoch={current.epoch} focusLeft={focusLeft && !compact} />
+      <CameraRig
+        build={build}
+        compact={compact}
+        epoch={current.epoch}
+        focusLeft={focusLeft && !compact}
+        preset={preset}
+        presetSeq={presetSeq}
+        reduced={reduced}
+        anim={camAnim}
+        onTourEnd={onTourEnd}
+      />
     </Canvas>
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {labels.map((l) => (
