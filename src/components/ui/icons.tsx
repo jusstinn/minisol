@@ -231,6 +231,47 @@ export const IconUndo = ({ size, ...p }: P) => (
   </svg>
 );
 
+/* Camera presets — a small "project box" with a lens marking where the camera stands. */
+export const IconCamIso = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M12 3l7 4v8l-7 4-7-4V7z" />
+    <path d="M12 3v8M5 7l7 4 7-4" />
+  </svg>
+);
+export const IconCamTop = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="7" y="7" width="10" height="10" rx="1" />
+    <circle cx="12" cy="4" r="1.3" fill="currentColor" stroke="none" />
+    <path d="M12 5.3V7" />
+  </svg>
+);
+export const IconCamFront = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="7" y="7" width="10" height="10" rx="1" />
+    <circle cx="12" cy="20" r="1.3" fill="currentColor" stroke="none" />
+    <path d="M12 18.7V17" />
+  </svg>
+);
+export const IconCamSide = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="7" y="7" width="10" height="10" rx="1" />
+    <circle cx="20" cy="12" r="1.3" fill="currentColor" stroke="none" />
+    <path d="M18.7 12H17" />
+  </svg>
+);
+export const IconCamEye = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" />
+    <circle cx="12" cy="12" r="2.3" />
+  </svg>
+);
+export const IconCamTour = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M10 8.3l6 3.7-6 3.7z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 /** Blueprint wordmark glyph: a square with dimension ticks. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {
   return (

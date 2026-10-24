@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Card, ProjectSnapshot } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
 import { exposedEdges, fenceSegments } from "@/domain/layout";
@@ -14,6 +14,9 @@ import { tr } from "@/lib/i18n";
 import type { UiSignal } from "@/lib/useAgent";
 import type { LiteGraphics } from "@/lib/useLiteGraphics";
 import { buildScene } from "../blueprint/builders";
+import CameraMenu from "../blueprint/CameraMenu";
+import { CAMERA_PRESETS } from "../blueprint/cameraPresets";
+import type { CameraPreset } from "../blueprint/cameraPresets";
 import type { ViewMode } from "../blueprint/Scene";
 import { useUploads } from "../blueprint/uploads/useUploads";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconUndo, IconUsers, IconWarn } from "../ui/icons";
@@ -120,6 +123,25 @@ function SketchView({
   const [seenLayout, setSeenLayout] = useState(project.layout);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [diff, setDiff] = useState<{ added: number; changed: number; removed: number; at: number } | null>(null);
+  // The sketch's camera: which preset, and a sequence bumped on every explicit pick (even
+  // re-picking the same one, e.g. "tour" again after grabbing the camera stopped it).
+  const [cam, setCam] = useState<{ preset: CameraPreset; seq: number }>({ preset: "iso", seq: 0 });
+  const chooseCamera = useCallback((p: CameraPreset) => setCam((c) => ({ preset: p, seq: c.seq + 1 })), []);
+  // Desktop shortcut: 1–6 pick a camera preset, but only with the pointer over the sketch and
+  // while the customer isn't typing somewhere else on the page.
+  const hoverSketch = useRef(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!hoverSketch.current) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      const idx = Number(e.key) - 1;
+      if (!Number.isInteger(idx) || idx < 0 || idx >= CAMERA_PRESETS.length) return;
+      chooseCamera(CAMERA_PRESETS[idx]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [chooseCamera]);
 
   // Apply the assistant's screen commands once each (fresh ones also when this view mounts).
   const [uiSeen, setUiSeen] = useState<number | null>(() => (ui && Date.now() - ui.at > 5000 ? ui.seq : null));
@@ -129,7 +151,8 @@ function SketchView({
     if (c.view) setMode(c.view);
     if (typeof c.editor === "boolean") setEditing(c.editor && Boolean(sketch && project.layout));
     if (c.replay) setReplay((r) => r + 1);
-    if (c.view || c.editor || c.highlight) setRotate(false);
+    if (c.camera) setCam((cm) => ({ preset: c.camera!, seq: cm.seq + 1 }));
+    if (c.view || c.editor || c.highlight || c.camera) setRotate(false);
   }
 
   // A newly committed layout replaces any drag preview.
@@ -231,6 +254,12 @@ function SketchView({
         className={`relative overflow-hidden rounded-[22px] transition-colors duration-700 ${
           dark ? "bp-sheet" : "bg-[radial-gradient(120%_100%_at_30%_0%,#fbf8f1,#e7e1d3)] text-ink"
         } ${inline ? "h-[380px]" : "h-[clamp(460px,62vh,660px)]"}`}
+        onMouseEnter={() => {
+          hoverSketch.current = true;
+        }}
+        onMouseLeave={() => {
+          hoverSketch.current = false;
+        }}
         {...up.dropProps}
       >
         <div className="absolute inset-0">
@@ -248,6 +277,9 @@ function SketchView({
             lite={lite}
             paused={paused}
             extra={up.sceneExtra}
+            preset={cam.preset}
+            presetSeq={cam.seq}
+            onTourEnd={() => chooseCamera("iso")}
           />
           </SceneBoundary>
         </div>
@@ -327,6 +359,7 @@ function SketchView({
               </button>
             )}
             {up.button}
+            <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>
