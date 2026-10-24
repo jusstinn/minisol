@@ -37,6 +37,7 @@ export default function Entry({
   member,
   fromPass = false,
   account,
+  isOwner = false,
   membersFailed = false,
   onRetryMembers,
   lang,
@@ -55,6 +56,8 @@ export default function Entry({
   fromPass?: boolean;
   /** Signed in through the site sign-in as this account: AI status, who, and "Sign out". */
   account?: string;
+  /** The owner: a link to /admin (who tried it). */
+  isOwner?: boolean;
   /** The member list couldn't be loaded: show "try again" instead of a loading card. */
   membersFailed?: boolean;
   onRetryMembers?: () => void;
@@ -128,6 +131,11 @@ export default function Entry({
           ))}
         </div>
         {account && <AiStatus lang={lang} />}
+        {isOwner && (
+          <a href="/admin" className="rounded-full px-2 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3 transition hover:text-ink">
+            {lang === "en" ? "Usage" : "Utilizare"}
+          </a>
+        )}
         {account && (
           <a
             href="/api/logout"

@@ -4,6 +4,7 @@ import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { MAX_BATCH, cleanUsageEvent, minuteOf } from "@/lib/usage";
 import type { UsageRecord } from "@/lib/usage";
 import { siteSignIn } from "@/lib/siteLogin";
+import { countEvents } from "@/lib/usageCounters";
 import { usageSink } from "@/lib/usageSink";
 
 export const runtime = "nodejs";
@@ -33,6 +34,10 @@ export async function POST(req: Request) {
     .filter((e) => e !== null)
     // Behind the site sign-in: which invited account (decided by the server, from the cookie — never the browser).
     .map((e) => ({ ...e, tenant, at, ...(account ? { account } : {}) }));
-  if (records.length) await sink.record(records);
+  if (records.length) {
+    await sink.record(records);
+    // Invited accounts: daily counts kept for the owner's /admin page.
+    await countEvents(records);
+  }
   return new Response(null, { status: 204 });
 }

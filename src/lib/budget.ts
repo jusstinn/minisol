@@ -24,9 +24,14 @@ type Env = Record<string, string | undefined>;
 export interface CounterStore {
   /** Add `by` (default 1) to `key`, which expires `windowMs` after its first hit; return the new count. */
   hit(key: string, windowMs: number, by?: number): Promise<number>;
+  /** Current values of many keys at once (0 for missing ones). */
+  getMany?(keys: string[]): Promise<number[]>;
 }
 
-const mem = new Map<string, { count: number; resetAt: number }>();
+// One map per process: Next bundles route handlers and pages separately, and each bundle would
+// otherwise get its own copy (in production every serverless instance has its own anyway).
+const g = globalThis as typeof globalThis & { __blueprintCounters?: Map<string, { count: number; resetAt: number }> };
+const mem = (g.__blueprintCounters ??= new Map<string, { count: number; resetAt: number }>());
 
 export const memoryStore: CounterStore = {
   async hit(key, windowMs, by = 1) {
@@ -38,6 +43,13 @@ export const memoryStore: CounterStore = {
       return by;
     }
     return (b.count += by);
+  },
+  async getMany(keys) {
+    const now = Date.now();
+    return keys.map((k) => {
+      const b = mem.get(k);
+      return b && b.resetAt > now ? b.count : 0;
+    });
   },
 };
 
@@ -59,6 +71,18 @@ export function upstashStore(url: string, token: string, fetcher: typeof fetch =
       const n = Number(out[1]?.result);
       if (!Number.isFinite(n)) throw new Error(out[1]?.error ?? "counter store: bad reply");
       return n;
+    },
+    async getMany(keys) {
+      if (!keys.length) return [];
+      const res = await fetcher(`${url.replace(/\/$/, "")}/pipeline`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(keys.map((k) => ["GET", k])),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) throw new Error(`counter store HTTP ${res.status}`);
+      const out = (await res.json()) as { result?: unknown }[];
+      return keys.map((_, i) => Number(out[i]?.result ?? 0) || 0);
     },
   };
 }
@@ -82,6 +106,18 @@ function store(env: Env): CounterStore | null {
 }
 
 const NO_STORE: Allowance = { ok: false, reason: "AI budget store not configured" };
+
+/**
+ * A store that outlives one serverless instance (Upstash), for numbers worth keeping (usage per
+ * account). Locally (not Vercel production) memory is fine; in production without Upstash: none.
+ */
+export function sharedStore(env: Env = process.env): CounterStore | null {
+  if (override) return override;
+  const url = env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL;
+  const token = env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN;
+  if (url && token) return upstashStore(url, token);
+  return env.VERCEL_ENV === "production" ? null : memoryStore;
+}
 
 /** Counters for OpenAI's own rate limits (src/agent/models.ts): shared when possible, else this instance's. */
 export function rateStore(env: Env = process.env): CounterStore {

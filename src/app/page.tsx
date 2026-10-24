@@ -14,6 +14,7 @@ export default async function Page({ searchParams }: PageProps<"/">) {
   // Behind the site sign-in: who's signed in (shown with "Sign out" on the start screen).
   const login = siteLogin();
   const account = login ? (loginSession(login, (await cookies()).get(loginCookieName())?.value)?.account ?? undefined) : undefined;
+  const isOwner = !!account && login?.accounts.find((a) => a.login === account)?.kind === "owner";
 
   if (requirePassLink()) {
     // Product mode: the member comes only from the session set by a signed pass link (src/proxy.ts).
@@ -24,9 +25,9 @@ export default async function Page({ searchParams }: PageProps<"/">) {
     const sources = getDataSources(tenant.id);
     const [customer, stores] = await Promise.all([sources.loyalty.getMember(session.memberId), sources.stores.list()]);
     if (!customer) return <PassRequired tenant={tenant} initialLang={session.lang ?? lang} reason="invalid" />;
-    return <App tenant={tenant} passMember={memberSummary(customer, stores)} initialLang={session.lang ?? customer.language} account={account} />;
+    return <App tenant={tenant} passMember={memberSummary(customer, stores)} initialLang={session.lang ?? customer.language} account={account} isOwner={isOwner} />;
   }
 
   const member = typeof sp.member === "string" ? sp.member : undefined;
-  return <App tenant={tenant} initialMember={member} account={account} />;
+  return <App tenant={tenant} initialMember={member} account={account} isOwner={isOwner} />;
 }

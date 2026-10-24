@@ -1,4 +1,5 @@
 import { readJson } from "@/lib/body";
+import { countLogin } from "@/lib/usageCounters";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 import { checkCredentials, loginCookieName, loginCookieOptions, loginCookieValue, safeNext, siteLogin } from "@/lib/siteLogin";
 
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
   }
 
   console.info(`[login] signed in: ${check.account}`);
+  await countLogin(check.account);
   const cookie = loginCookieValue(login, check.account);
   const res = Response.json({ ok: true, next: safeNext(body?.next) }, { headers: { "Cache-Control": "no-store" } });
   const o = loginCookieOptions(cookie.maxAge);

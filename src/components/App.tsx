@@ -18,6 +18,7 @@ export default function App({
   passMember,
   initialLang,
   account,
+  isOwner = false,
 }: {
   tenant: Tenant;
   initialMember?: string;
@@ -26,6 +27,8 @@ export default function App({
   initialLang?: Lang;
   /** Signed in through the site sign-in as this account: shown with "Sign out" on the start screen. */
   account?: string;
+  /** That account is the owner's: a link to the usage page. */
+  isOwner?: boolean;
 }) {
   const [members, setMembers] = useState<MemberSummary[]>(passMember ? [passMember] : []);
   const [memberId, setMemberId] = useState<string | undefined>(passMember?.memberId ?? initialMember);
@@ -90,6 +93,7 @@ export default function App({
           <motion.div key="entry" exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
             <Entry
               account={account}
+              isOwner={isOwner}
               membersFailed={membersFailed}
               onRetryMembers={() => {
                 setMembersFailed(false);
