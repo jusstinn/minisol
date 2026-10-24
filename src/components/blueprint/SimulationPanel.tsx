@@ -6,7 +6,6 @@ import type { Layout } from "@/domain/layout";
 import { DEFAULT_LOCATION, localHourOfDay, solarPosition, sunTimes, todayInZone, zonedTimeToUtc } from "@/domain/sun";
 import type { Location } from "@/domain/sun";
 import type { Lang } from "@/domain/types";
-import { dec } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { Layer } from "./builders";
 import { dayHourAt, hoursAtProgress, progressToLayer, sweepProgress } from "./buildTimeline";
@@ -281,9 +280,10 @@ export default function SimulationPanel({
           </div>
           <div className="flex items-center gap-1.5 font-mono text-[10px] opacity-75">
             <IconClock size={11} />
+            {/* Workdays of 8 h; the total is the project's own estimate range. */}
             {en
-              ? `Day ${dh.day}, hour ${dec(dh.hour, lang, 1)} of ~${hoursMax} h`
-              : `Ziua ${dh.day}, ora ${dec(dh.hour, lang, 1)} din ~${hoursMax} h`}
+              ? `Day ${dh.day} · ~${Math.round(hours)} h of ${hoursMin}–${hoursMax} h`
+              : `Ziua ${dh.day} · ~${Math.round(hours)} h din ${hoursMin}–${hoursMax} h`}
           </div>
         </div>
       )}

@@ -31,9 +31,12 @@ export function layerToProgress(layerIndex: number, layerCount: number): number 
   return clamp01((layerIndex + 0.5) / layerCount);
 }
 
-/** Linear estimate of elapsed hours at this point in the build, between the project's hour range. */
+/**
+ * Hours worked by this point in the build: the share of a typical duration (the middle of the
+ * project's estimate). At the start nothing is done yet — 0 h, not the minimum.
+ */
 export function hoursAtProgress(progress: number, hoursMin: number, hoursMax: number): number {
-  return hoursMin + (hoursMax - hoursMin) * clamp01(progress);
+  return clamp01(progress) * ((hoursMin + hoursMax) / 2);
 }
 
 export interface DayHour {

@@ -35,10 +35,11 @@ describe("layerToProgress", () => {
 });
 
 describe("hoursAtProgress", () => {
-  it("interpolates linearly between the project's hour estimate", () => {
-    expect(hoursAtProgress(0, 10, 16)).toBe(10);
-    expect(hoursAtProgress(1, 10, 16)).toBe(16);
-    expect(hoursAtProgress(0.5, 10, 16)).toBe(13);
+  it("is the share of a typical duration done so far (nothing at the start)", () => {
+    expect(hoursAtProgress(0, 10, 16)).toBe(0);
+    expect(hoursAtProgress(1, 10, 16)).toBe(13);
+    expect(hoursAtProgress(0.5, 10, 16)).toBe(6.5);
+    expect(hoursAtProgress(2, 10, 16)).toBe(13);
   });
 });
 

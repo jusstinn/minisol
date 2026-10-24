@@ -293,7 +293,7 @@ function SketchView({
   return (
     <div className={inline ? "space-y-3" : undefined}>
       <div
-        className={`relative overflow-hidden rounded-[22px] transition-colors duration-700 ${
+        className={`@container relative overflow-hidden rounded-[22px] transition-colors duration-700 ${
           dark ? "bp-sheet" : "bg-[radial-gradient(120%_100%_at_30%_0%,#fbf8f1,#e7e1d3)] text-ink"
         } ${inline ? "h-[380px]" : "h-[clamp(460px,62vh,660px)]"}`}
         onMouseEnter={() => {
@@ -390,7 +390,7 @@ function SketchView({
                 }`}
               >
                 {m.icon}
-                <span className="hidden sm:inline">{m.label}</span>
+                <span className="hidden @xl:inline">{m.label}</span>
               </button>
             ))}
           </div>
@@ -408,7 +408,7 @@ function SketchView({
                 }`}
               >
                 {editing ? <IconClose size={14} /> : <IconPencil size={14} />}
-                <span className={inline ? "sr-only" : "hidden sm:inline"}>{editing ? (en ? "Done" : "Gata") : en ? "Edit sketch" : "Modifică"}</span>
+                <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{editing ? (en ? "Done" : "Gata") : en ? "Edit sketch" : "Modifică"}</span>
               </button>
             )}
             <button
@@ -421,7 +421,7 @@ function SketchView({
               }`}
             >
               <IconSun size={14} />
-              <span className={inline ? "sr-only" : "hidden sm:inline"}>{tr("simulate", lang)}</span>
+              <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{tr("simulate", lang)}</span>
             </button>
             {up.button}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
