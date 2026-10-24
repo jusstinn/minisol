@@ -9,6 +9,7 @@ import type { BasketItem } from "@/domain/quote";
 import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
 import type { Board as BoardState, UiSignal } from "@/lib/useAgent";
+import SceneBoundary from "../blueprint/SceneBoundary";
 import BlueprintPanel from "./BlueprintPanel";
 import type { SketchControls } from "./BlueprintPanel";
 import ChangeCard from "./ChangeCard";
@@ -74,9 +75,12 @@ export default function Board(props: Props) {
       case "project": {
         // Only the current project is editable; older snapshots in the conversation stay as they were.
         const current = board.project?.id === c.id;
+        const project = current ? board.project!.project : c.project;
         return (
+          // A sketch that can't be drawn (e.g. a malformed saved layout) stays inside its panel.
+          <SceneBoundary resetKey={project} en={lang === "en"}>
           <BlueprintPanel
-            project={current ? board.project!.project : c.project}
+            project={project}
             tenant={tenant}
             lang={lang}
             highlight={highlight}
@@ -87,6 +91,7 @@ export default function Board(props: Props) {
             ui={current ? ui : undefined}
             look={current ? board.quote?.look : undefined}
           />
+          </SceneBoundary>
         );
       }
       case "change":
