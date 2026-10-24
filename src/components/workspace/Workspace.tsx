@@ -99,6 +99,7 @@ export default function Workspace({
       send: (t) => void agent.send(t, "chat"),
       openCart: (open) => setCartOpen(open),
       reveal: (panel) => showPanelRef.current(panel, {}),
+      openSketch: () => agent.sketch.open(),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [agent.send],

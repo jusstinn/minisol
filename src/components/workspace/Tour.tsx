@@ -26,12 +26,16 @@ interface Step {
   enter?: (t: TourActions) => void;
   /** Wait for this before lighting the anchor (the demo's answer arriving). */
   ready?: (has: (k: Board) => boolean) => boolean;
+  /** Once it's ready (e.g. draw the sketch for retailers that only draw it on request). */
+  onReady?: (t: TourActions) => void;
 }
 
 export interface TourActions {
   send: (text: string) => void;
   openCart: (open: boolean) => void;
   reveal: (panel: PanelTarget) => void;
+  /** Draw the 3D sketch (retailers set to draw it only on request). */
+  openSketch: () => void;
 }
 
 const DECK = { ro: "Vreau o terasă din lemn de 4 x 3 m în curte, pe pământ.", en: "I want to build a 4 x 3 m wooden deck in my garden, on soil." };
@@ -60,6 +64,7 @@ function steps(lang: Lang, retailer: string): Step[] {
       panel: "sketch",
       enter: (t) => t.send(en ? DECK.en : DECK.ro),
       ready: (has) => has("project") && has("quote"),
+      onReady: (t) => t.openSketch(),
       title: ["2 · Schița 3D, din dimensiunile lui", "2 · A 3D sketch from their dimensions"],
       body: [
         "Se construiește strat cu strat. E orientativă, nu proiect tehnic — dar clientul vede ce cumpără și o poate modifica: trăgând de margini sau cerând în chat. Încearcă vederile PLAN / REAL / EXPLODAT și camerele.",
@@ -181,10 +186,11 @@ export default function Tour({
     // Next tick: the workspace (a parent) updates its tabs after this child's effects run.
     const t = setTimeout(() => {
       revealed.current = i;
+      step.onReady?.(actions);
       actions.reveal(panel);
     }, 0);
     return () => clearTimeout(t);
-  }, [ready, i, step.panel, actions]);
+  }, [ready, i, step, actions]);
 
   // Follow the anchor while things move (streaming cards, scrolling, the sketch building).
   useEffect(() => {
