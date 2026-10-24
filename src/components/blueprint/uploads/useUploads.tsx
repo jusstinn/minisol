@@ -150,7 +150,7 @@ export function useUploads({
       }`}
     >
       {loading ? <Spinner className="text-[13px]" /> : <IconUpload size={14} />}
-      <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{en ? "Upload" : "Încarcă"}</span>
+      <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{en ? "Upload" : "Încarcă"}</span>
     </button>
   );
   // Phones: the controls row is already full (it runs into the title), so the button sits

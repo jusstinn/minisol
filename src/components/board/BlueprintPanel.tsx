@@ -409,12 +409,13 @@ function SketchView({
                 }}
                 aria-pressed={editing}
                 aria-label={editing ? (en ? "Done editing" : "Gata cu modificările") : en ? "Edit sketch" : "Modifică schița"}
+                title={editing ? (en ? "Done editing" : "Gata cu modificările") : en ? "Edit sketch" : "Modifică schița"}
                 className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full px-2 font-mono sm:px-3 text-[10.5px] uppercase tracking-wider backdrop-blur transition ${
                   editing ? "bg-accent text-on-accent" : dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
                 }`}
               >
                 {editing ? <IconClose size={14} /> : <IconPencil size={14} />}
-                <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{editing ? (en ? "Done" : "Gata") : en ? "Edit sketch" : "Modifică"}</span>
+                <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{editing ? (en ? "Done" : "Gata") : en ? "Edit sketch" : "Modifică"}</span>
               </button>
             )}
             <button
@@ -427,11 +428,27 @@ function SketchView({
               }`}
             >
               <IconSun size={14} />
-              <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{tr("simulate", lang)}</span>
+              <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{tr("simulate", lang)}</span>
             </button>
             {up.button}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
-            <PhotoRenderButton captureRef={captureRef} mode={mode} setMode={setMode} title={project.title} measurements={project.measurements} tenant={tenant} lang={lang} dark={dark} inline={inline} />
+            <PhotoRenderButton
+              captureRef={captureRef}
+              mode={mode}
+              setMode={setMode}
+              title={project.title}
+              measurements={project.measurements}
+              tenant={tenant}
+              lang={lang}
+              dark={dark}
+              inline={inline}
+              backdrop={simOpen && simSun?.bg ? simSun.bg : undefined}
+              size={build.dims
+                .filter((d) => Math.hypot(d.to[0] - d.from[0], d.to[2] - d.from[2]) > 0.05)
+                .slice(0, 2)
+                .map((d) => d.label)
+                .join(" × ")}
+            />
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>

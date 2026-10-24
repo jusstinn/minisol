@@ -7,7 +7,7 @@ import { tr } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { IconPhoto, IconWarn } from "../ui/icons";
 import type { CaptureFn, ViewMode } from "./Scene";
-import { footerText } from "./photoFooter";
+import { contentCrop, footerText, photoFileName } from "./photoFooter";
 
 /**
  * "Randare foto": a high-resolution PNG of the current sketch's REAL view, with a branded
@@ -26,6 +26,8 @@ export default function PhotoRenderButton({
   lang,
   dark,
   inline,
+  backdrop,
+  size,
 }: {
   captureRef: React.RefObject<CaptureFn | null>;
   mode: ViewMode;
@@ -37,6 +39,10 @@ export default function PhotoRenderButton({
   dark: boolean;
   /** Phone tab layout: the label is screen-reader only, like the other toolbar buttons. */
   inline?: boolean;
+  /** The sky behind the model (the sun simulation's tint); the usual warm paper otherwise. */
+  backdrop?: string;
+  /** The sketch's plan dimensions ("4 m × 3 m"). */
+  size?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -58,8 +64,8 @@ export default function PhotoRenderButton({
       const dataUrl = capture?.();
       if (mode !== original) setMode(original);
       if (!dataUrl) throw new Error("capture unavailable");
-      const blob = await addFooter(dataUrl, footerText({ title, measurements, tenant: tenant.name, lang }), tenant.accent);
-      await shareOrDownload(blob, fileName(tenant.id));
+      const blob = await composePhoto(dataUrl, footerText({ title, measurements, tenant: tenant.name, lang, size }), tenant.accent, backdrop);
+      await shareOrDownload(blob, photoFileName(title, tenant.id));
       track("render_exported");
     } catch {
       if (mode !== original) setMode(original);
@@ -84,7 +90,7 @@ export default function PhotoRenderButton({
         }`}
       >
         {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <IconPhoto size={15} />}
-        <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{tr("photoRender", lang)}</span>
+        <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{tr("photoRender", lang)}</span>
       </button>
       {error && (
         <div className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-[min(60vw,220px)] items-start gap-1.5 rounded-lg bg-[#b3261e] px-2.5 py-2 text-[11px] leading-snug text-white shadow-lg">
@@ -96,10 +102,6 @@ export default function PhotoRenderButton({
   );
 }
 
-function fileName(tenantId: string): string {
-  return `schita-${tenantId}-${Date.now()}.png`;
-}
-
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -109,16 +111,39 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Composites the branded footer strip under the captured frame. */
-async function addFooter(dataUrl: string, footer: { title: string; dims: string; meta: string }, accent: string): Promise<Blob> {
-  const img = await loadImage(dataUrl);
+/**
+ * The photo: the captured frame cropped to the model (the live view leaves room for the
+ * toolbar and cards), on an opaque backdrop — the canvas itself is transparent, which most
+ * photo apps show as black — with the branded footer strip under it.
+ */
+async function composePhoto(dataUrl: string, footer: { title: string; dims: string; meta: string }, accent: string, backdrop?: string): Promise<Blob> {
+  const src = await loadImage(dataUrl);
+  const probe = document.createElement("canvas");
+  probe.width = src.width;
+  probe.height = src.height;
+  const pctx = probe.getContext("2d", { willReadFrequently: true });
+  if (!pctx) throw new Error("no 2d context");
+  pctx.drawImage(src, 0, 0);
+  const data = pctx.getImageData(0, 0, src.width, src.height).data;
+  const crop = contentCrop((x, y) => data[(y * src.width + x) * 4 + 3], src.width, src.height);
+
+  const img = { width: crop.w, height: crop.h };
   const barH = Math.max(56, Math.round(img.height * 0.09));
   const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height + barH;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("no 2d context");
-  ctx.drawImage(img, 0, 0);
+  if (backdrop) ctx.fillStyle = backdrop;
+  else {
+    // The REAL view's paper: radial-gradient(120% 100% at 30% 0%, #fbf8f1, #e7e1d3).
+    const g = ctx.createRadialGradient(img.width * 0.3, 0, 0, img.width * 0.3, 0, Math.max(img.width, img.height) * 1.1);
+    g.addColorStop(0, "#fbf8f1");
+    g.addColorStop(1, "#e7e1d3");
+    ctx.fillStyle = g;
+  }
+  ctx.fillRect(0, 0, img.width, img.height);
+  ctx.drawImage(src, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
   ctx.fillStyle = "#141311";
   ctx.fillRect(0, img.height, canvas.width, barH);
   ctx.fillStyle = accent;
