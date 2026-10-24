@@ -1159,7 +1159,10 @@ export function budgetReply(b: BudgetView, lang: Lang): string {
       ? `Even the leanest version costs ${T}, **${lei(b.total - b.amount, lang)}** over ${A}. We could do it in stages, or save on single items — tell me which.`
       : `Nici varianta cea mai economică nu încape: costă ${T}, cu **${lei(b.total - b.amount, lang)}** peste ${A}. O putem face în etape sau economisi la unele produse — spune-mi cum preferi.`;
   }
-  const what =
+  const without = b.without?.length
+    ? en ? `, without the ${b.without.length < 2 ? b.without[0] : `${b.without.slice(0, -1).join(", ")} and ${b.without.at(-1)}`}` : `, fără ${b.without.length < 2 ? b.without[0] : `${b.without.slice(0, -1).join(", ")} și ${b.without.at(-1)}`}`
+    : "";
+  const what0 =
     b.fit === "tier"
       ? en ? `the same sketch in the ${q} range` : `aceeași schiță în varianta ${q}`
       : b.fit === "lean"
@@ -1167,12 +1170,13 @@ export function budgetReply(b: BudgetView, lang: Lang): string {
         : b.stage
           ? en ? `a first stage of **${b.size}** of fence, in the budget range` : `o primă etapă de **${b.size}** de gard, în varianta economică`
           : en ? `a **${b.size}** version in the budget range` : `o variantă de **${b.size}**, în varianta economică`;
+  const what = what0 + without;
   if (b.applied) {
     return en
       ? `Done — I switched to ${what}: new total ${T}, within your ${A}. The sketch and the list are updated.`
       : `Gata — am trecut la ${what}: total nou ${T}, în bugetul de ${A}. Schița și lista sunt actualizate.`;
   }
   return en
-    ? `With ${A}: ${what} costs ${T}. Tap **Apply** on the card and I'll update the sketch and the list.`
-    : `Cu ${A}: ${what} costă ${T}. Apasă **Aplică** pe card și actualizez schița și lista.`;
+    ? `With ${A}: ${what}${without ? "," : ""} costs ${T}. Tap **Apply** on the card and I'll update the sketch and the list.`
+    : `Cu ${A}: ${what}${without ? "," : ""} costă ${T}. Apasă **Aplică** pe card și actualizez schița și lista.`;
 }

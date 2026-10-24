@@ -46,6 +46,20 @@ describe("fitBudget", () => {
     expect(await fitBudget({ ...deck, amount: 600, current: 5470 }, deckPrice)).toEqual({ kind: "over", minimum: 3850 });
   });
 
+  it("leaves the furniture out before making the project smaller", async () => {
+    // A 1.200 lei table + BBQ on the deck.
+    const furnished: Pricer = async (o) => {
+      const p = (await deckPrice(o))!;
+      return { total: p.total + (o.bare ? 0 : 1200) };
+    };
+    const base = { ...deck, current: 6670, furnished: true };
+    expect(await fitBudget({ ...base, amount: 4000 }, furnished)).toEqual({ kind: "lean", total: 3850, bare: true });
+    const r = await fitBudget({ ...base, amount: 3000 }, furnished);
+    // A bigger deck without the furniture beats a tiny one with it.
+    expect(r).toMatchObject({ kind: "smaller", bare: true, minimum: 3850 });
+    if (r.kind === "smaller") expect(r.scale).toBeGreaterThan(0.72);
+  });
+
   it("skips sizes that can't be drawn", async () => {
     const picky: Pricer = async (o) => (o.scale < 1 && o.scale > 0.5 ? null : deckPrice(o));
     const r = await fitBudget({ ...deck, amount: 3000, current: 5470 }, picky);

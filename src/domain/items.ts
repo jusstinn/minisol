@@ -125,6 +125,12 @@ export function paletteFor(type: ProjectType): ItemKind[] {
 }
 
 /** A placed item. x/z = centre of the footprint in plan metres; rot in 90° steps (0 = back to the north). */
+/**
+ * Furniture and decor: placed in the sketch (and sold, some of them) but not part of the build —
+ * what a tight budget leaves out first. Bathroom fixtures and fitted lights are the job itself.
+ */
+export const FURNISHINGS: ReadonlySet<ItemKind> = new Set<ItemKind>(["table", "chair", "sofa", "bed", "wardrobe", "tv", "plant", "planter", "bbq", "lounger", "parasol", "floor_lamp", "washing_machine"]);
+
 export interface Item {
   id: string;
   kind: ItemKind;

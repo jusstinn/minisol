@@ -49,8 +49,10 @@ export default function BudgetCard({ card, lang, onSend, disabled }: { card: Ext
               : en ? "Budget range, essentials only, same proportions." : "Varianta economică, doar strictul necesar, aceleași proporții."
             : en ? `${lei(b.total - b.amount, lang)} over. It could be done in stages, or saved on single items.` : `Depășește cu ${lei(b.total - b.amount, lang)}. Se poate face în etape sau economisi la produse.`;
 
+  const without = b.without?.length ? (en ? ` Without the ${andList(b.without, "and")}.` : ` Fără ${andList(b.without, "și")}.`) : "";
+
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 overflow-hidden rounded-2xl border border-rule bg-paper-2/60">
+    <motion.div data-tour="budget" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 overflow-hidden rounded-2xl border border-rule bg-paper-2/60">
       <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
         <IconWallet size={13} />
         {en ? "Your budget" : "Bugetul tău"} · {int(b.amount, lang)} lei
@@ -60,7 +62,10 @@ export default function BudgetCard({ card, lang, onSend, disabled }: { card: Ext
           <div className="text-[14.5px] font-semibold leading-tight text-ink">{headline}</div>
           <div className={`shrink-0 font-mono text-[14px] font-semibold tabular-nums ${over ? "text-bad" : "text-ink"}`}>{lei(b.total, lang)}</div>
         </div>
-        <div className="mt-1 text-[12.5px] leading-snug text-ink-3">{detail}</div>
+        <div className="mt-1 text-[12.5px] leading-snug text-ink-3">
+          {detail}
+          {without}
+        </div>
 
         {/* The total against the budget; past the line when even the leanest version doesn't fit. */}
         <div className="relative mt-3 h-2 rounded-full bg-rule/60" role="img" aria-label={`${lei(b.total, lang)} / ${lei(b.amount, lang)}`}>
@@ -103,4 +108,9 @@ export default function BudgetCard({ card, lang, onSend, disabled }: { card: Ext
       </div>
     </motion.div>
   );
+}
+
+/** "masă, șezlong și grătar" */
+function andList(xs: string[], and: string): string {
+  return xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} ${and} ${xs[xs.length - 1]}`;
 }

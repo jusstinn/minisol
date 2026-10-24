@@ -25,6 +25,7 @@ export default function PhotoRenderButton({
   tenant,
   lang,
   dark,
+  inline,
 }: {
   captureRef: React.RefObject<CaptureFn | null>;
   mode: ViewMode;
@@ -34,6 +35,8 @@ export default function PhotoRenderButton({
   tenant: Tenant;
   lang: Lang;
   dark: boolean;
+  /** Phone tab layout: the label is screen-reader only, like the other toolbar buttons. */
+  inline?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -76,11 +79,12 @@ export default function PhotoRenderButton({
         aria-busy={busy}
         disabled={busy}
         onClick={() => void run()}
-        className={`grid h-8 w-8 place-items-center rounded-full backdrop-blur transition disabled:opacity-60 ${
+        className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full px-2 font-mono sm:px-3 text-[10.5px] uppercase tracking-wider backdrop-blur transition disabled:opacity-60 ${
           dark ? "bg-[#0a1f47]/70 text-[#dce9ff] ring-1 ring-[#dce9ff]/25 hover:text-white" : "bg-white/70 text-ink-2 ring-1 ring-ink/10"
         }`}
       >
         {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <IconPhoto size={15} />}
+        <span className={inline ? "sr-only" : "hidden @3xl:inline"}>{tr("photoRender", lang)}</span>
       </button>
       {error && (
         <div className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-[min(60vw,220px)] items-start gap-1.5 rounded-lg bg-[#b3261e] px-2.5 py-2 text-[11px] leading-snug text-white shadow-lg">

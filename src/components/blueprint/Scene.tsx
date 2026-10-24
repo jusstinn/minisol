@@ -10,7 +10,9 @@ import type { Build, Part, Vec3 } from "./builders";
 import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
 import type { CameraPreset } from "./cameraPresets";
 import { captureHighRes, computeCaptureSize } from "./capture";
+import Lighting from "./Lighting";
 import { shadowBoundsFor } from "./shadowBounds";
+import type { SunLight } from "./sunLighting";
 import { finishTextures } from "./textures";
 
 export type ViewMode = "blueprint" | "real" | "exploded";
@@ -174,7 +176,9 @@ function PartMesh({
   const leaving = anim.kind === "leave";
   const blue = mode !== "real";
   const baseColor = highlighted ? accent : blue ? (part.context ? "#4f82ea" : "#5b8cf0") : part.color;
-  const baseOpacity = blue ? (highlighted ? 0.6 : part.context || dimmed ? 0.06 : 0.28) : dimmed ? 0.25 : (part.opacity ?? 1);
+  // REAL mode ghosts (a dimmed layer, or a build-simulation step not reached yet) need to read
+  // clearly fainter than the blueprint's own dim, since they sit over a light, busy background.
+  const baseOpacity = blue ? (highlighted ? 0.6 : part.context || dimmed ? 0.06 : 0.28) : dimmed ? 0.11 : (part.opacity ?? 1);
   const slideAxis = part.size[0] >= part.size[2] ? "x" : "z";
   const minor = Math.max(...part.size) < 0.25 || Math.min(...part.size) < 0.03;
   const outlined = highlighted || edges === "all" || (!part.context && (edges === "products" || !minor));
@@ -277,6 +281,7 @@ function PartMesh({
           bumpScale={finish.bumpScale}
           transparent={baseOpacity < 1 || dimmed || leaving}
           opacity={baseOpacity}
+          depthWrite={!dimmed}
         />
       ) : (
         <meshStandardMaterial
@@ -286,6 +291,7 @@ function PartMesh({
           metalness={0.02}
           transparent={baseOpacity < 1 || dimmed || leaving}
           opacity={baseOpacity}
+          depthWrite={!dimmed}
         />
       )}
       {(blue || highlighted) && outlined && (
@@ -643,6 +649,11 @@ export interface SceneProps {
   onTourEnd?: () => void;
   /** Called once the live renderer is ready with a `CaptureFn` for "Randare foto" (PhotoRender.tsx). */
   onCaptureReady?: (fn: CaptureFn) => void;
+  /** The "Simulare" sun/time-of-day scrubber's current look (REAL mode only; null is today's fixed sun). */
+  sun?: SunLight | null;
+  /** The "Simulează montajul" scrubber's current `build.layers` index: later layers dim to a ghost
+   *  (reusing the same highlight/dim path as `highlightLayer`), the current one lights up. */
+  buildSimLayer?: number | null;
 }
 
 export default function Scene({
@@ -663,6 +674,8 @@ export default function Scene({
   presetSeq = 0,
   onTourEnd,
   onCaptureReady,
+  sun = null,
+  buildSimLayer = null,
 }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
@@ -699,8 +712,13 @@ export default function Scene({
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const realNow = mode === "real" && !lite;
 
+  // `isolate`: without a local stacking context the backdrop tint below would paint behind the
+  // sheet's own background instead of just behind the (transparent) canvas.
   return (
-    <div className="relative h-full w-full">
+    <div className="relative isolate h-full w-full">
+    {mode === "real" && sun?.bg && (
+      <div className="pointer-events-none absolute inset-0 -z-10 transition-colors duration-700" style={{ background: sun.bg }} />
+    )}
     <Canvas
       // Antialiasing is fixed when the context is created: a new quality level gets a new canvas.
       key={String(lite)}
@@ -715,35 +733,30 @@ export default function Scene({
       style={{ touchAction: interactive ? "none" : "auto" }}
     >
       <Driver shared={shared} mode={mode} />
-      <ambientLight intensity={mode === "real" ? 0.75 : 1} />
-      <directionalLight
-        ref={lightRef}
-        position={[6, 10, 4]}
-        intensity={mode === "real" ? 1.6 : 0.4}
-        castShadow={!lite && mode === "real"}
-        shadow-mapSize={[shadowBounds.mapSize, shadowBounds.mapSize]}
-      >
-        <orthographicCamera attach="shadow-camera" args={[-shadowBounds.half, shadowBounds.half, shadowBounds.half, -shadowBounds.half, 0.1, shadowBounds.far]} />
-      </directionalLight>
-      <hemisphereLight args={["#fff6e8", "#8a7a66", mode === "real" ? 0.5 : 0.2]} />
+      <Lighting mode={mode} lite={lite} sun={sun} shadowBounds={shadowBounds} lightRef={lightRef} />
       <CaptureBridge lightRef={lightRef} build={build} onCaptureReady={onCaptureReady} />
 
       <World build={build} epoch={current.epoch} shared={shared}>
-      {build.parts.map((p) => (
-        <PartMesh
-          key={`${current.epoch}:${p.id}`}
-          part={p}
-          anim={current.anims.get(p.id) ?? noAnim}
-          mode={mode}
-          highlighted={Boolean(highlightLayer) && p.layer === highlightLayer}
-          dimmed={Boolean(highlightLayer) && p.layer !== highlightLayer && !p.context}
-          layerIndex={layerIndex.get(p.layer) ?? 0}
-          shared={shared}
-          accent={accent}
-          edges={edges}
-          lite={lite}
-        />
-      ))}
+      {build.parts.map((p) => {
+        const li = layerIndex.get(p.layer);
+        const simGhost = buildSimLayer != null && !p.context && li !== undefined && li > buildSimLayer;
+        const simCurrent = buildSimLayer != null && !p.context && li !== undefined && li === buildSimLayer;
+        return (
+          <PartMesh
+            key={`${current.epoch}:${p.id}`}
+            part={p}
+            anim={current.anims.get(p.id) ?? noAnim}
+            mode={mode}
+            highlighted={(Boolean(highlightLayer) && p.layer === highlightLayer) || simCurrent}
+            dimmed={(Boolean(highlightLayer) && p.layer !== highlightLayer && !p.context) || simGhost}
+            layerIndex={li ?? 0}
+            shared={shared}
+            accent={accent}
+            edges={edges}
+            lite={lite}
+          />
+        );
+      })}
       {ghosts.map((p) => (
         <PartMesh
           key={`ghost:${current.epoch}:${p.id}`}

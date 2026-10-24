@@ -79,8 +79,19 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
   /** The server's signature over historyRef (unchanged items only; see agent/historySeal.ts). */
   const historySigRef = useRef<string | undefined>(restored?.historySig);
   const abortRef = useRef<AbortController | null>(null);
-  // Leaving the workspace cancels an answer still streaming.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Leaving the workspace cancels an answer still streaming — but not React's dev-mode
+  // unmount/remount check, which would cancel the very first message.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const ctrl = abortRef.current;
+      setTimeout(() => {
+        if (!mountedRef.current) ctrl?.abort();
+      }, 0);
+    };
+  }, []);
   const [pointsDelta, setPointsDelta] = useState<number | null>(null);
   const [ui, setUi] = useState<UiSignal | null>(null);
 

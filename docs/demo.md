@@ -31,6 +31,8 @@ Live AI tips:
 | `pune o masă și un grătar pe terasă` | Furniture placed in the sketch, with the sellable items added to the list. |
 | Tap **REAL**, then **EXPLODAT** in the sketch | The realistic view, then the exploded view (layers apart). |
 | `arată-mi grinzile` | The joists are highlighted in the sketch and in the list. |
+| `arată-mi de sus`, then `fă-mi un tur` | The camera glides to the top view, then flies one lap around the deck. The camera button in the sketch toolbar has all six views. |
+| `Am doar 2.000 lei` | The budget card: the largest deck that fits in the budget range, priced by the engine. Tap **Aplică** and the sketch and list follow. |
 | Open the cart, then tap **Rezervă pentru ridicare** | Click & Collect: store, availability, time slot, then the reservation code on the wallet pass. |
 
 ## Flow 2 — the bathroom (2 minutes)

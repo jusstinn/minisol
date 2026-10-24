@@ -220,6 +220,15 @@ in its instructions:
 | "L-shape", "3 steps at the front", "a gate", "undo" | `edit_sketch` (with layout history) |
 | "show me the joists", "exploded view", "open the cart", "pay with points", "open the plan editor" | `control_view` → a `ui` event the client applies (sketch view/highlight, panels, cart, product sheet) |
 | "I don't know the size" | `suggest_sizes` → typical sizes + pace estimator |
+| "from above", "eye level", "walk me around" | `control_view` `camera` → the sketch glides to a preset (3/4, top, front, side, eye level, a cinematic tour) |
+| "am un buget de 3.000 lei", "my budget is 2,500 lei" | `fit_budget` → a budget card with the best version that fits and an **Apply** button |
+
+**Budget fitting** (`src/agent/budgetFit.ts`). The pricing engine, never the model, finds what fits,
+in order: the current list; a cheaper quality tier (never an upgrade); the budget tier with only the
+essentials; for a deck, paving or lawn the largest size with the same proportions (a fence gets a
+first stage), found by bisection on real prices; otherwise what the leanest version costs. Nothing
+changes until the customer taps **Apply**, which redraws the sketch and the list through the normal
+sketch-edit path, with a change card.
 
 **Fast first answer.** Before the model starts, the server loads the member profile and, when the
 message clearly describes a complete project, calculates it deterministically: the sketch and
@@ -328,6 +337,11 @@ Phone (390 × 844): [project received](docs/screenshots/interaction-share-receiv
 [chat hint](docs/screenshots/interaction-hint-phone-chat.png) ·
 [English chips](docs/screenshots/interaction-en-chips-phone.png).
 
+- **Store sheet** (`src/components/print/StoreSheet.tsx`): the printer button in the header prints the
+  project on A4 (or saves it as PDF from the browser's dialog) — the sketch seen from above with its
+  dimensions (`planDrawing.ts` flattens the 3D parts, so every project type works), the list grouped
+  by aisle with tick boxes and stock warnings, a QR for the till and one that reopens the project on
+  a phone, the steps and the safety notes. Nothing leaves the browser.
 - **Context-aware next steps** (`src/lib/nextSteps.ts`, pure): 3–5 chips from the board — fix first
   (move the list to the nearest store that has everything; *Anulează* right after a change), then a
   reshape per project (steps / L-shape for decks, gate / corner / height for fences, wall tiles to

@@ -26,6 +26,7 @@ import CardChips from "./CardChips";
 import { NextStepChips, useNextSteps, useSketchMode } from "./NextStepChips";
 import CoachMarks from "./CoachMarks";
 import { ShareButton } from "./ShareSheet";
+import { PrintSheetButton } from "../print/StoreSheet";
 import type { NextStep } from "@/lib/nextSteps";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
 import type { PanelTarget } from "./MobileTabs";
@@ -101,6 +102,7 @@ export default function Workspace({
       openCart: (open) => setCartOpen(open),
       reveal: (panel) => showPanelRef.current(panel, {}),
       openSketch: () => agent.sketch.open(),
+      showChat: () => selectTabRef.current("chat"),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [agent.send],
@@ -125,9 +127,12 @@ export default function Workspace({
     // Never pull the customer away from a message they're writing: flag the tab instead.
     if (typing.current) tabs.notify(tab);
     else tabs.select(tab, to);
-  };  const showPanelRef = useRef(showPanel);
+  };
+  const showPanelRef = useRef(showPanel);
+  const selectTabRef = useRef(tabs.select);
   useEffect(() => {
     showPanelRef.current = showPanel;
+    selectTabRef.current = tabs.select;
   });
 
 
@@ -173,6 +178,17 @@ export default function Workspace({
           <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
         </button>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {project && quote && (
+            <PrintSheetButton
+              getState={() => agent.state.current}
+              quote={quote}
+              project={project}
+              plan={agent.board.plan?.plan}
+              look={agent.board.quote?.look}
+              tenant={tenant}
+              lang={lang}
+            />
+          )}
           {project && <ShareButton getState={() => agent.state.current} tenant={tenant} lang={lang} />}
           <AnimatePresence>
             {quote && (
@@ -285,7 +301,7 @@ export default function Workspace({
           lang={lang}
           retailer={tenant.name}
           isDesktop={isDesktop}
-          has={(k) => Boolean(agent.board[k])}
+          has={(k) => (k === "budget" ? agent.messages.some((m) => m.cards.some((c) => c.kind === "budget")) : Boolean(agent.board[k]))}
           actions={tourActions}
           onExit={(tryLive) => {
             setTouring(false);
