@@ -297,3 +297,26 @@ input[type="range"]:focus-visible {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* The store sheet (components/print/StoreSheet.tsx): only it is printed, on A4. */
+.print-sheet {
+  display: none;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 13mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body > *:not(.print-sheet) {
+    display: none !important;
+  }
+  .print-sheet {
+    display: block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

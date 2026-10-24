@@ -26,6 +26,7 @@ import CardChips from "./CardChips";
 import { NextStepChips, useNextSteps, useSketchMode } from "./NextStepChips";
 import CoachMarks from "./CoachMarks";
 import { ShareButton } from "./ShareSheet";
+import { PrintSheetButton } from "../print/StoreSheet";
 import type { NextStep } from "@/lib/nextSteps";
 import { MobilePanels, MobileTabBar, TAB_OF, useMobileTabs } from "./MobileTabs";
 import type { PanelTarget } from "./MobileTabs";
@@ -173,6 +174,17 @@ export default function Workspace({
           <span className="hidden sm:inline">{offline || agent.mode?.mode === "scripted" ? (lang === "en" ? "Offline demo" : "Demo offline") : "AI live"}</span>
         </button>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {project && quote && (
+            <PrintSheetButton
+              getState={() => agent.state.current}
+              quote={quote}
+              project={project}
+              plan={agent.board.plan?.plan}
+              look={agent.board.quote?.look}
+              tenant={tenant}
+              lang={lang}
+            />
+          )}
           {project && <ShareButton getState={() => agent.state.current} tenant={tenant} lang={lang} />}
           <AnimatePresence>
             {quote && (

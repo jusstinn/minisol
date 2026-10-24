@@ -53,6 +53,8 @@ export const USAGE_EVENTS = {
   share_created: {},
   upload_added: { kind: e(["plan", "model", "photo"]) },
   sizes_used: { how: e(["preset", "estimate"]) },
+  /** The printable store sheet (plan, list by aisle, QR codes). */
+  sheet_printed: {},
   /** A budget fitted to the project ("am 3.000 lei"): what the engine found. */
   budget_fit: { fit: e(["fits", "tier", "lean", "smaller", "over"]), applied: flag },
 } satisfies Record<string, Record<string, Prop>>;
