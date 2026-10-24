@@ -655,8 +655,10 @@ export default function Scene({
   const edges: EdgeBudget = !lite ? "all" : build.parts.length > MANY_PARTS ? "major" : "products";
   const shadows = mode === "real" && !lite;
 
+  // `isolate`: without a local stacking context the backdrop tint below would paint behind the
+  // sheet's own background instead of just behind the (transparent) canvas.
   return (
-    <div className="relative h-full w-full">
+    <div className="relative isolate h-full w-full">
     {mode === "real" && sun?.bg && (
       <div className="pointer-events-none absolute inset-0 -z-10 transition-colors duration-700" style={{ background: sun.bg }} />
     )}

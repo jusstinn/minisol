@@ -201,7 +201,10 @@ function SketchView({
   }
   const layout = preview ?? project.layout;
   const build = useMemo(() => buildScene(project.type, project.inputs, lang, layout, look), [project.type, project.inputs, lang, layout, look]);
-  const dark = mode !== "real";
+  // PLAN/EXPLODED are always the dark "blueprint" theme; REAL normally isn't — except once the sun
+  // simulation has it showing night: the chrome (title, controls, cards) follows the sketch's own
+  // backdrop so text stays legible either way.
+  const dark = mode !== "real" || Boolean(simOpen && simSun?.isNight);
   const canEdit = Boolean(sketch && project.layout);
   // The customer's own 3D model / architect's plan (see blueprint/uploads).
   const up = useUploads({ lang, dark, mode, lite, inline, build, projectType: project.type, enabled: canEdit, openEditor: setEditing });
@@ -330,8 +333,9 @@ function SketchView({
           </SceneBoundary>
         </div>
 
-        {/* title block — kept clear of the controls column on the right (≈7.5 rem on phones, ≈18 rem with labels from sm) */}
-        <div className="pointer-events-none absolute left-4 right-[9.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
+        {/* title block — kept clear of the controls column on the right (the "Simulare" toggle made
+            that column one icon wider, ≈12.5 rem on phones now, ≈18 rem with labels from sm) */}
+        <div className="pointer-events-none absolute left-4 right-[12.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
           <div className={`flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
             <span>{en ? "Indicative sketch" : "Schiță orientativă"}</span>
             <span
@@ -502,7 +506,7 @@ function SketchView({
           <div className="absolute bottom-5 right-5 top-[118px] hidden w-[min(380px,44%)] flex-col justify-end gap-3 sm:flex">
             <AnimatePresence mode="popLayout">{dock}</AnimatePresence>
             <AnimatePresence mode="popLayout">
-              {floatingChange && !editing && (
+              {floatingChange && !editing && !simOpen && (
                 <ChangeCard
                   key={floatingChange.id}
                   change={floatingChange.change}
