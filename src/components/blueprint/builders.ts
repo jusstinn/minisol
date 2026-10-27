@@ -8,6 +8,7 @@ import { PAVING_BUILDUP, pavingDepth } from "@/domain/paving";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import { pedestalGrid } from "./detail/pedestals";
 import type { Finish } from "./textures";
 
 /**
@@ -34,6 +35,12 @@ export interface Part {
   context?: boolean;
   /** The REAL view's procedural material (see textures.ts) — flat colour without it. */
   finish?: Finish;
+  /**
+   * Explicit geometry for the handful of furniture/BBQ/lamp highlights that read wrong as a box
+   * (see `itemBoxes` below) — everything else infers its shape from layer/finish instead (see
+   * `./detail/shapes.ts`'s `shapeFor`), so this stays rare and intentional.
+   */
+  shape?: "cylinder" | "cone" | "sphere";
 }
 
 export interface DimLine {
@@ -211,19 +218,23 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
     }
     const run = alongX ? z.w : z.d;
     const across = alongX ? z.d : z.w;
-    const J = Math.ceil(run / 0.4) + 1;
-    const S = Math.ceil(across / 0.6) + 1;
     const R = Math.ceil(across / pitch);
-    const stepS = Math.max(1, Math.ceil((J * S) / 160));
-    let k = 0;
-    for (let i = 0; i < J; i++) {
-      const u = (i * run) / (J - 1); // along the run
-      for (let j = 0; j < S; j++) {
-        if ((i * S + j) % stepS !== 0) continue;
-        const v = (j * across) / (S - 1);
-        const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
-        parts.push({ id: `${z.id}-sup-${i}-${j}`, layer: "deck_support", pos: [px, supH / 2, pz], size: [0.1, supH, 0.1], color: supColor, delay: zd + 0.3 + (k++ * 0.8) / ((J * S) / stepS), grow: "rise", finish: { kind: "metal" } });
-      }
+    const grid = pedestalGrid(run, across);
+    grid.points.forEach(({ i, j, u, v }, k) => {
+      const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
+      parts.push({
+        id: `${z.id}-sup-${i}-${j}`,
+        layer: "deck_support",
+        pos: [px, supH / 2, pz],
+        size: [0.1, supH, 0.1],
+        color: supColor,
+        delay: zd + 0.3 + (k * 0.8) / grid.points.length,
+        grow: "rise",
+        finish: { kind: "metal" },
+      });
+    });
+    for (let i = 0; i < grid.J; i++) {
+      const u = grid.J > 1 ? (i * run) / (grid.J - 1) : 0;
       const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
       parts.push({
         id: `${z.id}-joist-${i}`,
@@ -231,7 +242,7 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
         pos: jp,
         size: alongX ? [joistW, joistH, across] : [across, joistH, joistW],
         color: joistColor,
-        delay: zd + 1.2 + i * (1 / J),
+        delay: zd + 1.2 + i * (1 / grid.J),
         grow: "drop",
         finish: joistFinish,
       });
@@ -561,6 +572,9 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
   sx *= fScale;
   sz *= fScale;
   if (l.floor) {
+    // A dark grout bed just under the tiles' own bottom face: it only peeks through the
+    // few-mm gaps between them, reading as a recessed grout line instead of the slab colour.
+    parts.push({ id: "floor-grout", layer: "structure", pos: [0, 0.004, 0], size: [L - 0.01, 0.004, W - 0.01], color: "#726d63", delay: 0.75, grow: "fade", context: true, finish: { kind: "concrete" } });
     const nx = Math.ceil(L / sx - 1e-9);
     const nz = Math.ceil(W / sz - 1e-9);
     for (let j = 0; j < nz; j++) {
@@ -599,6 +613,20 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
     if (wallH <= 0) continue;
     const horizontal = side === "n" || side === "s";
     const len = horizontal ? L : W;
+    // Same grout-bed trick as the floor, tucked a hair behind the tile face so only the
+    // joints between tiles read as a dark recess.
+    const groutOff = side === "n" ? -W / 2 + 0.004 : side === "s" ? W / 2 - 0.004 : side === "w" ? -L / 2 + 0.004 : L / 2 - 0.004;
+    parts.push({
+      id: `wt-grout-${side}`,
+      layer: "structure",
+      pos: horizontal ? [0, wallH / 2, groutOff] : [groutOff, wallH / 2, 0],
+      size: horizontal ? [len - 0.01, wallH - 0.01, 0.006] : [0.006, wallH - 0.01, len - 0.01],
+      color: "#726d63",
+      delay: 2.2,
+      grow: "fade",
+      context: true,
+      finish: { kind: "concrete" },
+    });
     const rows = Math.ceil(wallH / th - 1e-9);
     for (let r = 0; r < rows; r++) {
       const y0 = r * th;
@@ -878,7 +906,7 @@ function buildShape(l: Layout, lang: Lang, look: Look): Build {
 }
 
 // ─────────────────────────── placed items ────────────────────────────
-type Box = [x: number, y: number, z: number, w: number, h: number, d: number, color?: string, opacity?: number];
+type Box = [x: number, y: number, z: number, w: number, h: number, d: number, color?: string, opacity?: number, shape?: Part["shape"]];
 
 /**
  * Each item kind as a few boxes in local coordinates: x across, y up from its base,
@@ -929,29 +957,29 @@ function itemBoxes(kind: ItemKind, color: string, outdoorSet: boolean): Box[] {
         [0, h * 0.55, d / 2 + 0.005, 0.34, 0.34, 0.01, "#b8c6d1"],
       ];
     case "ceiling_lamp":
-      return [[0, h / 2, 0, w, h, d, color]];
+      return [[0, h / 2, 0, w, h, d, color, undefined, "sphere"]];
     case "wall_lamp":
       return [
         [0, h / 2, -d / 2 + 0.01, 0.08, h * 0.8, 0.02, dark],
-        [0, h / 2, 0.01, w, h, d * 0.7, color],
+        [0, h / 2, 0.01, w, h, d * 0.7, color, undefined, "cone"],
       ];
     case "floor_lamp":
       return [
-        [0, 0.015, 0, 0.3, 0.03, 0.3, dark],
-        [0, 0.72, 0, 0.03, 1.4, 0.03, dark],
-        [0, 1.43, 0, w, 0.32, d, "#efe6d2"],
+        [0, 0.015, 0, 0.3, 0.03, 0.3, dark, undefined, "cylinder"],
+        [0, 0.72, 0, 0.03, 1.4, 0.03, dark, undefined, "cylinder"],
+        [0, 1.43, 0, w, 0.32, d, "#efe6d2", undefined, "cone"],
       ];
     case "garden_light":
       return [
-        [0, 0.2, 0, 0.07, 0.4, 0.07, dark],
-        [0, 0.44, 0, w, 0.1, d, "#fff1c2"],
+        [0, 0.2, 0, 0.07, 0.4, 0.07, dark, undefined, "cylinder"],
+        [0, 0.44, 0, w, 0.1, d, "#fff1c2", undefined, "sphere"],
       ];
     case "table": {
       const legs: Box[] = [
-        [-w / 2 + 0.06, 0.36, -d / 2 + 0.06, 0.06, 0.72, 0.06],
-        [w / 2 - 0.06, 0.36, -d / 2 + 0.06, 0.06, 0.72, 0.06],
-        [-w / 2 + 0.06, 0.36, d / 2 - 0.06, 0.06, 0.72, 0.06],
-        [w / 2 - 0.06, 0.36, d / 2 - 0.06, 0.06, 0.72, 0.06],
+        [-w / 2 + 0.06, 0.36, -d / 2 + 0.06, 0.06, 0.72, 0.06, undefined, undefined, "cylinder"],
+        [w / 2 - 0.06, 0.36, -d / 2 + 0.06, 0.06, 0.72, 0.06, undefined, undefined, "cylinder"],
+        [-w / 2 + 0.06, 0.36, d / 2 - 0.06, 0.06, 0.72, 0.06, undefined, undefined, "cylinder"],
+        [w / 2 - 0.06, 0.36, d / 2 - 0.06, 0.06, 0.72, 0.06, undefined, undefined, "cylinder"],
       ];
       const top: Box = [0, 0.74, 0, w, 0.04, d];
       if (!outdoorSet) return [top, ...legs];
@@ -968,10 +996,10 @@ function itemBoxes(kind: ItemKind, color: string, outdoorSet: boolean): Box[] {
       return [
         [0, 0.45, 0.02, w, 0.05, d - 0.04],
         [0, 0.7, -d / 2 + 0.03, w, 0.45, 0.04],
-        [-w / 2 + 0.04, 0.22, d / 2 - 0.06, 0.04, 0.44, 0.04],
-        [w / 2 - 0.04, 0.22, d / 2 - 0.06, 0.04, 0.44, 0.04],
-        [-w / 2 + 0.04, 0.22, -d / 2 + 0.06, 0.04, 0.44, 0.04],
-        [w / 2 - 0.04, 0.22, -d / 2 + 0.06, 0.04, 0.44, 0.04],
+        [-w / 2 + 0.04, 0.22, d / 2 - 0.06, 0.04, 0.44, 0.04, undefined, undefined, "cylinder"],
+        [w / 2 - 0.04, 0.22, d / 2 - 0.06, 0.04, 0.44, 0.04, undefined, undefined, "cylinder"],
+        [-w / 2 + 0.04, 0.22, -d / 2 + 0.06, 0.04, 0.44, 0.04, undefined, undefined, "cylinder"],
+        [w / 2 - 0.04, 0.22, -d / 2 + 0.06, 0.04, 0.44, 0.04, undefined, undefined, "cylinder"],
       ];
     case "sofa":
       return [
@@ -1009,11 +1037,11 @@ function itemBoxes(kind: ItemKind, color: string, outdoorSet: boolean): Box[] {
       ];
     case "bbq":
       return [
-        [-0.18, 0.3, 0.1, 0.03, 0.6, 0.03, dark],
-        [0.18, 0.3, 0.1, 0.03, 0.6, 0.03, dark],
-        [0, 0.3, -0.18, 0.03, 0.6, 0.03, dark],
-        [0, 0.75, 0, 0.56, 0.3, 0.56],
-        [0, 0.98, 0, 0.5, 0.16, 0.5],
+        [-0.18, 0.3, 0.1, 0.03, 0.6, 0.03, dark, undefined, "cylinder"],
+        [0.18, 0.3, 0.1, 0.03, 0.6, 0.03, dark, undefined, "cylinder"],
+        [0, 0.3, -0.18, 0.03, 0.6, 0.03, dark, undefined, "cylinder"],
+        [0, 0.75, 0, 0.56, 0.3, 0.56, undefined, undefined, "cylinder"],
+        [0, 0.98, 0, 0.5, 0.16, 0.5, undefined, undefined, "sphere"],
         [w / 2 - 0.12, 0.62, 0, 0.22, 0.03, 0.4, metal],
       ];
     case "lounger":
@@ -1025,9 +1053,9 @@ function itemBoxes(kind: ItemKind, color: string, outdoorSet: boolean): Box[] {
       ];
     case "parasol":
       return [
-        [0, 0.04, 0, 0.4, 0.08, 0.4, dark],
-        [0, h / 2, 0, 0.04, h, 0.04, "#8a8f94"],
-        [0, h - 0.02, 0, 2.4, 0.06, 2.4, color, 0.92],
+        [0, 0.04, 0, 0.4, 0.08, 0.4, dark, undefined, "cylinder"],
+        [0, h / 2, 0, 0.04, h, 0.04, "#8a8f94", undefined, "cylinder"],
+        [0, h - 0.02, 0, 2.4, 0.3, 2.4, color, 0.92, "cone"],
       ];
   }
 }
@@ -1046,7 +1074,7 @@ function withItems(b: Build, l: Layout, lang: Lang, look: Look): Build {
     }
     const c = itemContainer(l, it.zone, { x: it.x, z: it.z });
     const base = spec.mount === "ceiling" ? (c.ceilingY ?? 2.6) - spec.h : spec.mount === "wall" ? c.floorY + (spec.elevation ?? 1) : c.floorY;
-    itemBoxes(it.kind, color, outdoor && it.kind === "table").forEach(([x, y, z, w, h, d, col, op], k) => {
+    itemBoxes(it.kind, color, outdoor && it.kind === "table").forEach(([x, y, z, w, h, d, col, op, shape], k) => {
       const [rx, rz] = rotXZ(x, z, it.rot);
       const sideways = it.rot % 180 !== 0;
       parts.push({
@@ -1058,6 +1086,7 @@ function withItems(b: Build, l: Layout, lang: Lang, look: Look): Build {
         opacity: op,
         delay: b.duration * 0.85 + i * 0.15 + k * 0.04,
         grow: "pop",
+        shape,
       });
     });
   });

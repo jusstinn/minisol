@@ -4,16 +4,24 @@
 
 import { ContactShadows, Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Build, Part, Vec3 } from "./builders";
 import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
 import type { CameraPreset } from "./cameraPresets";
 import { captureHighRes, computeCaptureSize } from "./capture";
+import { deckScrewInstances } from "./detail/deckScrews";
+import { bevelGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
+import { isBevelShape, shapeFor } from "./detail/shapes";
 import Lighting from "./Lighting";
 import { shadowBoundsFor } from "./shadowBounds";
 import type { SunLight } from "./sunLighting";
 import { finishTextures } from "./textures";
+
+// Lazy: ambient occlusion + anti-aliasing cost real bundle weight, so this never slows the
+// start screen's first paint — only fetched once a REAL-mode, non-`lite` canvas actually mounts.
+const Effects = dynamic(() => import("./Effects"), { ssr: false });
 
 export type ViewMode = "blueprint" | "real" | "exploded";
 export type { CameraPreset };
@@ -27,8 +35,9 @@ const GLOW_DUR = 1.8;
 const EXPLODE_GAP = 0.55;
 const PRESET_GLIDE_S = 0.7;
 const REMOVED = "#ff5a4f";
-/** Every part is a scaled unit box, so an edit can morph a part's size smoothly. */
-const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+/** Every part is a scaled unit box by default, so an edit can morph a part's size smoothly —
+ *  see detail/shapes.ts and detail/geometries.ts for the higher-fidelity REAL-view shapes. */
+const UNIT_BOX = unitGeometryFor("box");
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -185,6 +194,14 @@ function PartMesh({
   // Procedural PBR maps for the REAL view only — desktop/tablet; phones keep a flat colour.
   const useFinish = !blue && !lite && Boolean(part.finish);
   const finish = useMemo(() => (useFinish && part.finish ? finishTextures(part.finish, part.size) : null), [useFinish, part.finish, part.size]);
+  // Higher-fidelity geometry for the REAL view, desktop only (see detail/shapes.ts): a chamfered
+  // edge at the part's own real size, a round pedestal, a post cap, or a furniture/BBQ/lamp
+  // highlight — PLAN/EXPLODED and phones stay plain boxes. Built to the part's *real* size (not a
+  // scaled unit cube), so a bevel stays a constant few millimetres regardless of how long the
+  // part is — see geometries.ts's module doc for why that matters for a 4 m deck board.
+  const shape = useMemo(() => shapeFor(part, { real: !blue, lite }), [part, blue, lite]);
+  const bevel = isBevelShape(shape);
+  const steadyGeometry = useMemo(() => (bevel ? bevelGeometryFor(shape, part.size) : unitGeometryFor(shape)), [bevel, shape, part.size]);
 
   useFrame(() => {
     const mesh = ref.current;
@@ -243,7 +260,14 @@ function PartMesh({
     }
     if (!part.context) y += shared.explode.current * (layerIndex + 1) * EXPLODE_GAP;
     mesh.position.set(x, y, z);
-    mesh.scale.set(Math.max(w * sx, 1e-4), Math.max(h * sy, 1e-4), Math.max(d * sz, 1e-4));
+    // A bevel geometry is baked to the part's *real* size (see the module doc), so it only
+    // needs the bare growth fraction on top — except mid-resize (an edit's "changed" morph),
+    // where the target size itself is still interpolating: fall back to the plain box rather
+    // than rebuild (or distort) a chamfered geometry every frame for a fraction of a second.
+    const morphing = bevel && anim.kind === "changed" && t < 0.999;
+    mesh.geometry = morphing ? UNIT_BOX : steadyGeometry;
+    if (bevel && !morphing) mesh.scale.set(Math.max(sx, 1e-4), Math.max(sy, 1e-4), Math.max(sz, 1e-4));
+    else mesh.scale.set(Math.max(w * sx, 1e-4), Math.max(h * sy, 1e-4), Math.max(d * sz, 1e-4));
 
     // Diff glow: edited parts light up in the accent colour, removed ones in red, then settle.
     const mtl = mat.current;
@@ -266,7 +290,7 @@ function PartMesh({
   });
 
   return (
-    <mesh ref={ref} geometry={UNIT_BOX} visible={false} castShadow={!blue && !part.context && !leaving} receiveShadow={!blue}>
+    <mesh ref={ref} geometry={steadyGeometry} visible={false} castShadow={!blue && !part.context && !leaving} receiveShadow={!blue}>
       {blue ? (
         <meshBasicMaterial ref={mat as React.RefObject<THREE.MeshBasicMaterial>} color={baseColor} transparent opacity={baseOpacity} depthWrite={false} toneMapped={false} />
       ) : finish ? (
@@ -320,7 +344,16 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
       return Array.from({ length: n }, () => {
         const x = zone.x + rnd() * zone.w;
         const z = zone.z + rnd() * zone.d;
-        return { key: zoneKey(zone), x, z, h: 0.05 + rnd() * 0.07, r: rnd() * Math.PI, lean: (rnd() - 0.5) * 0.4, wave: ((x - minX) / spanX) * 1.6 + rnd() * 0.3 };
+        return {
+          key: zoneKey(zone),
+          x,
+          z,
+          h: 0.05 + rnd() * 0.07,
+          widthJ: 0.75 + rnd() * 0.6,
+          r: rnd() * Math.PI,
+          lean: (rnd() - 0.5) * 0.4,
+          wave: ((x - minX) / spanX) * 1.6 + rnd() * 0.3,
+        };
       });
     });
   }, [grass]);
@@ -354,9 +387,12 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
       const t = shared.reduced ? 1 : clamp01((now - (g.starts.get(b.key) ?? now) - b.wave) / 0.7);
       if (t < 1) allDone = false;
       const s = Math.max(easeOutCubic(t), 0.0001);
-      tmp.position.set(b.x, 0.02 + (b.h * s) / 2 + shared.explode.current * 2 * EXPLODE_GAP, b.z);
+      // The blade's own geometry runs from the ground (y 0) to its tip (y 1): its *height* is
+      // the growth scale, not its position — a box centred on itself needed the old half-height
+      // offset, a blade rooted at its own base doesn't.
+      tmp.position.set(b.x, 0.012 + shared.explode.current * 2 * EXPLODE_GAP, b.z);
       tmp.rotation.set(b.lean, b.r, 0);
-      tmp.scale.set(1, s, 1);
+      tmp.scale.set(b.widthJ, Math.max(b.h * s, 1e-4), b.widthJ);
       tmp.updateMatrix();
       mesh.setMatrixAt(i, tmp.matrix);
     }
@@ -365,10 +401,42 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
   });
   const blue = mode !== "real";
   return (
-    <instancedMesh key={data.length} ref={ref} args={[undefined, undefined, data.length]} frustumCulled={false}>
-      <boxGeometry args={[0.012, 1, 0.012]} />
-      {/* height is applied through instance scale → geometry is unit-tall */}
-      <meshStandardMaterial color={blue ? "#9fd3a0" : "#5fa04a"} roughness={0.9} />
+    <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, undefined, data.length]} frustumCulled={false}>
+      {/* height/width are applied through instance scale — see the geometry's own doc */}
+      <meshStandardMaterial color={blue ? "#9fd3a0" : "#5fa04a"} roughness={0.9} side={THREE.DoubleSide} />
+    </instancedMesh>
+  );
+}
+
+/**
+ * Screw heads at every deck board × joist crossing (see detail/deckScrews.ts) — REAL view,
+ * desktop only (see `Scene`'s own `lite`): one instanced draw call regardless of how many there
+ * are, so even a big deck stays cheap. Each one pops in shortly after its own board settles.
+ */
+function DeckScrews({ parts, shared, show }: { parts: Part[]; shared: Shared; show: boolean }) {
+  const points = useMemo(() => (show ? deckScrewInstances(parts) : []), [parts, show]);
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const tmp = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh || !points.length) return;
+    const now = shared.clock.current;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const t = shared.reduced ? 1 : clamp01((now - p.delay - PART_DUR - 0.15) / 0.3);
+      const s = Math.max(easeOutBack(t), 0.0001) * 0.0032;
+      tmp.position.set(p.pos[0], p.pos[1] + shared.explode.current * EXPLODE_GAP, p.pos[2]);
+      tmp.scale.set(s, s * 0.5, s);
+      tmp.updateMatrix();
+      mesh.setMatrixAt(i, tmp.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  });
+  if (!points.length) return null;
+  return (
+    <instancedMesh key={points.length} ref={ref} args={[undefined, undefined, points.length]} frustumCulled={false}>
+      <cylinderGeometry args={[0.5, 0.5, 1, 8, 1]} />
+      <meshStandardMaterial color="#2b2b2b" roughness={0.35} metalness={0.85} />
     </instancedMesh>
   );
 }
