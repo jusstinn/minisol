@@ -1,6 +1,6 @@
 "use client";
 
-import { animate, useMotionValue, useTransform, motion } from "motion/react";
+import { AnimatePresence, animate, useMotionValue, useTransform, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import type { Lang } from "@/domain/types";
 import { money, int } from "@/lib/format";
@@ -105,27 +105,36 @@ export function Spinner({ className }: { className?: string }) {
   return <span className={`font-mono ${className ?? ""}`}>{frames[i]}</span>;
 }
 
-/** Text that scrambles through glyphs before settling — for the rotating project word. */
-export function Scramble({ text, className }: { text: string; className?: string }) {
-  const [shown, setShown] = useState(text);
-  useEffect(() => {
-    const glyphs = "▚▞▖▗▘▝#/\\_-=+×÷";
-    let frame = 0;
-    const total = 16;
-    const id = setInterval(() => {
-      frame++;
-      const settled = Math.floor((frame / total) * text.length);
-      setShown(
-        text
-          .split("")
-          .map((c, i) => (i < settled || c === " " ? c : glyphs[(i * 7 + frame) % glyphs.length]))
-          .join(""),
-      );
-      if (frame >= total) clearInterval(id);
-    }, 38);
-    return () => clearInterval(id);
-  }, [text]);
-  return <span className={className}>{shown}</span>;
+/**
+ * The rotating project word: the old word rolls up and out, the new one rises in. Every word sits
+ * invisibly in the same grid cell, so the cell is always as big as the longest one — the headline
+ * never changes size and nothing under it moves (a glyph "scramble" here flickered and reflowed).
+ */
+export function RollingWord({ words, index, className }: { words: readonly string[]; index: number; className?: string }) {
+  const word = words[index % words.length];
+  return (
+    // The padding (cancelled by the negative margin) lets ascenders and descenders show inside the
+    // clip; a word leaving or arriving is hidden outside it.
+    <span className={`relative -my-[0.18em] inline-grid overflow-hidden py-[0.18em] align-bottom ${className ?? ""}`}>
+      {words.map((w) => (
+        <span key={w} aria-hidden className="invisible col-start-1 row-start-1">
+          {w}
+        </span>
+      ))}
+      <AnimatePresence initial={false}>
+        <motion.span
+          key={word}
+          className="col-start-1 row-start-1"
+          initial={{ y: "110%", opacity: 0 }}
+          animate={{ y: "0%", opacity: 1 }}
+          exit={{ y: "-110%", opacity: 0, transition: { duration: 0.4, ease: [0.7, 0, 0.84, 0] } }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {word}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
 }
 
 /** Section header used on every board panel: index number + label + rule. */

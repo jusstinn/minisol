@@ -14,7 +14,7 @@ import type { SavedSummary } from "@/lib/savedSession";
 import { buildScene } from "../blueprint/builders";
 import { IconArrow, IconClose, Logo, PROJECT_ICONS } from "../ui/icons";
 import { MicButton } from "../ui/MicButton";
-import { Scramble } from "../ui/primitives";
+import { RollingWord } from "../ui/primitives";
 import type { MemberSummary } from "./WalletPass";
 import { WalletPass } from "./WalletPass";
 import SceneBoundary from "../blueprint/SceneBoundary";
@@ -157,8 +157,8 @@ export default function Entry({
           </div>
           <h1 className="display text-[clamp(44px,7.2vw,108px)] text-ink">
             <span className="block">{head1}</span>
-            <span className="block min-h-[1em] text-accent">
-              <Scramble key={words[wordIdx]} text={words[wordIdx]} />
+            <span className="block text-accent">
+              <RollingWord words={words} index={wordIdx} />
             </span>
             <span className="mt-3 block text-[0.4em] font-bold tracking-[-0.02em] text-ink-2">{head2}</span>
           </h1>
