@@ -135,11 +135,14 @@ const angleDist = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b),
  * — which for a rectangle still varies with angle — never swings far from the fitted framing.
  */
 export function tourArcFor(extent: Vec3, interior?: boolean): TourArc {
-  if (interior) return { center: ISO_ANGLES.theta, span: 80 * DEG };
+  // Kept fairly narrow: a wide swing changes a rectangle's own apparent width a lot (the fitted
+  // framing is only ever computed at the arc's own centre — see cameraFor/tourFrame), and the
+  // brief is "a slow move that still holds the framing", not a sightseeing lap.
+  if (interior) return { center: ISO_ANGLES.theta, span: 50 * DEG };
   const [L, , W] = extent;
   const longX = L >= W;
   const ratio = longX ? L / Math.max(W, 1e-6) : W / Math.max(L, 1e-6);
-  if (ratio < ELONGATION_THRESHOLD) return { center: ISO_ANGLES.theta, span: 70 * DEG };
+  if (ratio < ELONGATION_THRESHOLD) return { center: ISO_ANGLES.theta, span: 55 * DEG };
   const edgeOn = longX ? Math.PI / 2 : 0;
   // Whichever oblique side (±45° off the long axis) lands closer to the default iso angle keeps
   // the sweep's centre close to the view a non-elongated build would get.

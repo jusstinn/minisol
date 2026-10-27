@@ -173,9 +173,12 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
         )}
         <div className="pointer-events-none absolute left-5 top-5 sm:left-7 sm:top-6">
           <AnimatePresence mode="wait">
+            {/* Solid colours (not the backdrop's own gradients) so the swap between the dark
+                blueprint and the light daylight backdrop is a smooth CSS transition, not a pop —
+                legible against either. */}
             <motion.div key={idx} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35 }}>
-              <div className="text-[13.5px] text-[#dce9ff]">{lang === "en" ? hero.en : hero.ro}</div>
-              <div className="mt-0.5 text-[12px] text-[#8fa9dd]">{dims}</div>
+              <div className={`text-[13.5px] transition-colors duration-700 ${phase === "real" ? "text-[#16233f]" : "text-[#dce9ff]"}`}>{lang === "en" ? hero.en : hero.ro}</div>
+              <div className={`mt-0.5 text-[12px] transition-colors duration-700 ${phase === "real" ? "text-[#4b5b7a]" : "text-[#8fa9dd]"}`}>{dims}</div>
             </motion.div>
           </AnimatePresence>
         </div>

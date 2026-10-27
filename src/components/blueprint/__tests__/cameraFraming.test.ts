@@ -102,10 +102,10 @@ describe("tourArcFor", () => {
     expect(Math.abs(Math.atan2(Math.sin(zArc.center - edgeOnZ), Math.cos(zArc.center - edgeOnZ)))).toBeGreaterThan((20 * Math.PI) / 180);
   });
 
-  it("a non-elongated footprint doesn't trigger the oblique-band treatment", () => {
+  it("a non-elongated footprint doesn't trigger the oblique-band treatment (a visibly wider sweep)", () => {
     const square: Vec3 = [4, 1, 4];
     const arc = tourArcFor(square);
-    expect(arc.span).toBeGreaterThan((60 * Math.PI) / 180);
+    expect(arc.span).toBeGreaterThan((45 * Math.PI) / 180);
   });
 });
 
