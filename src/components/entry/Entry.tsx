@@ -84,17 +84,17 @@ export default function Entry({
         <Logo className="text-ink" />
         <div className="flex items-baseline gap-2">
           <span className="display text-[19px] leading-none">Blueprint</span>
-          <span className="label hidden sm:inline">by WalletLoop</span>
+          <span className="hidden text-[13px] text-ink-3 sm:inline">by WalletLoop</span>
         </div>
-        <span className="ml-2 hidden rounded-full border border-rule px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 sm:inline-flex">
-          {lang === "en" ? "for" : "pentru"}&nbsp;<b className="font-semibold text-ink">{tenant.name}</b>
+        <span className="ml-2 hidden text-[13px] text-ink-3 sm:inline">
+          {lang === "en" ? "for" : "pentru"} <b className="font-medium text-ink-2">{tenant.name}</b>
         </span>
         {!fromPass && (
           <a
             href={`/pitch?retailer=${tenant.id}&lang=${lang}`}
-            className="ml-auto hidden rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-2 transition hover:text-ink sm:inline"
+            className="ml-auto hidden text-[13px] text-ink-3 transition hover:text-ink sm:inline"
           >
-            {lang === "en" ? "For retailers →" : "Pentru retaileri →"}
+            {lang === "en" ? "For retailers" : "Pentru retaileri"} →
           </a>
         )}
         <div
@@ -131,7 +131,7 @@ export default function Entry({
       <main className="relative z-10 mx-auto grid w-full max-w-[1480px] flex-1 grid-cols-1 gap-10 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pt-14">
         {/* left: message + prompt */}
         <section className="flex flex-col">
-          <div className="label mb-5 flex items-center gap-2">
+          <div className="mb-5 flex items-center gap-2 text-[13px] text-ink-3">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
             {tr("fromWallet", lang)} · {tenant.programName}
           </div>
@@ -145,9 +145,8 @@ export default function Entry({
           <p className="mt-6 max-w-[560px] text-[16.5px] leading-relaxed text-ink-2 sm:text-[18px]">{tr("subhead", lang)}</p>
 
           {/* prompt */}
-          <div className="group relative mt-8 max-w-[640px]">
-            <div className="absolute -inset-px rounded-[20px] bg-gradient-to-r from-accent/60 via-accent/10 to-transparent opacity-0 blur transition group-focus-within:opacity-100" />
-            <div className="relative flex items-end gap-2 rounded-[18px] border border-ink/15 bg-card p-2 shadow-[0_18px_40px_-24px_rgba(20,19,17,0.5)]">
+          <div className="relative mt-8 max-w-[640px]">
+            <div className="flex items-end gap-2 rounded-[18px] border border-ink/15 bg-card p-2 shadow-[0_8px_24px_-18px_rgba(20,19,17,0.4)] transition focus-within:border-ink/30 focus-within:ring-2 focus-within:ring-accent/25">
               <textarea
                 ref={inputRef}
                 rows={2}
@@ -215,11 +214,11 @@ export default function Entry({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                className="mt-6 flex max-w-[640px] items-center gap-3 rounded-[18px] border border-ink/15 bg-card p-3 pl-4 shadow-[0_18px_40px_-28px_rgba(20,19,17,0.5)]"
+                className="mt-6 flex max-w-[640px] items-center gap-3 rounded-[18px] border border-ink/15 bg-card p-3 pl-4 shadow-[0_6px_16px_-12px_rgba(20,19,17,0.35)]"
               >
                 <span className="h-10 w-1 shrink-0 rounded-full bg-accent" />
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+                  <div className="text-[12px] text-ink-3">
                     {lang === "en" ? "Your saved project" : "Proiectul tău salvat"} · {ago(saved.savedAt, lang)}
                   </div>
                   <div className="truncate text-[15.5px] font-semibold text-ink">{saved.title}</div>
@@ -271,8 +270,6 @@ export default function Entry({
         {/* right: the 3D hero */}
         <Hero lang={lang} accent={tenant.accent} />
       </main>
-
-      <Ticker lang={lang} />
     </div>
   );
 }
@@ -314,7 +311,7 @@ function MemberPicker({
   const shown = fromPass ? (selected ? [selected] : []) : members;
   return (
     <div className="mt-7 max-w-[680px]">
-      <div className="label mb-2">{fromPass ? `${en ? "Your card" : "Cardul tău"} · ${tenant.programName}` : tr("pickPass", lang)}</div>
+      <div className="mb-2 text-[13px] text-ink-3">{fromPass ? `${en ? "Your card" : "Cardul tău"} · ${tenant.programName}` : tr("pickPass", lang)}</div>
       {!shown.length ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
@@ -343,36 +340,14 @@ function MemberPicker({
       <AnimatePresence mode="wait">
         {selected && (
           <motion.p key={selected.memberId} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-2.5 text-[13px] leading-snug text-ink-3">
-            <span className="font-mono text-[10.5px] uppercase tracking-[0.14em]">
+            <span className="font-medium text-ink-2">
               {selected.firstName} · {selected.city}
             </span>
             {(en ? selected.personaEn : selected.persona) && <> — {en ? selected.personaEn : selected.persona}</>}
-            {!selected.personalization && (
-              <span className="ml-1.5 inline-flex rounded-full bg-ink px-2 py-0.5 align-middle font-mono text-[10px] uppercase tracking-wider text-paper">{tr("noPersonalization", lang)}</span>
-            )}
+            {!selected.personalization && <span className="ml-1.5 text-ink-3">· {tr("noPersonalization", lang)}</span>}
           </motion.p>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function Ticker({ lang }: { lang: Lang }) {
-  const items =
-    lang === "en"
-      ? ["Quantity calculation", "Live store stock", "WalletLoop personal offers", "Step-by-step plan", "3D project blueprint", "8 project types", "Romanian / English", "Tools you own are skipped"]
-      : ["Calcul cantități", "Stoc live în magazine", "Oferte personale WalletLoop", "Plan pas cu pas", "Model 3D al proiectului", "8 tipuri de proiecte", "Română / Engleză", "Sculele pe care le ai nu se mai cumpără"];
-  const row = [...items, ...items];
-  return (
-    <div className="relative z-10 overflow-hidden border-y border-ink/10 bg-ink py-2.5 text-paper">
-      <div className="marquee flex w-max gap-10 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.18em]">
-        {row.map((t, i) => (
-          <span key={i} className="flex items-center gap-10">
-            {t}
-            <span className="text-accent">✕</span>
-          </span>
-        ))}
-      </div>
     </div>
   );
 }

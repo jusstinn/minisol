@@ -62,7 +62,7 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
         <Logo className="text-ink" />
         <div className="flex items-baseline gap-2">
           <span className="display text-[19px] leading-none">Blueprint</span>
-          <span className="label hidden sm:inline">by WalletLoop</span>
+          <span className="hidden text-[13px] text-ink-3 sm:inline">by WalletLoop</span>
         </div>
         <div className="ml-auto flex items-center gap-1 rounded-full border border-rule bg-card/70 p-0.5 font-mono text-[11px] backdrop-blur">
           {(["ro", "en"] as const).map((l) => (
@@ -81,7 +81,7 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
 
       <main className="mx-auto grid w-full max-w-[1100px] flex-1 grid-cols-1 items-center gap-10 px-4 py-10 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
         <section>
-          <div className="label mb-5 flex items-center gap-2">
+          <div className="mb-5 flex items-center gap-2 text-[13px] text-ink-3">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
             {en ? "Private demo" : "Demo privat"}
           </div>
@@ -103,12 +103,12 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
           </p>
         </section>
 
-        <form onSubmit={submit} className="w-full rounded-[22px] border border-rule bg-card p-5 shadow-[0_30px_80px_-40px_rgba(20,19,17,0.45)] sm:p-7" noValidate>
+        <form onSubmit={submit} className="w-full rounded-[22px] border border-rule bg-card p-5 shadow-[0_10px_30px_-20px_rgba(20,19,17,0.35)] sm:p-7" noValidate>
           <h2 className="display text-[26px] leading-tight">{en ? "Sign in" : "Autentificare"}</h2>
           <p className="mt-1 text-[13.5px] text-ink-3">{en ? "Access for invited guests." : "Acces pentru invitați."}</p>
 
           <label className="mt-6 block">
-            <span className="label">{en ? "User name" : "Utilizator"}</span>
+            <span className="text-[13px] text-ink-3">{en ? "User name" : "Utilizator"}</span>
             <input
               value={user}
               onChange={(e) => setUser(e.target.value)}
@@ -120,7 +120,7 @@ export default function LoginForm({ tenant, next, initialLang = "ro" }: { tenant
             />
           </label>
           <label className="mt-4 block">
-            <span className="label">{en ? "Password" : "Parolă"}</span>
+            <span className="text-[13px] text-ink-3">{en ? "Password" : "Parolă"}</span>
             <span className="relative mt-1.5 block">
               <input
                 value={password}
