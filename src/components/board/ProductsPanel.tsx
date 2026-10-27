@@ -20,7 +20,7 @@ const QUALITY = {
 export default function ProductsPanel({ query, products, lang, onAdd }: { query: string; products: ProductView[]; lang: Lang; onAdd: (i: BasketItem) => void }) {
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4 sm:p-6">
-      <PanelHeader index="06" title={`${tr("searchResults", lang)} · „${query}”`} />
+      <PanelHeader title={`${tr("searchResults", lang)} · „${query}”`} />
       <div className="thin-scroll -mx-1 mt-4 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
         {products.map((p, i) => (
           <motion.div

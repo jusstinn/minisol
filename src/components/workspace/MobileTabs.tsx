@@ -376,7 +376,7 @@ function ProjectFacts({ project, lang }: { project: ProjectSnapshot; lang: Lang 
   const est = project.estimate;
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4">
-      <PanelHeader index="01" title={tr("measurements", lang)} />
+      <PanelHeader title={tr("measurements", lang)} />
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
         {project.measurements.map((m) => (
           <div key={m.label} className="min-w-0 border-b border-dashed border-rule pb-1.5">

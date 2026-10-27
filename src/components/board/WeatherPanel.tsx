@@ -98,7 +98,7 @@ export default function WeatherPanel({ lat, lng, city, type, lang }: { lat: numb
 
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4 sm:p-6">
-      <PanelHeader index="06" title={lang === "en" ? `When to build · ${city}` : `Când să lucrezi · ${city}`} right={<span className="font-mono text-[10px] text-ink-3">Open-Meteo · 7 {lang === "en" ? "days" : "zile"}</span>} />
+      <PanelHeader title={lang === "en" ? `When to build · ${city}` : `Când să lucrezi · ${city}`} right={<span className="font-mono text-[10px] text-ink-3">Open-Meteo · 7 {lang === "en" ? "days" : "zile"}</span>} />
       {!days ? (
         <div className="shimmer mt-4 h-[210px] rounded-xl bg-paper-2" />
       ) : (

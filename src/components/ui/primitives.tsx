@@ -137,12 +137,11 @@ export function RollingWord({ words, index, className }: { words: readonly strin
   );
 }
 
-/** Section header used on every board panel: index number + label + rule. */
-export function PanelHeader({ index, title, right, dark }: { index: string; title: string; right?: React.ReactNode; dark?: boolean }) {
+/** Section header used on every board panel: a plain sentence-case title + rule. */
+export function PanelHeader({ title, right, dark }: { title: string; right?: React.ReactNode; dark?: boolean }) {
   return (
     <div className={`flex items-center gap-3 ${dark ? "text-[#dce9ff]" : "text-ink"}`}>
-      <span className={`font-mono text-[10.5px] tracking-widest ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>{index}</span>
-      <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em]">{title}</span>
+      <span className="text-[14.5px] font-semibold tracking-tight">{title}</span>
       <span className={`h-px flex-1 ${dark ? "bg-[#dce9ff]/25" : "bg-rule"}`} />
       {right}
     </div>

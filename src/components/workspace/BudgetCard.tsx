@@ -53,7 +53,7 @@ export default function BudgetCard({ card, lang, onSend, disabled }: { card: Ext
 
   return (
     <motion.div data-tour="budget" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-3 overflow-hidden rounded-2xl border border-rule bg-paper-2/60">
-      <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+      <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5 text-[12.5px] text-ink-3">
         <IconWallet size={13} />
         {en ? "Your budget" : "Bugetul tău"} · {int(b.amount, lang)} lei
       </div>
@@ -79,7 +79,7 @@ export default function BudgetCard({ card, lang, onSend, disabled }: { card: Ext
             <span className="absolute -top-0.5 right-0 h-3 w-px bg-ink" />
           )}
         </div>
-        <div className="mt-1.5 flex justify-between font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+        <div className="mt-1.5 flex justify-between text-[11px] text-ink-3">
           <span>{b.fit === "fits" ? (en ? "Your list" : "Lista ta") : en ? `Was ${lei(b.current, lang)}` : `Era ${lei(b.current, lang)}`}</span>
           <span>{en ? "Budget" : "Buget"}</span>
         </div>

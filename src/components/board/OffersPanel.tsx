@@ -21,7 +21,7 @@ export default function OffersPanel({ offers, quote, lang }: { offers?: OfferVie
 
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4 sm:p-6">
-      <PanelHeader index="04" title={tr("offers", lang)} right={<span className="font-mono text-[10px] text-ink-3">WalletLoop</span>} />
+      <PanelHeader title={tr("offers", lang)} right={<span className="font-mono text-[10px] text-ink-3">WalletLoop</span>} />
       <div className="mt-4 space-y-2.5">
         {items.map((o, i) => (
           <motion.div
