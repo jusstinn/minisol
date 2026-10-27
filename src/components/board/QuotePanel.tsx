@@ -93,9 +93,8 @@ export default function QuotePanel({
   const best = quote.availability.alternatives.find((a) => a.allInStock && a.distanceKm <= 60);
 
   return (
-    <div className="min-w-0 rounded-[22px] border border-rule bg-card p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_24px_48px_-36px_rgba(20,19,17,0.45)] sm:p-6">
+    <div className="min-w-0 rounded-[22px] border border-rule bg-card p-4 shadow-[0_4px_16px_-12px_rgba(20,19,17,0.35)] sm:p-6">
       <PanelHeader
-        index="02"
         title={tr("shoppingList", lang)}
         right={<span className="font-mono text-[10.5px] text-ink-3">{quote.lines.length} {tr("products", lang)}</span>}
       />
@@ -129,7 +128,7 @@ export default function QuotePanel({
         </div>
         <div className="flex flex-col justify-between gap-3 rounded-2xl bg-ink p-4 text-paper sm:min-w-[210px]">
           <div>
-            <div className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-paper/60">{tr("earn", lang)}</div>
+            <div className="text-[12px] font-medium text-paper/60">{tr("earn", lang)}</div>
             <div className="display-cond text-[34px] leading-none text-accent">
               +<Counter value={quote.points.earned} lang={lang} decimals={0} />
             </div>
@@ -333,7 +332,7 @@ export default function QuotePanel({
               <span className="h-2 w-2 rounded-full bg-warn" />
               {tr("missingAt", lang)} {quote.storeName}: {quote.availability.missing.map((m) => m.name.split(" ").slice(0, 3).join(" ")).join(", ")}
               {best && (
-                <button onClick={() => onMoveStore(best.storeId)} className="rounded-full bg-ink px-2.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-paper hover:bg-accent hover:text-on-accent">
+                <button onClick={() => onMoveStore(best.storeId)} className="rounded-full bg-ink px-2.5 py-0.5 text-[12px] font-medium text-paper hover:bg-accent hover:text-on-accent">
                   {tr("moveTo", lang)} {storeLabel(best.name, quote.availability.alternatives.map((a) => a.name))} · {km(best.distanceKm, lang)}
                 </button>
               )}

@@ -421,20 +421,20 @@ function Rail({
             </motion.div>
           ) : (
             <div key={m.id} className="space-y-3">
-              <ConstructionLog message={m} />
+              <ConstructionLog message={m} lang={lang} />
               {m.text && <RevealText text={m.text} animate={!restored.has(m.id)} className="text-[15.5px] leading-[1.6] text-ink-2" />}
               {m.verified && m.verified.checked > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-ok/30 bg-ok/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ok"
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-1.5 text-[12px] text-ink-3"
                   title={lang === "en" ? "Every amount in this answer was checked against the pricing engine" : "Fiecare sumă din răspuns a fost verificată cu motorul de prețuri"}
                 >
-                  <IconCheck size={12} />
+                  <IconCheck size={12} className="text-ok" />
                   {m.verified.replaced
                     ? lang === "en" ? "Corrected by the pricing engine" : "Corectat de motorul de prețuri"
                     : lang === "en" ? `${m.verified.checked} amounts verified` : `${m.verified.checked} sume verificate`}
-                </motion.div>
+                </motion.p>
               )}
               {m.pending && !m.text && m.log.length === 0 && (
                 <div className="flex items-center gap-2 font-mono text-[12px] text-ink-3">
@@ -492,21 +492,49 @@ function Rail({
   );
 }
 
-function ConstructionLog({ message }: { message: ChatMessage }) {
+/**
+ * What the assistant is doing to answer. While it's still working this is one quiet line (no
+ * timestamps) — a customer doesn't need a stopwatch, just to know it's thinking. Once the answer
+ * is in, the detail (steps, timing) folds behind a small "how I calculated this" expander: useful
+ * for a demo, out of the way for everyone else.
+ */
+function ConstructionLog({ message, lang }: { message: ChatMessage; lang: Lang }) {
+  const [open, setOpen] = useState(false);
   if (message.log.length === 0) return null;
+  const en = lang === "en";
   const t0 = message.log[0].at;
+
+  if (message.pending) {
+    const current = [...message.log].reverse().find((l) => !l.done) ?? message.log[message.log.length - 1];
+    return (
+      <div className="flex items-center gap-2 text-[12.5px] text-ink-3">
+        <Spinner /> {current.label}…
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-rule bg-card/70 px-3 py-2 font-mono text-[11px] leading-[1.9] text-ink-3">
-      {message.log.map((l, i) => (
-        <motion.div key={i} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2">
-          <span className="w-12 text-ink-3/70">{fmtT(l.at - t0)}</span>
-          <span className={l.done ? "text-ok" : "text-accent"}>{l.done ? <IconCheck size={12} /> : <Spinner />}</span>
-          <span className={l.done ? "text-ink-2" : "text-ink"}>{l.label}</span>
-        </motion.div>
-      ))}
-      {!message.pending && message.ms ? (
-        <div className="mt-0.5 border-t border-dashed border-rule pt-1 text-[10px] uppercase tracking-[0.14em]">Σ {(message.ms / 1000).toFixed(1)} s</div>
-      ) : null}
+    <div>
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-1.5 text-[12px] text-ink-3 transition hover:text-ink">
+        <span className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+        {en ? "How I calculated this" : "Cum am calculat"}
+        {message.ms ? <span className="text-ink-3/70"> · {(message.ms / 1000).toFixed(1)} s</span> : null}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="mt-2 space-y-1 rounded-xl border border-rule bg-card/70 px-3 py-2 font-mono text-[11px] leading-[1.8] text-ink-3">
+              {message.log.map((l, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-12 text-ink-3/70">{fmtT(l.at - t0)}</span>
+                  <IconCheck size={12} className="text-ok" />
+                  <span className="text-ink-2">{l.label}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

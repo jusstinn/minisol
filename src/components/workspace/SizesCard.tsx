@@ -30,7 +30,7 @@ export default function SizesCard({ card, lang, onSend, disabled }: { card: Extr
       animate={{ opacity: 1, y: 0 }}
       className="mt-3 overflow-hidden rounded-2xl border border-rule bg-paper-2/60"
     >
-      <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+      <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5 text-[12.5px] text-ink-3">
         <IconRuler size={13} />
         {en ? "Don't know the size? Pick one" : "Nu știi dimensiunile? Alege una"}
       </div>
@@ -57,7 +57,7 @@ export default function SizesCard({ card, lang, onSend, disabled }: { card: Extr
       </div>
 
       <div className="border-t border-dashed border-rule px-4 py-3">
-        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+        <div className="text-[12px] text-ink-3">
           {en ? "Or pace it out" : "Sau măsoară cu pașii"} · {en ? "1 pace" : "1 pas"} ≈ {PACE_M * 100} cm
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -79,7 +79,7 @@ export default function SizesCard({ card, lang, onSend, disabled }: { card: Extr
         </div>
       </div>
 
-      <button onClick={() => setTips((x) => !x)} className="w-full border-t border-rule px-4 py-2 text-left font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3 hover:text-ink">
+      <button onClick={() => setTips((x) => !x)} className="w-full border-t border-rule px-4 py-2 text-left text-[12.5px] text-ink-3 hover:text-ink">
         {tips ? "−" : "+"} {en ? "How to measure" : "Cum măsor"}
       </button>
       <AnimatePresence initial={false}>

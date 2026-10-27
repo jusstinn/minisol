@@ -125,10 +125,12 @@ export function RollingWord({ words, index, className }: { words: readonly strin
         <motion.span
           key={word}
           className="col-start-1 row-start-1"
-          initial={{ y: "110%", opacity: 0 }}
+          // Same duration and curve both ways: the words move in lockstep (like a counter rolling),
+          // so the leaving one is always a full line above the arriving one — never on top of it.
+          initial={{ y: "105%", opacity: 0 }}
           animate={{ y: "0%", opacity: 1 }}
-          exit={{ y: "-110%", opacity: 0, transition: { duration: 0.4, ease: [0.7, 0, 0.84, 0] } }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ y: "-105%", opacity: 0 }}
+          transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
         >
           {word}
         </motion.span>
@@ -137,12 +139,11 @@ export function RollingWord({ words, index, className }: { words: readonly strin
   );
 }
 
-/** Section header used on every board panel: index number + label + rule. */
-export function PanelHeader({ index, title, right, dark }: { index: string; title: string; right?: React.ReactNode; dark?: boolean }) {
+/** Section header used on every board panel: a plain sentence-case title + rule. */
+export function PanelHeader({ title, right, dark }: { title: string; right?: React.ReactNode; dark?: boolean }) {
   return (
     <div className={`flex items-center gap-3 ${dark ? "text-[#dce9ff]" : "text-ink"}`}>
-      <span className={`font-mono text-[10.5px] tracking-widest ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>{index}</span>
-      <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em]">{title}</span>
+      <span className="text-[14.5px] font-semibold tracking-tight">{title}</span>
       <span className={`h-px flex-1 ${dark ? "bg-[#dce9ff]/25" : "bg-rule"}`} />
       {right}
     </div>

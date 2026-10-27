@@ -19,7 +19,7 @@ export default function StockPanel({ quote, lang, onMoveStore }: { quote: Quote;
 
   return (
     <div className="bp-sheet relative overflow-hidden rounded-[22px] p-4 sm:p-6">
-      <PanelHeader index="03" title={tr("stock", lang)} dark />
+      <PanelHeader title={tr("stock", lang)} dark />
       <div className="relative mt-3">
         <svg viewBox={`-20 -20 ${RO_MAP.width + 40} ${RO_MAP.height + 40}`} className="w-full">
           <defs>
@@ -124,11 +124,11 @@ export default function StockPanel({ quote, lang, onMoveStore }: { quote: Quote;
                 </div>
               </div>
               {selected ? (
-                <span className="font-mono text-[10px] uppercase tracking-wider text-white/70">✓</span>
+                <span className="text-[13px] text-white/70">✓</span>
               ) : (
                 <button
                   onClick={() => onMoveStore(s.storeId)}
-                  className="rounded-full bg-white/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-white transition hover:bg-accent hover:text-on-accent"
+                  className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white transition hover:bg-accent hover:text-on-accent"
                 >
                   {tr("moveTo", lang)}
                 </button>

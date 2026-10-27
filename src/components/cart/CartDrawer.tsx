@@ -252,7 +252,7 @@ export default function CartDrawer({
                     <dl className="mt-3 space-y-1 text-[13px]">
                       <Row k={en ? "Subtotal" : "Subtotal"} v={lei(quote.subtotal, lang)} />
                       {quote.discounts.length > 0 && (
-                        <div className="pt-1 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">{en ? "Discounts on today's prices" : "Reduceri față de prețul de azi"}</div>
+                        <div className="pt-1 text-[11.5px] text-ink-3">{en ? "Discounts on today's prices" : "Reduceri față de prețul de azi"}</div>
                       )}
                       {quote.discounts.map((d) => (
                         <Row key={d.offerId} k={d.title} v={`−${lei(d.amount, lang)}`} accent tag={d.personalised ? (en ? "personalised" : "personalizat") : undefined} />

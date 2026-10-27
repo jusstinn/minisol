@@ -75,14 +75,14 @@ body {
   color: var(--on-accent);
 }
 
-/* Millimetre drafting paper */
+/* Millimetre drafting paper — kept faint: a quiet texture, not a pattern that competes with content. */
 .paper-grid {
   background-color: var(--paper);
   background-image:
-    linear-gradient(var(--rule) 1px, transparent 1px),
-    linear-gradient(90deg, var(--rule) 1px, transparent 1px),
-    linear-gradient(rgba(20, 19, 17, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 19, 17, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(20, 19, 17, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 19, 17, 0.065) 1px, transparent 1px),
+    linear-gradient(rgba(20, 19, 17, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 19, 17, 0.028) 1px, transparent 1px);
   background-size:
     120px 120px,
     120px 120px,
@@ -121,11 +121,12 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+/* A quiet section eyebrow — sentence case (the copy is already written that way), not a shouting
+   mono-uppercase tag. Used above section titles and big numbers throughout the board and cart. */
 .label {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
   color: var(--ink-3);
 }
 .num {
@@ -203,15 +204,6 @@ body {
   transform-origin: center;
   transform-box: fill-box;
   animation: pulse-ring 1.8s var(--ease-out) infinite;
-}
-
-@keyframes marquee {
-  to {
-    transform: translateX(-50%);
-  }
-}
-.marquee {
-  animation: marquee 38s linear infinite;
 }
 
 @keyframes blink {

@@ -246,18 +246,15 @@ function EmptyBoard({ lang }: { lang: Lang }) {
         ))}
       </svg>
       <div className="relative text-center">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#9fbcf0]">
-          FIG. 00
-        </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.8 }}
-          className="display mt-2 text-[clamp(30px,4vw,54px)] text-white"
+          transition={{ delay: 0.6, duration: 0.8 }}
+          className="display text-[clamp(30px,4vw,54px)] text-white"
         >
           {tr("boardEmpty", lang)}
         </motion.div>
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }} className="mx-auto mt-3 max-w-[420px] text-[14px] leading-relaxed text-[#c7d9fa]">
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }} className="mx-auto mt-3 max-w-[420px] text-[14px] leading-relaxed text-[#c7d9fa]">
           {tr("boardEmptySub", lang)}
         </motion.p>
       </div>

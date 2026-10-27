@@ -25,7 +25,7 @@ export default function PlanPanel({ plan, lang }: { plan: PlanView; lang: Lang }
 
   return (
     <div className="rounded-[22px] border border-rule bg-card p-4 sm:p-7">
-      <PanelHeader index="05" title={tr("plan", lang)} />
+      <PanelHeader title={tr("plan", lang)} />
       <PlanSource plan={plan} lang={lang} />
       <motion.h3 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="display mt-4 text-[clamp(26px,3vw,40px)] text-ink">
         {plan.title}

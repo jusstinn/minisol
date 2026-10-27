@@ -150,6 +150,8 @@ function SketchView({
   const [seenLayout, setSeenLayout] = useState(project.layout);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [diff, setDiff] = useState<{ added: number; changed: number; removed: number; at: number } | null>(null);
+  // The indicative-sketch disclaimer: one quiet line near the sketch, with the fuller legal text a tap away.
+  const [sketchInfo, setSketchInfo] = useState(false);
   // The "Simulare" panel: mutually exclusive with the plan editor (both use the same right-column
   // slot on desktop), and with the sun/build sub-simulations themselves (see SimulationPanel).
   const [simOpen, setSimOpen] = useState(false);
@@ -342,23 +344,31 @@ function SketchView({
         {/* title block — kept clear of the controls column on the right (the "Simulare" toggle made
             that column one icon wider, ≈12.5 rem on phones now, ≈18 rem with labels from sm) */}
         <div className="pointer-events-none absolute left-4 right-[12.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
-          <div className={`flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
-            <span>{en ? "Indicative sketch" : "Schiță orientativă"}</span>
-            <span
-              className={`pointer-events-auto rounded-full px-2 py-0.5 text-[9px] tracking-[0.12em] ${dark ? "bg-[#0a1f47]/70 text-[#ffd479] ring-1 ring-[#ffd479]/40" : "bg-warn/15 text-ink"}`}
-              title={
-                en
+          <div className={`flex flex-wrap items-center gap-1.5 text-[11.5px] ${dark ? "text-[#9fbcf0]" : "text-ink-3"}`}>
+            <span>{en ? "Indicative sketch — not a technical plan" : "Schiță orientativă — nu e proiect tehnic"}</span>
+            <span className="group/sketchinfo pointer-events-auto relative inline-flex">
+              <button
+                type="button"
+                onClick={() => setSketchInfo((o) => !o)}
+                onBlur={() => setSketchInfo(false)}
+                aria-expanded={sketchInfo}
+                aria-label={en ? "What this means" : "Ce înseamnă asta"}
+                className={`grid h-[15px] w-[15px] place-items-center rounded-full border text-[9.5px] leading-none transition ${dark ? "border-[#9fbcf0]/50 hover:border-[#9fbcf0]" : "border-ink/25 hover:border-ink/50"}`}
+              >
+                i
+              </button>
+              <span
+                role="tooltip"
+                className={`absolute left-0 top-full z-20 mt-1.5 w-[260px] rounded-lg bg-ink px-2.5 py-2 text-[11px] normal-case leading-snug tracking-normal text-paper shadow-lg ${
+                  sketchInfo ? "block" : "hidden group-hover/sketchinfo:block group-focus-within/sketchinfo:block"
+                }`}
+              >
+                {en
                   ? "A to-scale visualisation of your dimensions. It does not account for slope, soil, loads or existing structures and is not a construction plan."
-                  : "Vizualizare la scară a dimensiunilor tale. Nu ține cont de pantă, teren, sarcini sau structuri existente și nu este un proiect de execuție."
-              }
-            >
-              {en ? "not a technical plan" : "nu e proiect tehnic"}
-            </span>
-            {(project.revision ?? 0) > 0 && (
-              <span className={`rounded-full px-2 py-0.5 text-[9px] tracking-[0.12em] ${dark ? "bg-[#dce9ff]/10" : "bg-ink/5"}`}>
-                {en ? "rev." : "rev."} {project.revision}
+                  : "Vizualizare la scară a dimensiunilor tale. Nu ține cont de pantă, teren, sarcini sau structuri existente și nu este un proiect de execuție."}
               </span>
-            )}
+            </span>
+            {(project.revision ?? 0) > 0 && <span className="opacity-70">· {en ? "rev." : "rev."} {project.revision}</span>}
           </div>
           <motion.h2
             key={project.title}
