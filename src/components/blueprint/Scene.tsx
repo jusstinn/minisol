@@ -461,17 +461,18 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
  * `Driver` in lock-step with the hero's "plan → reality" backdrop transition (see Hero.tsx).
  */
 function GroundHalo({ build, shared }: { build: Build; shared: Shared }) {
-  const mat = useRef<THREE.MeshBasicMaterial>(null);
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
   const texture = useMemo(() => groundHaloTexture(), []);
-  const radius = Math.max(build.extent[0], build.extent[2]) * 1.15 + 1.6;
-  const tint = build.interior ? "#cdbda0" : "#5a9b47";
+  const radius = Math.max(build.extent[0], build.extent[2]) * 1.25 + 2;
+  // Muted, lit and shadowed like real ground (an unlit saturated green read as a neon glow).
+  const tint = build.interior ? "#d6cdbd" : "#97ab84";
   useFrame(() => {
-    if (mat.current) mat.current.opacity = shared.realT.current * 0.85;
+    if (mat.current) mat.current.opacity = shared.realT.current * 0.75;
   });
   return (
-    <mesh position={[0, -0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-10} raycast={() => null} userData={{ [EXCLUDE_FROM_CAPTURE]: true }}>
-      <circleGeometry args={[radius, 48]} />
-      <meshBasicMaterial ref={mat} map={texture} color={tint} transparent opacity={0} depthWrite={false} toneMapped={false} />
+    <mesh position={[0, -0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-10} receiveShadow raycast={() => null} userData={{ [EXCLUDE_FROM_CAPTURE]: true }}>
+      <circleGeometry args={[radius, 64]} />
+      <meshStandardMaterial ref={mat} alphaMap={texture} color={tint} roughness={1} metalness={0} transparent opacity={0} depthWrite={false} />
     </mesh>
   );
 }
@@ -985,7 +986,9 @@ export default function Scene({
       </World>
       <LabelProjector labels={labels} els={labelEls} shared={shared} />
 
-      {realNow && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.4} blur={2} far={shadowBounds.far * 0.3} resolution={512} />}
+      {/* Desktop: the ground (GroundHalo) takes the sun's real shadow. Its square plane read as a
+          dark sheet under the model there, so contact shadows only ground phones, which have no shadow map. */}
+      {realNow && lite && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.4} blur={2} far={shadowBounds.far * 0.3} resolution={512} />}
       {/* Stays mounted across PLAN/REAL/EXPLODED (and across the hero's own projects): see
           Effects.tsx's own doc on why toggling `aoEnabled` beats remounting the whole composer. */}
       {!lite && effects && <Effects aoEnabled={realNow} night={Boolean(sun?.isNight)} />}

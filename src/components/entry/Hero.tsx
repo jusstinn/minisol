@@ -13,9 +13,10 @@ import type { CaptureFn } from "../blueprint/Scene";
 import SceneBoundary from "../blueprint/SceneBoundary";
 import { heroCycle } from "./heroTiming";
 
-/** Fills ~70% of the panel's own width (whatever its aspect), padded for the dimension labels,
- *  and sits a touch below the panel's vertical middle — see cameraPresets.ts's `FrameFit`. */
-const HERO_FRAME: FrameFit = { fillWidth: 0.68, margin: 0.75, verticalBias: 0.1 };
+/** Fills ~80% of the panel's own width (whatever its aspect), padded for the dimension labels,
+ *  centred, seen from higher than the usual 3/4 view so a flat project fills a tall panel —
+ *  see cameraPresets.ts's `FrameFit`. */
+const HERO_FRAME: FrameFit = { fillWidth: 0.8, margin: 0.6, verticalBias: 0.02, phi: (50 * Math.PI) / 180 };
 
 const Scene = dynamic(() => import("../blueprint/Scene"), { ssr: false, loading: () => <HeroPlaceholder /> });
 

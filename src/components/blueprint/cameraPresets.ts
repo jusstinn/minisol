@@ -83,6 +83,9 @@ export interface FrameFit {
   /** How far *above* the build's own look-at point the camera's target sits, as a fraction of
    *  the fit distance — pushes the build down in frame ("centred slightly below middle"). */
   verticalBias?: number;
+  /** Camera polar angle (radians from straight down) instead of the iso one (~61°): a tall
+   *  panel shows a flat build better from higher up. */
+  phi?: number;
 }
 
 /** The apparent horizontal half-extent of an axis-aligned footprint as seen from azimuth
@@ -193,7 +196,7 @@ export function cameraFor(preset: CameraPreset, bounds: CameraBounds, aspect: nu
       const theta = arc?.center ?? ISO_ANGLES.theta;
       const r = fitDistanceFor(bounds.extent, aspect, theta, fit);
       const biasedTarget: Vec3 = fit ? [0, H * 0.25 + (fit.verticalBias ?? 0) * r, 0] : target;
-      return { position: add(fromSpherical(theta, ISO_ANGLES.phi, r), biasedTarget), target: biasedTarget, fov: DEFAULT_FOV };
+      return { position: add(fromSpherical(theta, fit?.phi ?? ISO_ANGLES.phi, r), biasedTarget), target: biasedTarget, fov: DEFAULT_FOV };
     }
   }
 }
@@ -215,7 +218,7 @@ export function tourFrame(bounds: CameraBounds, aspect: number, phase: number, a
   const theta = arc ? center + Math.sin(lap) * (arc.span / 2) : center + lap;
   const phiAmp = arc ? 0.06 : 0.12;
   const dollyAmp = arc ? 0.06 : 0.1;
-  const phi = ISO_ANGLES.phi + Math.sin(lap) * phiAmp;
+  const phi = (fit?.phi ?? ISO_ANGLES.phi) + Math.sin(lap) * phiAmp;
   const dolly = r * (1 + Math.sin(lap) * dollyAmp);
   return { position: add(fromSpherical(theta, phi, dolly), rest.target), target: rest.target, fov: DEFAULT_FOV };
 }
