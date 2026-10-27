@@ -31,12 +31,27 @@ export interface CaptureParams {
   mapSize: number;
 }
 
+/**
+ * Objects marked this way (the ground halo — see Scene.tsx's `GroundHalo`) sit out of "Randare
+ * foto": its own soft, wide alpha falloff would otherwise read as "content" to `contentCrop`'s
+ * alpha scan (photoFooter.ts) and crop the export to the halo's own, much bigger footprint
+ * instead of the model.
+ */
+export const EXCLUDE_FROM_CAPTURE = "excludeFromCapture";
+
 /** A PNG data URL of the scene at `width`×`height`, with the renderer left exactly as found. */
 export function captureHighRes({ gl, scene, camera, light, width, height, mapSize }: CaptureParams): string {
   const size = gl.getSize(new THREE.Vector2());
   const prevPixelRatio = gl.getPixelRatio();
   const prevAspect = camera.aspect;
   const prevMapSize = light ? light.shadow.mapSize.clone() : null;
+  const hidden: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    if (o.visible && o.userData[EXCLUDE_FROM_CAPTURE]) {
+      o.visible = false;
+      hidden.push(o);
+    }
+  });
 
   try {
     gl.setPixelRatio(1);
@@ -63,6 +78,7 @@ export function captureHighRes({ gl, scene, camera, light, width, height, mapSiz
       light.shadow.map = null;
       light.shadow.needsUpdate = true;
     }
+    for (const o of hidden) o.visible = true;
     // Render once immediately at the restored size, so the canvas never shows a stale frame
     // from the bigger buffer until the live loop's next tick.
     gl.render(scene, camera);

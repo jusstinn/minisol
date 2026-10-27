@@ -11,7 +11,7 @@ import type { Line2, LineSegments2 } from "three-stdlib";
 import type { Build, DimLine as DimLineSpec, Part, Vec3 } from "./builders";
 import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
 import type { CameraPreset, FrameFit, TourArc } from "./cameraPresets";
-import { captureHighRes, computeCaptureSize } from "./capture";
+import { captureHighRes, computeCaptureSize, EXCLUDE_FROM_CAPTURE } from "./capture";
 import { deckScrewInstances } from "./detail/deckScrews";
 import { bevelGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
 import { isBevelShape, shapeFor } from "./detail/shapes";
@@ -469,7 +469,7 @@ function GroundHalo({ build, shared }: { build: Build; shared: Shared }) {
     if (mat.current) mat.current.opacity = shared.realT.current * 0.85;
   });
   return (
-    <mesh position={[0, -0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-10} raycast={() => null}>
+    <mesh position={[0, -0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-10} raycast={() => null} userData={{ [EXCLUDE_FROM_CAPTURE]: true }}>
       <circleGeometry args={[radius, 48]} />
       <meshBasicMaterial ref={mat} map={texture} color={tint} transparent opacity={0} depthWrite={false} toneMapped={false} />
     </mesh>

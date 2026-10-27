@@ -15,7 +15,7 @@ import { heroCycle } from "./heroTiming";
 
 /** Fills ~70% of the panel's own width (whatever its aspect), padded for the dimension labels,
  *  and sits a touch below the panel's vertical middle — see cameraPresets.ts's `FrameFit`. */
-const HERO_FRAME: FrameFit = { fillWidth: 0.7, margin: 0.6, verticalBias: 0.16 };
+const HERO_FRAME: FrameFit = { fillWidth: 0.68, margin: 0.75, verticalBias: 0.1 };
 
 const Scene = dynamic(() => import("../blueprint/Scene"), { ssr: false, loading: () => <HeroPlaceholder /> });
 
