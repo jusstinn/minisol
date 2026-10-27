@@ -42,26 +42,37 @@ describe("shapeFor", () => {
     }
   });
 
-  it("an ordinary product (a board, a tile, a paver) gets the soft product bevel", () => {
+  it("an ordinary product (a board, a paver) gets the soft product bevel", () => {
     expect(shapeFor(base, { real: true, lite: false })).toBe("bevelSoft");
-    expect(shapeFor({ ...base, layer: "floor_tiles", size: [0.3, 0.01, 0.3] }, { real: true, lite: false })).toBe("bevelSoft");
+    expect(shapeFor({ ...base, layer: "pavers", finish: { kind: "paver" } }, { real: true, lite: false })).toBe("bevelSoft");
+  });
+
+  it("ceramic tile (floor or wall) gets its own much crisper, smaller bevel class — not the soft product one", () => {
+    expect(shapeFor({ ...base, layer: "floor_tiles", size: [0.3, 0.01, 0.3], finish: { kind: "tile" } }, { real: true, lite: false })).toBe("bevelTile");
+    expect(shapeFor({ ...base, layer: "wall_tiles", size: [0.6, 0.3, 0.008], finish: { kind: "tileWall" } }, { real: true, lite: false })).toBe("bevelTile");
   });
 
   it("a hair-thin sheet (a vapour barrier, a foil) stays a plain box — the bevel would be bigger than the part", () => {
     expect(shapeFor({ ...base, size: [2, 0.003, 2] }, { real: true, lite: false })).toBe("box");
   });
 
-  it("isBevelShape only accepts the three bevel kinds", () => {
+  it("a grass ground plane stays flat, same as a membrane or bare soil", () => {
+    expect(shapeFor({ ...base, finish: { kind: "grass" } }, { real: true, lite: false })).toBe("bevelFlat");
+  });
+
+  it("isBevelShape only accepts the four bevel kinds", () => {
     expect(isBevelShape("bevelSoft")).toBe(true);
     expect(isBevelShape("bevelCrisp")).toBe(true);
     expect(isBevelShape("bevelFlat")).toBe(true);
+    expect(isBevelShape("bevelTile")).toBe(true);
     expect(isBevelShape("box")).toBe(false);
     expect(isBevelShape("pedestal")).toBe(false);
   });
 });
 
 describe("BEVEL_RADIUS", () => {
-  it("orders chamfer sizes from barely-there to crisp trim", () => {
+  it("orders chamfer sizes from barely-there to crisp trim, tile crisper again than flat", () => {
+    expect(BEVEL_RADIUS.bevelTile).toBeLessThan(BEVEL_RADIUS.bevelFlat);
     expect(BEVEL_RADIUS.bevelFlat).toBeLessThan(BEVEL_RADIUS.bevelSoft);
     expect(BEVEL_RADIUS.bevelSoft).toBeLessThan(BEVEL_RADIUS.bevelCrisp);
   });

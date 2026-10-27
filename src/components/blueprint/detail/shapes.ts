@@ -12,19 +12,22 @@ import type { Part } from "../builders";
  * to a drawing that's supposed to read as construction lines, not a rendered product.
  */
 
-export type ShapeKind = "box" | "bevelFlat" | "bevelSoft" | "bevelCrisp" | "pedestal" | "postCap" | "cylinder" | "cone" | "sphere";
+export type ShapeKind = "box" | "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "pedestal" | "postCap" | "cylinder" | "cone" | "sphere";
 
-const BEVEL_SHAPES: ReadonlySet<ShapeKind> = new Set(["bevelFlat", "bevelSoft", "bevelCrisp"]);
+const BEVEL_SHAPES: ReadonlySet<ShapeKind> = new Set(["bevelFlat", "bevelTile", "bevelSoft", "bevelCrisp"]);
 
-export function isBevelShape(shape: ShapeKind): shape is "bevelFlat" | "bevelSoft" | "bevelCrisp" {
+export function isBevelShape(shape: ShapeKind): shape is "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" {
   return BEVEL_SHAPES.has(shape);
 }
 
 /** Absolute, real-world chamfer radius (metres) per bevel class — small, believable arrises
  *  (an actual product's eased edge), not a toy-like fillet. `RoundedBoxGeometry` itself clamps
- *  this to at most half the part's own shortest side, so a hair-thin part never self-intersects. */
-export const BEVEL_RADIUS: Record<"bevelFlat" | "bevelSoft" | "bevelCrisp", number> = {
+ *  this to at most half the part's own shortest side, so a hair-thin part never self-intersects.
+ *  Ceramic tile gets its own, much smaller class: at tile scale even the "soft" product radius
+ *  reads as a rounded, stacked-brick edge rather than a crisp, barely-there eased arris. */
+export const BEVEL_RADIUS: Record<"bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp", number> = {
   bevelFlat: 0.0015,
+  bevelTile: 0.0007,
   bevelSoft: 0.003,
   bevelCrisp: 0.005,
 };
@@ -46,9 +49,11 @@ const CRISP_LAYERS: ReadonlySet<string> = new Set([
   "post_concrete",
   "transition_profile",
 ]);
-/** Finishes that read as a thin, flexible sheet (membrane, bare soil): a bevel would just be
- *  noise on something that isn't a cut, rigid product edge. */
-const FLAT_FINISHES: ReadonlySet<string> = new Set(["membrane", "soil"]);
+/** Finishes that read as a thin, flexible sheet (membrane, bare soil, turf): a bevel would just
+ *  be noise on something that isn't a cut, rigid product edge. */
+const FLAT_FINISHES: ReadonlySet<string> = new Set(["membrane", "soil", "grass"]);
+/** Ceramic tile (floor or wall) gets its own much crisper, smaller bevel class — see BEVEL_RADIUS. */
+const TILE_FINISHES: ReadonlySet<string> = new Set(["tile", "tileWall"]);
 /** Below this, any bevel radius would be bigger than the part itself — not worth the geometry. */
 const MIN_BEVEL_THICKNESS = 0.006;
 
@@ -64,6 +69,7 @@ export function shapeFor(part: Part, opts: { real: boolean; lite: boolean | "low
   if (!opts.real || opts.lite) return "box";
   if (PEDESTAL_LAYERS.has(part.layer)) return "pedestal";
   if (CAP_LAYERS.has(part.layer)) return "postCap";
+  if (part.finish && TILE_FINISHES.has(part.finish.kind)) return "bevelTile";
   if (Math.min(part.size[0], part.size[1], part.size[2]) < MIN_BEVEL_THICKNESS) return "box";
   if (part.context) return "bevelFlat";
   if (part.finish && FLAT_FINISHES.has(part.finish.kind)) return "bevelFlat";

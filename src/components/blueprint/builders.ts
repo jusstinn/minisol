@@ -64,6 +64,12 @@ export interface Build {
   layers: Layer[];
   grass?: { zones: { x: number; z: number; w: number; d: number }[]; count: number; delay: number };
   duration: number;
+  /** A cut-away room (see `roomShell`): only the south/east walls are low/open — the camera (see
+   *  `cameraPresets.ts`'s `tourArcFor`) should never swing round to the tall walls' backs. */
+  interior?: boolean;
+  /** A garden/outdoor project (deck, fence, paving, lawn) — `Scene.tsx`'s REAL-mode ground halo
+   *  (see `GroundHalo`) tints itself grass-green for these, a floor tone for everything else. */
+  outdoor?: boolean;
 }
 
 const m = (n: number, lang: Lang) => `${n.toLocaleString(lang === "en" ? "en-GB" : "ro-RO", { maximumFractionDigits: 2 })} m`;
@@ -303,6 +309,7 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
       { id: "deck_board", label: lang === "en" ? "Deck boards" : "Deck", color: boardColors[0] },
     ],
     duration: 5,
+    outdoor: true,
   };
 }
 
@@ -422,6 +429,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): B
       { id: "post_cap", label: lang === "en" ? "Post caps" : "Capace", color: "#3b3b3b" },
     ],
     duration: 4.5,
+    outdoor: true,
   };
 }
 
@@ -453,6 +461,7 @@ function paintRoom(l: Extract<Layout, { type: "paint_room" }>, lang: Lang, look:
       { id: "interior_paint", label: lang === "en" ? "Paint" : "Vopsea", color: paint },
     ],
     duration: 4,
+    interior: true,
   };
 }
 
@@ -644,7 +653,7 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
           delay: 2.4 + r * 0.16 + c * 0.02,
           grow: "pop",
           // The wall's long span is along x for the n/s walls but along z for e/w ones.
-          finish: { kind: "tile", unit: wallTileUnit, axes: horizontal ? "xy" : "zy" },
+          finish: { kind: "tileWall", unit: wallTileUnit, axes: horizontal ? "xy" : "zy" },
         });
       }
     }
@@ -664,6 +673,7 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
       ...(maxH > 0 ? [{ id: "wall_tiles", label: lang === "en" ? "Wall tiles" : "Faianță", color: wallColors[0] }] : []),
     ],
     duration: 4.5,
+    interior: true,
   };
 }
 
@@ -747,6 +757,10 @@ function lawn(l: Extract<Layout, { type: "lawn" }>, lang: Lang): Build {
     const c: Vec3 = [z.x + z.w / 2, 0, z.z + z.d / 2];
     parts.push({ id: `${z.id}-soil`, layer: "structure", pos: [c[0], -0.1, c[2]], size: [z.w, 0.2, z.d], color: C.soil, delay: i * 0.4, grow: "rise", context: true, finish: { kind: "soil" } });
     parts.push({ id: `${z.id}-topsoil`, layer: "topsoil", pos: [c[0], 0.01, c[2]], size: [z.w, 0.02, z.d], color: C.topsoil, delay: 0.6 + i * 0.4, grow: "slide", finish: { kind: "soil" } });
+    // A grass-textured ground under the instanced blades (Scene.tsx's `Grass`): dense turf even
+    // where the blade count alone would read thin — the lawn settles as a lush lawn, not a bare
+    // brown slab with a few sparse sticks on top.
+    parts.push({ id: `${z.id}-turf`, layer: "grass_seed", pos: [c[0], 0.021, c[2]], size: [z.w - 0.01, 0.006, z.d - 0.01], color: "#5a9b47", delay: 1.0 + i * 0.4, grow: "fade", finish: { kind: "grass" } });
   });
   const area = l.zones.reduce((s, z) => s + z.w * z.d, 0);
   return {
@@ -758,8 +772,11 @@ function lawn(l: Extract<Layout, { type: "lawn" }>, lang: Lang): Build {
       { id: "topsoil", label: lang === "en" ? "Lawn soil" : "Pământ gazon", color: C.topsoil },
       { id: "grass_seed", label: lang === "en" ? "Grass" : "Gazon", color: "#5fa04a" },
     ],
-    grass: { zones: l.zones, count: Math.min(4200, Math.round(area * 40)), delay: 1.4 },
+    // Dense enough to read as a lawn, not sparse sticks — the turf ground above carries most of
+    // the density/colour, the blades add the close-up fringe; still capped for a big lawn.
+    grass: { zones: l.zones, count: Math.min(9000, Math.round(area * 110)), delay: 1.3 },
     duration: 4.5,
+    outdoor: true,
   };
 }
 
@@ -875,6 +892,7 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
       { id: "joint_sand", label: en ? "Jointing sand" : "Nisip de rosturi", color: jointColor },
     ],
     duration: 5,
+    outdoor: true,
   };
 }
 

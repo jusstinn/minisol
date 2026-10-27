@@ -20,7 +20,7 @@ import type { Vec3 } from "./builders";
  * (tileable, wrapped) value noise.
  */
 
-export type FinishKind = "wood" | "wpc" | "tile" | "paver" | "gravel" | "sand" | "soil" | "concrete" | "plaster" | "metal" | "membrane" | "fence";
+export type FinishKind = "wood" | "wpc" | "tile" | "tileWall" | "paver" | "gravel" | "sand" | "soil" | "concrete" | "plaster" | "metal" | "membrane" | "fence" | "grass";
 
 export interface Finish {
   kind: FinishKind;
@@ -46,6 +46,7 @@ const DEFAULT_UNIT: Record<FinishKind, [number, number]> = {
   wood: [0.9, 0.14],
   wpc: [0.9, 0.14],
   tile: [0.33, 0.33],
+  tileWall: [0.33, 0.33],
   paver: [0.2, 0.1],
   gravel: [0.3, 0.3],
   sand: [0.2, 0.2],
@@ -55,12 +56,14 @@ const DEFAULT_UNIT: Record<FinishKind, [number, number]> = {
   metal: [0.22, 0.22],
   membrane: [0.18, 0.18],
   fence: [0.14, 1.8],
+  grass: [0.5, 0.5],
 };
 
 const DEFAULT_AXES: Record<FinishKind, "xz" | "xy" | "zy"> = {
   wood: "xz",
   wpc: "xz",
   tile: "xz",
+  tileWall: "xy",
   paver: "xz",
   gravel: "xz",
   sand: "xz",
@@ -70,6 +73,7 @@ const DEFAULT_AXES: Record<FinishKind, "xz" | "xy" | "zy"> = {
   metal: "xy",
   membrane: "xz",
   fence: "xy",
+  grass: "xz",
 };
 
 /**
@@ -85,16 +89,23 @@ export function repeatFor(size: Vec3, finish: Finish): [number, number] {
   return [Math.max(0.2, Math.abs(u) / tu), Math.max(0.2, Math.abs(v) / tv)];
 }
 
-/** Per-kind PBR baseline, multiplied by the maps' own grayscale variation. */
+/** Per-kind PBR baseline, multiplied by the maps' own grayscale variation. `clearcoat` is a thin
+ *  lacquer layer on top of the base PBR response (a glazed ceramic's "wet" look) — only used by
+ *  `PartMesh` on desktop (phones keep the plain `meshStandardMaterial` path, clearcoat unused). */
 interface Style {
   roughness: number;
   metalness: number;
   bumpScale: number;
+  clearcoat?: number;
+  clearcoatRoughness?: number;
 }
 const STYLE: Record<FinishKind, Style> = {
   wood: { roughness: 0.75, metalness: 0.02, bumpScale: 0.0022 },
   wpc: { roughness: 0.6, metalness: 0.05, bumpScale: 0.0016 },
-  tile: { roughness: 0.3, metalness: 0.02, bumpScale: 0.0012 },
+  // Ceramic: smooth and a little glossy, not bumpy — a much smaller bump than most finishes here,
+  // plus a thin clearcoat for the glazed look. Floor stays a touch more matte than wall tiling.
+  tile: { roughness: 0.38, metalness: 0.02, bumpScale: 0.0003, clearcoat: 0.35, clearcoatRoughness: 0.22 },
+  tileWall: { roughness: 0.16, metalness: 0.02, bumpScale: 0.00018, clearcoat: 0.75, clearcoatRoughness: 0.08 },
   paver: { roughness: 0.8, metalness: 0.02, bumpScale: 0.002 },
   gravel: { roughness: 0.92, metalness: 0, bumpScale: 0.004 },
   sand: { roughness: 0.95, metalness: 0, bumpScale: 0.0018 },
@@ -104,6 +115,7 @@ const STYLE: Record<FinishKind, Style> = {
   metal: { roughness: 0.4, metalness: 0.75, bumpScale: 0.0008 },
   membrane: { roughness: 0.88, metalness: 0, bumpScale: 0.0014 },
   fence: { roughness: 0.72, metalness: 0.02, bumpScale: 0.002 },
+  grass: { roughness: 0.92, metalness: 0, bumpScale: 0.0022 },
 };
 
 /** Exposed for tests (e.g. metal reads back as far more metallic than wood). */
@@ -281,11 +293,40 @@ function drawTileLike(ctx: CanvasRenderingContext2D, rng: () => number, w: numbe
 }
 
 function drawTile(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
-  drawTileLike(ctx, rng, w, h, 260, 0.028, 95);
+  // Floor: smooth ceramic, a thin crisp grout line — not the thick, speckled joint a paver gets.
+  drawTileLike(ctx, rng, w, h, 150, 0.018, 92);
+}
+
+/** Wall tiling: glossier and smoother again than the floor — fewer, fainter specks, an even
+ *  thinner grout line (see textures.ts's own module doc on why this stays a separate finish
+ *  from the floor's `tile` — the two read differently enough to need their own PBR numbers). */
+function drawTileWall(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
+  drawTileLike(ctx, rng, w, h, 36, 0.011, 86);
 }
 
 function drawPaver(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
   drawTileLike(ctx, rng, w, h, 220, 0.05, 118);
+}
+
+/** A dense lawn seen from above: a soft tonal base plus many short, randomly angled blade
+ *  strokes in varying brightness — reads as thick turf even before any instanced blade sits on
+ *  top of it (see `lawn()` in builders.ts and `Scene.tsx`'s own `Grass`). */
+function drawGrassGround(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
+  fillNoise(ctx, w, h, 7, hashSeed("grass-ground") ^ Math.floor(rng() * 1e6), 150, 70);
+  const blades = Math.round(w * h * 0.85);
+  for (let i = 0; i < blades; i++) {
+    const x = rng() * w;
+    const y = rng() * h;
+    const len = 1.4 + rng() * 3.2;
+    const ang = rng() * Math.PI * 2;
+    const v = 85 + rng() * 150;
+    ctx.strokeStyle = `rgba(${v},${v},${v},${(0.3 + rng() * 0.35).toFixed(2)})`;
+    ctx.lineWidth = 0.7 + rng() * 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+    ctx.stroke();
+  }
 }
 
 function drawGravel(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
@@ -356,6 +397,7 @@ const CANVAS_SIZE: Record<FinishKind, [number, number]> = {
   wood: [256, 64],
   wpc: [256, 64],
   tile: [128, 128],
+  tileWall: [128, 128],
   paver: [128, 128],
   gravel: [128, 128],
   sand: [128, 128],
@@ -365,12 +407,14 @@ const CANVAS_SIZE: Record<FinishKind, [number, number]> = {
   metal: [160, 64],
   membrane: [128, 128],
   fence: [128, 128],
+  grass: [160, 160],
 };
 
 const DRAW: Record<FinishKind, (ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) => void> = {
   wood: drawWood,
   wpc: drawWPC,
   tile: drawTile,
+  tileWall: drawTileWall,
   paver: drawPaver,
   gravel: drawGravel,
   sand: drawSand,
@@ -380,6 +424,7 @@ const DRAW: Record<FinishKind, (ctx: CanvasRenderingContext2D, rng: () => number
   metal: drawMetal,
   membrane: drawMembrane,
   fence: drawFence,
+  grass: drawGrassGround,
 };
 
 interface DeriveSpec {
@@ -391,7 +436,8 @@ interface DeriveSpec {
 const DERIVE: Record<FinishKind, DeriveSpec> = {
   wood: { colorBase: 232, colorRange: 60, roughBase: 220, roughRange: 55 },
   wpc: { colorBase: 236, colorRange: 34, roughBase: 210, roughRange: 45 },
-  tile: { colorBase: 248, colorRange: 46, roughBase: 232, roughRange: 60 },
+  tile: { colorBase: 248, colorRange: 30, roughBase: 236, roughRange: 30 },
+  tileWall: { colorBase: 250, colorRange: 18, roughBase: 240, roughRange: 18 },
   paver: { colorBase: 228, colorRange: 46, roughBase: 222, roughRange: 42 },
   gravel: { colorBase: 222, colorRange: 68, roughBase: 236, roughRange: 24 },
   sand: { colorBase: 236, colorRange: 34, roughBase: 240, roughRange: 16 },
@@ -401,6 +447,7 @@ const DERIVE: Record<FinishKind, DeriveSpec> = {
   metal: { colorBase: 224, colorRange: 46, roughBase: 196, roughRange: 55 },
   membrane: { colorBase: 226, colorRange: 40, roughBase: 232, roughRange: 20 },
   fence: { colorBase: 224, colorRange: 58, roughBase: 216, roughRange: 38 },
+  grass: { colorBase: 222, colorRange: 85, roughBase: 236, roughRange: 20 },
 };
 
 function remap(src: HTMLCanvasElement, f: (v: number) => number): HTMLCanvasElement {
@@ -449,6 +496,9 @@ export interface FinishTextureSet {
   bumpScale: number;
   roughness: number;
   metalness: number;
+  /** A thin glazed/lacquer layer (ceramic tile only, desktop) — see `Style`'s own doc. */
+  clearcoat?: number;
+  clearcoatRoughness?: number;
 }
 
 const textureCache = new Map<string, FinishTextureSet>();
@@ -476,7 +526,16 @@ export function finishTextures(finish: Finish, size: Vec3): FinishTextureSet {
     t.repeat.set(rx, ry);
     t.needsUpdate = true;
   }
-  const set: FinishTextureSet = { map, roughnessMap, bumpMap, bumpScale: style.bumpScale, roughness: style.roughness, metalness: style.metalness };
+  const set: FinishTextureSet = {
+    map,
+    roughnessMap,
+    bumpMap,
+    bumpScale: style.bumpScale,
+    roughness: style.roughness,
+    metalness: style.metalness,
+    clearcoat: style.clearcoat,
+    clearcoatRoughness: style.clearcoatRoughness,
+  };
   textureCache.set(key, set);
   return set;
 }

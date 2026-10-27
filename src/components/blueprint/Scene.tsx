@@ -10,7 +10,7 @@ import * as THREE from "three";
 import type { Line2, LineSegments2 } from "three-stdlib";
 import type { Build, DimLine as DimLineSpec, Part, Vec3 } from "./builders";
 import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
-import type { CameraPreset } from "./cameraPresets";
+import type { CameraPreset, FrameFit, TourArc } from "./cameraPresets";
 import { captureHighRes, computeCaptureSize } from "./capture";
 import { deckScrewInstances } from "./detail/deckScrews";
 import { bevelGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
@@ -53,6 +53,9 @@ const easeOutBack = (t: number) => {
 interface Shared {
   clock: React.RefObject<number>;
   explode: React.RefObject<number>;
+  /** Eases toward 1 in REAL mode, 0 otherwise — the ground halo's own fade (see `GroundHalo`),
+   *  so "plan → reality" transitions the backdrop along with the model, not just the parts. */
+  realT: React.RefObject<number>;
   reduced: boolean;
   /** Current world offset of the drawing (it is recentred on its plan centre). */
   offset: THREE.Vector3;
@@ -149,6 +152,9 @@ function Driver({ shared, mode }: { shared: Shared; mode: ViewMode }) {
     shared.clock.current += dt;
     const target = mode === "exploded" ? 1 : 0;
     shared.explode.current += (target - shared.explode.current) * Math.min(1, dt * 5);
+    const realTarget = mode === "real" ? 1 : 0;
+    const realRate = shared.reduced ? 20 : 1.6; // snap instantly under reduced motion
+    shared.realT.current += (realTarget - shared.realT.current) * Math.min(1, dt * realRate);
   });
   return null;
 }
@@ -179,7 +185,7 @@ function PartMesh({
   lite?: boolean | "low";
 }) {
   const ref = useRef<THREE.Mesh>(null);
-  const mat = useRef<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>(null);
+  const mat = useRef<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
   const glow = useMemo(() => new THREE.Color(anim.kind === "leave" ? REMOVED : accent), [anim.kind, accent]);
   /** Last glow applied; once a part has settled (0) the material is left to its props. */
   const lastGlow = useRef(-1);
@@ -294,6 +300,24 @@ function PartMesh({
     <mesh ref={ref} geometry={steadyGeometry} visible={false} castShadow={!blue && !part.context && !leaving} receiveShadow={!blue}>
       {blue ? (
         <meshBasicMaterial ref={mat as React.RefObject<THREE.MeshBasicMaterial>} color={baseColor} transparent opacity={baseOpacity} depthWrite={false} toneMapped={false} />
+      ) : finish?.clearcoat ? (
+        // Ceramic: a thin lacquer layer on top of the base PBR response — the glazed look a
+        // plain meshStandardMaterial can't give (desktop only; `useFinish` already excludes lite).
+        <meshPhysicalMaterial
+          ref={mat as React.RefObject<THREE.MeshPhysicalMaterial>}
+          color={baseColor}
+          roughness={finish.roughness}
+          metalness={finish.metalness}
+          map={finish.map}
+          roughnessMap={finish.roughnessMap}
+          bumpMap={finish.bumpMap}
+          bumpScale={finish.bumpScale}
+          clearcoat={finish.clearcoat}
+          clearcoatRoughness={finish.clearcoatRoughness}
+          transparent={baseOpacity < 1 || dimmed || leaving}
+          opacity={baseOpacity}
+          depthWrite={!dimmed}
+        />
       ) : finish ? (
         <meshStandardMaterial
           ref={mat as React.RefObject<THREE.MeshStandardMaterial>}
@@ -349,11 +373,14 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
           key: zoneKey(zone),
           x,
           z,
-          h: 0.05 + rnd() * 0.07,
-          widthJ: 0.75 + rnd() * 0.6,
+          h: 0.06 + rnd() * 0.09,
+          widthJ: 0.8 + rnd() * 0.7,
           r: rnd() * Math.PI,
-          lean: (rnd() - 0.5) * 0.4,
+          lean: (rnd() - 0.5) * 0.45,
           wave: ((x - minX) / spanX) * 1.6 + rnd() * 0.3,
+          // Several greens, not one flat tint: a wide hue/lightness jitter per blade.
+          hueJ: (rnd() - 0.5) * 0.09,
+          lightJ: (rnd() - 0.5) * 0.3,
         };
       });
     });
@@ -361,10 +388,25 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
   // Zones that were already grown keep their grass through an edit; new zones sprout.
   const grown = useRef({ epoch: -1, starts: new Map<string, number>(), explode: 0 });
   const tmp = useMemo(() => new THREE.Object3D(), []);
+  const tmpColor = useMemo(() => new THREE.Color(), []);
   const settled = useRef(0);
   useEffect(() => {
     settled.current = 0;
   }, [data]);
+  const blue = mode !== "real";
+  // Per-blade hue/lightness jitter — several greens, not one flat tint — set once per data/mode
+  // change (it never animates, so it doesn't belong in the per-frame loop below).
+  useEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const base = new THREE.Color(blue ? "#9fd3a0" : "#5fa04a");
+    for (let i = 0; i < data.length; i++) {
+      const b = data[i];
+      tmpColor.copy(base).offsetHSL(b.hueJ, 0, b.lightJ);
+      mesh.setColorAt(i, tmpColor);
+    }
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [data, blue, tmpColor]);
   useFrame(() => {
     const mesh = ref.current;
     if (!mesh) return;
@@ -400,11 +442,12 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
     mesh.instanceMatrix.needsUpdate = true;
     settled.current = allDone ? settled.current + 1 : 0;
   });
-  const blue = mode !== "real";
   return (
     <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, undefined, data.length]} frustumCulled={false}>
-      {/* height/width are applied through instance scale — see the geometry's own doc */}
-      <meshStandardMaterial color={blue ? "#9fd3a0" : "#5fa04a"} roughness={0.9} side={THREE.DoubleSide} />
+      {/* height/width are applied through instance scale — see the geometry's own doc. Vertex
+          colours (baked into the blade geometry) lighten the tip; instance colours (above) vary
+          the hue/lightness blade to blade — three.js multiplies both into the base colour. */}
+      <meshStandardMaterial color={blue ? "#9fd3a0" : "#5fa04a"} roughness={0.9} side={THREE.DoubleSide} vertexColors />
     </instancedMesh>
   );
 }
@@ -587,6 +630,8 @@ function CameraRig({
   reduced,
   anim,
   onTourEnd,
+  frame,
+  tourArc,
 }: {
   build: Build;
   compact: boolean;
@@ -600,6 +645,12 @@ function CameraRig({
   anim: { current: { grabbed: boolean } };
   /** The cinematic tour finished its lap on its own (not interrupted) — let the toolbar settle back on "iso". */
   onTourEnd?: () => void;
+  /** An opt-in direct framing (see cameraPresets.ts's `FrameFit`) — only the hero passes this. */
+  frame?: FrameFit;
+  /** An opt-in restricted sweep for `tour` (see cameraPresets.ts's `tourArcFor`) — undefined keeps
+   *  the workspace's own "tour" camera a full revolution, exactly as before; only the hero (which
+   *  always tours) passes one, picked from its own build's shape. */
+  tourArc?: TourArc;
 }) {
   const { camera, controls, size } = useThree() as unknown as {
     camera: THREE.PerspectiveCamera;
@@ -617,14 +668,14 @@ function CameraRig({
   const frameFor = (p: CameraPreset) => {
     // While the plan editor covers the right side, the model has ~55% of the width.
     const aspect = (size.width / Math.max(1, size.height)) * (focusLeft ? 0.54 : 1);
-    const f = cameraFor(p, { extent: build.extent }, aspect);
+    const f = cameraFor(p, { extent: build.extent }, aspect, frame, p === "tour" ? tourArc : undefined);
     const target = new THREE.Vector3(...f.target);
     const position = new THREE.Vector3(...f.position).sub(target).multiplyScalar(compact ? 1.05 : 0.95).add(target);
     return { position, target, fov: f.fov };
   };
   const tourFrameAt = (phase: number) => {
     const aspect = (size.width / Math.max(1, size.height)) * (focusLeft ? 0.54 : 1);
-    const f = tourFrame({ extent: build.extent }, aspect, phase);
+    const f = tourFrame({ extent: build.extent }, aspect, phase, tourArc, frame);
     const target = new THREE.Vector3(...f.target);
     const position = new THREE.Vector3(...f.position).sub(target).multiplyScalar(compact ? 1.05 : 0.95).add(target);
     return { position, target, fov: f.fov };
@@ -774,6 +825,12 @@ export interface SceneProps {
   /** The "Simulează montajul" scrubber's current `build.layers` index: later layers dim to a ghost
    *  (reusing the same highlight/dim path as `highlightLayer`), the current one lights up. */
   buildSimLayer?: number | null;
+  /** An opt-in direct framing for "iso"/"tour" (see cameraPresets.ts's `FrameFit`) — only the hero
+   *  passes this; everyone else keeps the plain bounding-sphere fit. */
+  frame?: FrameFit;
+  /** An opt-in restricted sweep for "tour" (see cameraPresets.ts's `tourArcFor`) — only the hero
+   *  passes this; the workspace's own "tour" camera stays a full revolution. */
+  tourArc?: TourArc;
 }
 
 export default function Scene({
@@ -797,11 +854,14 @@ export default function Scene({
   onCaptureReady,
   sun = null,
   buildSimLayer = null,
+  frame,
+  tourArc,
 }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
+  const realT = useRef(mode === "real" ? 1 : 0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-  const shared = useMemo(() => ({ clock, explode, reduced, offset: new THREE.Vector3() }), [reduced]);
+  const shared = useMemo(() => ({ clock, explode, realT, reduced, offset: new THREE.Vector3() }), [reduced]);
   /** Shared with the canvas' OrbitControls: grabbing the camera stops a tour (and any in-flight glide). */
   const camAnim = useRef({ grabbed: false });
 
@@ -927,6 +987,8 @@ export default function Scene({
         reduced={reduced}
         anim={camAnim}
         onTourEnd={onTourEnd}
+        frame={frame}
+        tourArc={tourArc}
       />
     </Canvas>
       <div className="pointer-events-none absolute inset-0 overflow-hidden">

@@ -71,13 +71,13 @@ describe("paving finishes", () => {
 });
 
 describe("tiling finishes", () => {
-  it("floor and wall tiles both get the 'tile' finish, walls walled with the correct in-plane axes", () => {
+  it("floor tiles get the 'tile' finish; wall tiles get the glossier 'tileWall' one, correct in-plane axes", () => {
     // Wall tile height defaults from the raw input's roomType (not the layout's own default).
     const b = buildScene("tiling", { roomType: "bathroom" }, "ro");
     expect(byLayer(b.parts, "floor_tiles").every((p) => p.finish?.kind === "tile")).toBe(true);
     const wall = byLayer(b.parts, "wall_tiles");
     expect(wall.length).toBeGreaterThan(0);
-    expect(wall.every((p) => p.finish?.kind === "tile")).toBe(true);
+    expect(wall.every((p) => p.finish?.kind === "tileWall")).toBe(true);
     expect(wall.some((p) => p.finish?.axes === "xy" || p.finish?.axes === "zy")).toBe(true);
   });
 });

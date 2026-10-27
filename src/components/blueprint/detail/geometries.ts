@@ -66,14 +66,20 @@ const UNIT_POST_CAP = buildPostCapGeometry();
 /** A blade of grass: two crossed tapered quads (base width baked in, real metres — not scaled
  *  from a 1 m-wide unit, which blade this thin can't afford) from y = 0 (the ground) to y = 1
  *  (its tip) — reads as a blade from any horizontal angle, not just a flat card. Scaled per
- *  instance by (width jitter, real height × growth, width jitter) in `Scene.tsx`'s `Grass`. */
+ *  instance by (width jitter, real height × growth, width jitter) in `Scene.tsx`'s `Grass`, which
+ *  also varies the hue/lightness per instance — multiplied with this geometry's own baked-in
+ *  vertex colours (a touch darker at the base, lighter at the tip, like real grass catching
+ *  light along its length). */
 function buildBladeGeometry(): THREE.BufferGeometry {
   const halfWidth = 0.006;
+  const baseShade = 0.82;
+  const tipShade = 1.22;
   const quad = (nx: number, nz: number) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-halfWidth, 0, 0, halfWidth, 0, 0, 0, 1, 0]), 3));
     g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([nx, 0, nz, nx, 0, nz, nx, 0, nz]), 3));
     g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0.5, 1]), 2));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array([baseShade, baseShade, baseShade, baseShade, baseShade, baseShade, tipShade, tipShade, tipShade]), 3));
     return g;
   };
   const a = quad(0, 1);
@@ -87,7 +93,7 @@ function buildBladeGeometry(): THREE.BufferGeometry {
 
 export const UNIT_BLADE: THREE.BufferGeometry = buildBladeGeometry();
 
-const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelSoft" | "bevelCrisp">, THREE.BufferGeometry> = {
+const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp">, THREE.BufferGeometry> = {
   box: UNIT_BOX,
   pedestal: UNIT_PEDESTAL,
   postCap: UNIT_POST_CAP,
@@ -109,7 +115,7 @@ function bevelKey(shape: string, size: Vec3): string {
 
 /** A chamfered box at the part's exact real size (see the module doc for why size has to be
  *  baked in rather than applied through `mesh.scale`), cached per distinct size. */
-export function bevelGeometryFor(shape: "bevelFlat" | "bevelSoft" | "bevelCrisp", size: Vec3): THREE.BufferGeometry {
+export function bevelGeometryFor(shape: "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp", size: Vec3): THREE.BufferGeometry {
   const key = bevelKey(shape, size);
   const cached = bevelCache.get(key);
   if (cached) return cached;
