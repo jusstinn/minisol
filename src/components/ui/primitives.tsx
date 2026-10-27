@@ -125,10 +125,12 @@ export function RollingWord({ words, index, className }: { words: readonly strin
         <motion.span
           key={word}
           className="col-start-1 row-start-1"
-          initial={{ y: "110%", opacity: 0 }}
+          // Same duration and curve both ways: the words move in lockstep (like a counter rolling),
+          // so the leaving one is always a full line above the arriving one — never on top of it.
+          initial={{ y: "105%", opacity: 0 }}
           animate={{ y: "0%", opacity: 1 }}
-          exit={{ y: "-110%", opacity: 0, transition: { duration: 0.4, ease: [0.7, 0, 0.84, 0] } }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ y: "-105%", opacity: 0 }}
+          transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
         >
           {word}
         </motion.span>
