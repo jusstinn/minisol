@@ -135,6 +135,7 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
               accent={accent}
               lite={lite}
               paused={paused}
+              effects={false}
               onCaptureReady={(fn) => {
                 captureRef.current = fn;
               }}

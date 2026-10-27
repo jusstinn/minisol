@@ -746,6 +746,14 @@ export interface SceneProps {
    */
   lite?: boolean | "low";
   /**
+   * Ambient occlusion + anti-aliasing post-processing (REAL mode, desktop only — see
+   * `realNow`): on by default. The hero turns this off — a scene that rebuilds every few
+   * seconds churns through enough new geometry/shaders that the post-processing pass's own
+   * periodic housekeeping shows up as an occasional frame hitch; a single settled workspace
+   * project never does and holds a clean 60 fps with it on.
+   */
+  effects?: boolean;
+  /**
    * Extra things drawn in plan coordinates inside the world group (e.g. the customer's own
    * model, a plan on the ground): they move with the drawing but never explode, aren't part
    * of the edit animation and don't change the camera fit.
@@ -780,6 +788,7 @@ export default function Scene({
   onDiff,
   focusLeft = false,
   lite = false,
+  effects = true,
   extra,
   paused = false,
   preset = "iso",
@@ -892,7 +901,7 @@ export default function Scene({
       <LabelProjector labels={labels} els={labelEls} shared={shared} />
 
       {realNow && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.4} blur={2} far={shadowBounds.far * 0.3} resolution={512} />}
-      {realNow && <Effects night={Boolean(sun?.isNight)} />}
+      {realNow && effects && <Effects night={Boolean(sun?.isNight)} />}
       <OrbitControls
         makeDefault
         enablePan={false}
