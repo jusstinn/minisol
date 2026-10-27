@@ -15,6 +15,7 @@ import { captureHighRes, computeCaptureSize } from "./capture";
 import { deckScrewInstances } from "./detail/deckScrews";
 import { bevelGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
 import { isBevelShape, shapeFor } from "./detail/shapes";
+import { groundHaloTexture } from "./groundHalo";
 import Lighting from "./Lighting";
 import { shadowBoundsFor } from "./shadowBounds";
 import type { SunLight } from "./sunLighting";
@@ -449,6 +450,29 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
           the hue/lightness blade to blade — three.js multiplies both into the base colour. */}
       <meshStandardMaterial color={blue ? "#9fd3a0" : "#5fa04a"} roughness={0.9} side={THREE.DoubleSide} vertexColors />
     </instancedMesh>
+  );
+}
+
+/**
+ * A soft patch of garden/floor under the model, fading out at its edges (see groundHalo.ts) —
+ * grounds the REAL-mode result instead of it sitting on the blueprint grid with a shadow and
+ * nothing else. Stays mounted the whole time (even in PLAN/EXPLODED, at zero opacity) so flipping
+ * modes is a fade, never a mount/unmount pop — its own opacity rides `shared.realT`, eased by
+ * `Driver` in lock-step with the hero's "plan → reality" backdrop transition (see Hero.tsx).
+ */
+function GroundHalo({ build, shared }: { build: Build; shared: Shared }) {
+  const mat = useRef<THREE.MeshBasicMaterial>(null);
+  const texture = useMemo(() => groundHaloTexture(), []);
+  const radius = Math.max(build.extent[0], build.extent[2]) * 1.15 + 1.6;
+  const tint = build.interior ? "#cdbda0" : "#5a9b47";
+  useFrame(() => {
+    if (mat.current) mat.current.opacity = shared.realT.current * 0.85;
+  });
+  return (
+    <mesh position={[0, -0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-10} raycast={() => null}>
+      <circleGeometry args={[radius, 48]} />
+      <meshBasicMaterial ref={mat} map={texture} color={tint} transparent opacity={0} depthWrite={false} toneMapped={false} />
+    </mesh>
   );
 }
 
@@ -918,6 +942,7 @@ export default function Scene({
       <CaptureBridge lightRef={lightRef} build={build} onCaptureReady={onCaptureReady} />
 
       <World build={build} epoch={current.epoch} shared={shared}>
+      {!lite && <GroundHalo build={build} shared={shared} />}
       {build.parts.map((p) => {
         const li = layerIndex.get(p.layer);
         const simGhost = buildSimLayer != null && !p.context && li !== undefined && li > buildSimLayer;
@@ -961,7 +986,9 @@ export default function Scene({
       <LabelProjector labels={labels} els={labelEls} shared={shared} />
 
       {realNow && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.4} blur={2} far={shadowBounds.far * 0.3} resolution={512} />}
-      {realNow && effects && <Effects night={Boolean(sun?.isNight)} />}
+      {/* Stays mounted across PLAN/REAL/EXPLODED (and across the hero's own projects): see
+          Effects.tsx's own doc on why toggling `aoEnabled` beats remounting the whole composer. */}
+      {!lite && effects && <Effects aoEnabled={realNow} night={Boolean(sun?.isNight)} />}
       <OrbitControls
         makeDefault
         enablePan={false}

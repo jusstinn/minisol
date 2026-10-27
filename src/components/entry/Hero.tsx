@@ -7,9 +7,15 @@ import type { ProjectType } from "@/domain/calculators";
 import type { Lang } from "@/domain/types";
 import { useLiteGraphics } from "@/lib/useLiteGraphics";
 import { buildScene } from "../blueprint/builders";
+import { tourArcFor } from "../blueprint/cameraPresets";
+import type { FrameFit } from "../blueprint/cameraPresets";
 import type { CaptureFn } from "../blueprint/Scene";
 import SceneBoundary from "../blueprint/SceneBoundary";
 import { heroCycle } from "./heroTiming";
+
+/** Fills ~70% of the panel's own width (whatever its aspect), padded for the dimension labels,
+ *  and sits a touch below the panel's vertical middle — see cameraPresets.ts's `FrameFit`. */
+const HERO_FRAME: FrameFit = { fillWidth: 0.7, margin: 0.6, verticalBias: 0.16 };
 
 const Scene = dynamic(() => import("../blueprint/Scene"), { ssr: false, loading: () => <HeroPlaceholder /> });
 
@@ -56,6 +62,9 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
   const heroBuild = useMemo(() => buildScene(hero.type, hero.inputs, lang), [hero, lang]);
   const dims = useMemo(() => heroBuild.dims.slice(0, 2).map((d) => d.label).join(" × "), [heroBuild]);
   const timing = useMemo(() => heroCycle(heroBuild.duration, reduced), [heroBuild.duration, reduced]);
+  // A restricted camera sweep picked from this build's own shape (never edge-on, never showing
+  // the backs of a room's walls — see cameraPresets.ts's own doc).
+  const tourArc = useMemo(() => tourArcFor(heroBuild.extent, heroBuild.interior), [heroBuild]);
 
   // Off-screen (scrolled away) or the tab is hidden: stop rendering, keep the state — resumes
   // exactly where it left off, no catch-up animation.
@@ -122,6 +131,14 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
   return (
     <section className="lg:relative lg:min-h-[640px]">
       <div ref={containerRef} className="bp-sheet relative h-[360px] overflow-hidden rounded-[26px] shadow-[0_40px_80px_-40px_rgba(10,31,71,0.75)] sm:h-[460px] lg:absolute lg:inset-0 lg:h-auto">
+        {/* Plan → reality transitions the backdrop too: a soft daylight gradient crossfades in
+            under the canvas (the canvas itself stays transparent in both modes) in lock-step with
+            the model's own blueprint → real materialise, so the result never looks pasted onto
+            the blueprint grid — see GroundHalo (Scene.tsx) for the matching in-canvas ground. */}
+        <div
+          className="pointer-events-none absolute inset-0 transition-opacity ease-in-out"
+          style={{ opacity: phase === "real" ? 1 : 0, transitionDuration: `${reduced ? 250 : 900}ms`, background: "radial-gradient(120% 100% at 30% 10%, #eef4ff 0%, #d9e6f7 45%, #c3d6ec 100%)" }}
+        />
         <div className="absolute inset-0">
           <SceneBoundary resetKey={idx} en={lang === "en"} dark>
             <Scene
@@ -135,7 +152,8 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
               accent={accent}
               lite={lite}
               paused={paused}
-              effects={false}
+              frame={HERO_FRAME}
+              tourArc={tourArc}
               onCaptureReady={(fn) => {
                 captureRef.current = fn;
               }}
