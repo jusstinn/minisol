@@ -7,7 +7,8 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import type { Build, Part, Vec3 } from "./builders";
+import type { Line2, LineSegments2 } from "three-stdlib";
+import type { Build, DimLine as DimLineSpec, Part, Vec3 } from "./builders";
 import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
 import type { CameraPreset } from "./cameraPresets";
 import { captureHighRes, computeCaptureSize } from "./capture";
@@ -451,23 +452,66 @@ function mulberry32(a: number) {
   };
 }
 
-function DimLines({ build, mode }: { build: Build; mode: ViewMode }) {
+const DIM_REVEAL_AT = 0.68; // fraction of the build's own duration before dimension lines start drawing in
+const DIM_REVEAL_DUR = 0.9;
+
+function DimLines({ build, mode, shared, epoch }: { build: Build; mode: ViewMode; shared: Shared; epoch: number }) {
   const color = mode === "real" ? "#141311" : "#e6efff";
   return (
     <group>
-      {build.dims.map((dl, i) => {
-        const dir = new THREE.Vector3(...dl.to).sub(new THREE.Vector3(...dl.from)).normalize();
-        const perp = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(0.08, 0, 0) : new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(0.08);
-        const a = new THREE.Vector3(...dl.from);
-        const b = new THREE.Vector3(...dl.to);
-        return (
-          <group key={i}>
-            <Line points={[dl.from, dl.to]} color={color} lineWidth={1.2} transparent opacity={0.9} />
-            <Line points={[a.clone().add(perp).toArray(), a.clone().sub(perp).toArray()]} color={color} lineWidth={1.2} />
-            <Line points={[b.clone().add(perp).toArray(), b.clone().sub(perp).toArray()]} color={color} lineWidth={1.2} />
-          </group>
-        );
-      })}
+      {build.dims.map((dl, i) => (
+        <DimLine key={i} dl={dl} color={color} index={i} total={build.dims.length} duration={build.duration} shared={shared} epoch={epoch} />
+      ))}
+    </group>
+  );
+}
+
+function DimLine({
+  dl,
+  color,
+  index,
+  total,
+  duration,
+  shared,
+  epoch,
+}: {
+  dl: DimLineSpec;
+  color: string;
+  index: number;
+  total: number;
+  duration: number;
+  shared: Shared;
+  /** A full (re)build restarts the draw-in; an edit (same epoch) keeps the lines fully shown. */
+  epoch: number;
+}) {
+  const main = useRef<Line2 | LineSegments2>(null);
+  const tickA = useRef<Line2 | LineSegments2>(null);
+  const tickB = useRef<Line2 | LineSegments2>(null);
+  const state = useRef({ epoch: -1, start: 0 });
+  const { a, b, perp } = useMemo(() => {
+    const dir = new THREE.Vector3(...dl.to).sub(new THREE.Vector3(...dl.from)).normalize();
+    const p = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(0.08, 0, 0) : new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(0.08);
+    return { a: new THREE.Vector3(...dl.from), b: new THREE.Vector3(...dl.to), perp: p };
+  }, [dl]);
+  useFrame(() => {
+    const now = shared.clock.current;
+    const st = state.current;
+    if (st.epoch !== epoch) {
+      st.epoch = epoch;
+      st.start = now + duration * DIM_REVEAL_AT;
+    }
+    const stagger = total > 1 ? (index / total) * 0.3 : 0;
+    const t = shared.reduced ? 1 : clamp01((now - st.start - stagger) / DIM_REVEAL_DUR);
+    const o = easeOutCubic(t);
+    if (main.current) main.current.material.opacity = 0.9 * o;
+    if (tickA.current) tickA.current.material.opacity = o;
+    if (tickB.current) tickB.current.material.opacity = o;
+  });
+  return (
+    <group>
+      <Line ref={main} points={[dl.from, dl.to]} color={color} lineWidth={1.2} transparent opacity={0} />
+      <Line ref={tickA} points={[a.clone().add(perp).toArray(), a.clone().sub(perp).toArray()]} color={color} lineWidth={1.2} transparent opacity={0} />
+      <Line ref={tickB} points={[b.clone().add(perp).toArray(), b.clone().sub(perp).toArray()]} color={color} lineWidth={1.2} transparent opacity={0} />
     </group>
   );
 }
@@ -841,12 +885,14 @@ export default function Scene({
         />
       ))}
       {build.grass && <Grass grass={build.grass} shared={shared} mode={mode} epoch={current.epoch} />}
-      <DimLines build={build} mode={mode} />
+      <DeckScrews parts={build.parts} shared={shared} show={realNow} />
+      <DimLines build={build} mode={mode} shared={shared} epoch={current.epoch} />
       {extra}
       </World>
       <LabelProjector labels={labels} els={labelEls} shared={shared} />
 
       {realNow && <ContactShadows position={[0, -0.001, 0]} scale={shadowSize} opacity={0.4} blur={2} far={shadowBounds.far * 0.3} resolution={512} />}
+      {realNow && <Effects night={Boolean(sun?.isNight)} />}
       <OrbitControls
         makeDefault
         enablePan={false}

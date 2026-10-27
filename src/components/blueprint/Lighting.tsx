@@ -46,6 +46,10 @@ export default function Lighting({
         intensity={light.intensity}
         castShadow={!lite}
         shadow-mapSize={[shadowBounds.mapSize, shadowBounds.mapSize]}
+        // VSM's own blur pass (not a global shader patch, just this light): a believable soft
+        // shadow edge instead of a hard-edged cutout, at no extra per-frame cost.
+        shadow-radius={!lite ? 5 : undefined}
+        shadow-blurSamples={!lite ? 20 : undefined}
       >
         <orthographicCamera attach="shadow-camera" args={[-shadowBounds.half, shadowBounds.half, shadowBounds.half, -shadowBounds.half, 0.1, shadowBounds.far]} />
       </directionalLight>
