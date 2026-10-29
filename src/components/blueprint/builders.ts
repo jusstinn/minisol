@@ -5,10 +5,15 @@ import { defaultLayout, exposedEdges, fenceSegments, itemContainer, SIDES } from
 import type { Layout, Opening, Side, Zone } from "@/domain/layout";
 import { shades } from "@/domain/look";
 import { PAVING_BUILDUP, pavingDepth } from "@/domain/paving";
+import { DECK_BOARD_PITCH, DECK_JOIST_SPACING, deckFrameFor, deckFrameSides } from "@/domain/patterns";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import { diagonalBoards, frameBoards } from "./detail/deckBoards";
+import { bondUnit, paverPieces } from "./detail/pavingBond";
 import { pedestalGrid } from "./detail/pedestals";
+import { boundsOf, prismOf } from "./detail/prism";
+import type { Pt, PrismShape } from "./detail/prism";
 import type { Finish } from "./textures";
 
 /**
@@ -40,7 +45,7 @@ export interface Part {
    * (see `itemBoxes` below) — everything else infers its shape from layer/finish instead (see
    * `./detail/shapes.ts`'s `shapeFor`), so this stays rare and intentional.
    */
-  shape?: "cylinder" | "cone" | "sphere";
+  shape?: "cylinder" | "cone" | "sphere" | PrismShape;
 }
 
 export interface DimLine {
@@ -188,6 +193,32 @@ function roomShell(L: number, W: number, H: number, lowH: number, parts: Part[])
 /** Height a wall is drawn at in the cut-away room (back/left full, front/right low). */
 const drawnHeight = (side: Side, H: number, low: number) => (side === "n" || side === "w" ? H : low);
 
+/**
+ * A board with any convex outline (diagonal, mitred) as a part: its bounding box is the part's
+ * size, its outline travels in `shape` (see detail/prism.ts). The wood texture is re-scaled so the
+ * grain repeats at the real board length along the board, whatever the angle.
+ */
+function prismBoard(id: string, poly: Pt[], grain: number, y: number, t: number, color: string, delay: number, finish: Finish): Part {
+  const { center, shape, width, depth } = prismOf(poly, grain);
+  const gx = Math.cos(grain);
+  const gz = Math.sin(grain);
+  const along = poly.map(([x, z]) => x * gx + z * gz);
+  const length = Math.max(...along) - Math.min(...along);
+  // A whole number of half-repeats keeps the number of distinct textures small.
+  const repeats = Math.max(0.5, Math.round((length / 0.9) * 2) / 2);
+  return {
+    id,
+    layer: "deck_board",
+    pos: [center[0], y, center[1]],
+    size: [width, t, depth],
+    color,
+    delay,
+    grow: "drop",
+    shape,
+    finish: { ...finish, unit: [width / repeats, depth] },
+  };
+}
+
 // ───────────────────────────── deck ──────────────────────────────
 function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Build {
   const parts: Part[] = [];
@@ -203,6 +234,8 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
   const supColor = look.deck_support?.color ?? C.support;
   const supH = Math.max(0.03, top - boardT - joistH);
   const alongX = l.direction === "x";
+  const boards = l.boards ?? "straight";
+  const frameSides = boards === "frame" ? deckFrameSides(l.zones) : [];
   // WPC composite or aluminium read as a different material in the 3D sketch; everything else
   // (pin tratat, larice…) is wood.
   const boardFinish: Finish = /wpc/i.test(look.deck_board?.name ?? "") ? { kind: "wpc" } : { kind: "wood" };
@@ -224,8 +257,7 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
     }
     const run = alongX ? z.w : z.d;
     const across = alongX ? z.d : z.w;
-    const R = Math.ceil(across / pitch);
-    const grid = pedestalGrid(run, across);
+    const grid = pedestalGrid(run, across, { pitchAlong: DECK_JOIST_SPACING[boards] });
     grid.points.forEach(({ i, j, u, v }, k) => {
       const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
       parts.push({
@@ -239,33 +271,58 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
         finish: { kind: "metal" },
       });
     });
+    const joistPart = (id: string, u: number, delay: number): Part => {
+      const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
+      return { id, layer: "deck_joist", pos: jp, size: alongX ? [joistW, joistH, across] : [across, joistH, joistW], color: joistColor, delay, grow: "drop", finish: joistFinish };
+    };
     for (let i = 0; i < grid.J; i++) {
       const u = grid.J > 1 ? (i * run) / (grid.J - 1) : 0;
-      const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
-      parts.push({
-        id: `${z.id}-joist-${i}`,
-        layer: "deck_joist",
-        pos: jp,
-        size: alongX ? [joistW, joistH, across] : [across, joistH, joistW],
-        color: joistColor,
-        delay: zd + 1.2 + i * (1 / grid.J),
-        grow: "drop",
-        finish: joistFinish,
-      });
+      parts.push(joistPart(`${z.id}-joist-${i}`, u, zd + 1.2 + i * (1 / grid.J)));
     }
-    for (let r = 0; r < R; r++) {
-      const v = Math.min(bw / 2 + r * pitch, across - bw / 2);
-      const bp: Vec3 = alongX ? [z.x + run / 2, top - boardT / 2, z.z + v] : [z.x + v, top - boardT / 2, z.z + run / 2];
-      parts.push({
-        id: `${z.id}-board-${r}`,
-        layer: "deck_board",
-        pos: bp,
-        size: alongX ? [run, boardT, bw] : [bw, boardT, run],
-        color: boardColors[r % boardColors.length],
-        delay: zd + 2.4 + r * (2 / R),
-        grow: "slide",
-        finish: boardFinish,
+
+    // Straight rows of boards in a rectangle (the whole zone, or the field inside a frame).
+    const rowsIn = (x0: number, x1: number, z0: number, z1: number) => {
+      const fAcross = alongX ? z1 - z0 : x1 - x0;
+      const fRun = alongX ? x1 - x0 : z1 - z0;
+      const R = Math.ceil(fAcross / pitch);
+      for (let r = 0; r < R; r++) {
+        // The last board is ripped to the width that is left, not slid back over its neighbour.
+        const w = Math.min(bw, fAcross - r * pitch);
+        if (w < 0.02) continue;
+        const v = r * pitch + w / 2;
+        const bp: Vec3 = alongX ? [x0 + fRun / 2, top - boardT / 2, z0 + v] : [x0 + v, top - boardT / 2, z0 + fRun / 2];
+        parts.push({
+          id: `${z.id}-board-${r}`,
+          layer: "deck_board",
+          pos: bp,
+          size: alongX ? [fRun, boardT, w] : [w, boardT, fRun],
+          color: boardColors[r % boardColors.length],
+          delay: zd + 2.4 + r * (2 / R),
+          grow: "slide",
+          finish: boardFinish,
+        });
+      }
+    };
+    const frame = boards === "frame" ? deckFrameFor(z, frameSides[zi], pitch) : null;
+    if (boards === "diagonal") {
+      // Boards at 45°, cut flush at the edge of the deck. "Across" flips the diagonal.
+      const strips = diagonalBoards(z, !alongX, pitch, bw);
+      strips.forEach((st, n) => {
+        parts.push(prismBoard(`${z.id}-dboard-${st.index}`, st.poly, st.grain, top - boardT / 2, boardT, boardColors[st.index % boardColors.length], zd + 2.4 + n * (2 / strips.length), boardFinish));
       });
+    } else if (frame) {
+      rowsIn(frame.field.x0, frame.field.x1, frame.field.z0, frame.field.z1);
+      // The border: one board on each open side, mitred where two open sides meet.
+      frameBoards(z, frame.sides, bw).forEach((fb, n) => {
+        parts.push(prismBoard(`${z.id}-frame-${fb.side}`, fb.poly, fb.grain, top - boardT / 2, boardT, boardColors[(n + 1) % boardColors.length], zd + 4.4 + n * 0.12, boardFinish));
+      });
+      // A border board that runs with the joists needs a joist of its own beneath it.
+      const rim: [boolean, number][] = alongX ? [[frame.sides.w, pitch / 2], [frame.sides.e, z.w - pitch / 2]] : [[frame.sides.n, pitch / 2], [frame.sides.s, z.d - pitch / 2]];
+      rim.forEach(([open, u], n) => {
+        if (open) parts.push(joistPart(`${z.id}-rim-${alongX ? (n ? "e" : "w") : n ? "s" : "n"}`, u, zd + 1.2 + n * 0.1));
+      });
+    } else {
+      rowsIn(z.x, z.x + z.w, z.z, z.z + z.d);
     }
   });
 
@@ -800,8 +857,9 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const spec = PAVING_BUILDUP[l.use];
   // The pavers actually in the basket: format (long side along x), thickness and colour.
   const pv = look.pavers;
-  let [sx, sz] = pv?.w && pv.l ? [Math.max(pv.w, pv.l), Math.min(pv.w, pv.l)] : [0.2, 0.1];
-  const paverUnit: [number, number] = [sx, sz];
+  const [realL, realW] = pv?.w && pv.l ? [Math.max(pv.w, pv.l), Math.min(pv.w, pv.l)] : [0.2, 0.1];
+  // The herringbone and the basketweave need a 2:1 paver; the other bonds use the product's own format.
+  const unit = bondUnit(l.bond, realL, realW);
   const t = Math.min(0.12, pv?.t ?? spec.paver);
   const paverColors = shades(pv?.color ?? C.paver, 3, 0.05);
   const baseColor = look.paving_base?.color ?? C.gravel;
@@ -814,12 +872,10 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const sandBottom = Math.max(0.03, sandTop - spec.sand);
   // Small formats over a big area would mean thousands of parts: draw them larger, same
   // proportions — the joint pattern below still repeats at the real (pre-scale) paver format.
-  const area = l.zones.reduce((s, z) => s + z.w * z.d, 0);
-  const k = Math.max(1, Math.sqrt(area / (sx * sz) / 600));
-  sx *= k;
-  sz *= k;
-  // Rectangular pavers go in a running bond; squares in a straight grid.
-  const bond = sx >= 1.45 * sz;
+  const area = l.zones.reduce((sum, z) => sum + z.w * z.d, 0);
+  const k = Math.max(1, Math.sqrt(area / (unit.l * unit.w) / 600));
+  const drawnL = unit.l * k;
+  const drawnW = unit.w * k;
 
   l.zones.forEach((z, zi) => {
     const zd = zi * 0.6;
@@ -828,28 +884,20 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
     parts.push({ id: `${z.id}-membrane`, layer: "weed_membrane", pos: [cx, 0.003, cz], size: [z.w + 0.1, 0.006, z.d + 0.1], color: C.membrane, delay: zd + 0.2, grow: "fade", finish: { kind: "membrane" } });
     parts.push({ id: `${z.id}-base`, layer: "paving_base", pos: [cx, (0.006 + sandBottom) / 2, cz], size: [z.w, sandBottom - 0.006, z.d], color: baseColor, delay: zd + 0.5, grow: "rise", finish: { kind: "gravel" } });
     parts.push({ id: `${z.id}-sand`, layer: "paving_sand", pos: [cx, (sandBottom + sandTop) / 2, cz], size: [z.w, sandTop - sandBottom, z.d], color: sandColor, delay: zd + 1.1, grow: "slide", finish: { kind: "sand" } });
-    const rows = Math.ceil(z.d / sz - 1e-9);
-    for (let r = 0; r < rows; r++) {
-      const z0 = z.z + r * sz;
-      const z1 = Math.min(z0 + sz, z.z + z.d);
-      if (z1 - z0 < 0.02) continue;
-      const shift = bond && r % 2 ? sx / 2 : 0;
-      const cols = Math.ceil((z.w + shift) / sx - 1e-9);
-      for (let c = 0; c < cols; c++) {
-        const a = Math.max(z.x, z.x - shift + c * sx);
-        const b = Math.min(z.x - shift + (c + 1) * sx, z.x + z.w);
-        if (b - a < 0.02) continue;
-        parts.push({
-          id: `${z.id}-paver-${r}-${c}`,
-          layer: "pavers",
-          pos: [(a + b) / 2, top - t / 2, (z0 + z1) / 2],
-          size: [b - a - 0.004, t, z1 - z0 - 0.004],
-          color: paverColors[(r * 2 + c) % paverColors.length],
-          delay: zd + 1.6 + r * (2 / rows) + Math.min(0.6, c * 0.01),
-          grow: "drop",
-          finish: { kind: "paver", unit: paverUnit },
-        });
-      }
+    const pieces = paverPieces(z, drawnL, drawnW, l.bond);
+    const rows = Math.max(1, ...pieces.map((pc) => pc.r + 1));
+    for (const pc of pieces) {
+      parts.push({
+        id: `${z.id}-${pc.key}`,
+        layer: "pavers",
+        pos: [(pc.x0 + pc.x1) / 2, top - t / 2, (pc.z0 + pc.z1) / 2],
+        size: [pc.x1 - pc.x0 - 0.004, t, pc.z1 - pc.z0 - 0.004],
+        color: paverColors[(pc.r * 2 + pc.c) % paverColors.length],
+        delay: zd + 1.6 + pc.r * (2 / rows) + Math.min(0.6, pc.c * 0.01),
+        grow: "drop",
+        // The texture's joint pattern runs along the paver's long side, whichever way it lies.
+        finish: { kind: "paver", unit: pc.orient === "v" ? [unit.w, unit.l] : [unit.l, unit.w] },
+      });
     }
     // Swept into the joints: seen between the pavers, and as its own sheet when exploded.
     parts.push({ id: `${z.id}-joints`, layer: "joint_sand", pos: [cx, top - 0.015, cz], size: [z.w - 0.01, 0.01, z.d - 0.01], color: jointColor, delay: zd + 4.2, grow: "fade", finish: { kind: "sand" } });
