@@ -47,9 +47,12 @@ describe("shapeFor", () => {
     expect(shapeFor({ ...base, layer: "pavers", finish: { kind: "paver" } }, { real: true, lite: false })).toBe("bevelSoft");
   });
 
-  it("ceramic tile (floor or wall) gets its own much crisper, smaller bevel class — not the soft product one", () => {
+  it("floor tile gets its own much crisper, smaller bevel class — not the soft product one", () => {
     expect(shapeFor({ ...base, layer: "floor_tiles", size: [0.3, 0.01, 0.3], finish: { kind: "tile" } }, { real: true, lite: false })).toBe("bevelTile");
-    expect(shapeFor({ ...base, layer: "wall_tiles", size: [0.6, 0.3, 0.008], finish: { kind: "tileWall" } }, { real: true, lite: false })).toBe("bevelTile");
+  });
+
+  it("wall tiles stay plain boxes: they're butted together and their joints are in the texture", () => {
+    expect(shapeFor({ ...base, layer: "wall_tiles", size: [0.6, 0.3, 0.008], finish: { kind: "tileWall" } }, { real: true, lite: false })).toBe("box");
   });
 
   it("a hair-thin sheet (a vapour barrier, a foil) stays a plain box — the bevel would be bigger than the part", () => {

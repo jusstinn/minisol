@@ -614,7 +614,9 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
   const wallTileUnit: [number, number] = [tw, th];
   const wallColors = wt ? shades(wt.color, 2, 0.03) : C.tileWall;
   const perimeter = 2 * (L + W);
-  const wScale = Math.max(1, Math.sqrt((perimeter * 2.1) / (tw * th) / 700));
+  // A whole number of real tiles per drawn tile, so the texture's grout lines run on across
+  // drawn-tile seams instead of breaking (a fractional scale offset them at every seam).
+  const wScale = Math.max(1, Math.ceil(Math.sqrt((perimeter * 2.1) / (tw * th) / 700) - 1e-9));
   tw *= wScale;
   th *= wScale;
   for (const side of SIDES) {
@@ -648,8 +650,11 @@ function tiling(l: Extract<Layout, { type: "tiling" }>, lang: Lang, look: Look):
           id: `wt-${side}-${r}-${c}`,
           layer: "wall_tiles",
           pos: horizontal ? [(a + b) / 2, y0 + h / 2, off] : [off, y0 + h / 2, (a + b) / 2],
-          size: horizontal ? [b - a - 0.004, h - 0.004, 0.008] : [0.008, h - 0.004, b - a - 0.004],
-          color: wallColors[(r + c) % wallColors.length],
+          // Butted together: the grout comes from the texture (see wScale), not from gaps that
+          // showed the dark bed behind as uneven spindles.
+          size: horizontal ? [b - a, h, 0.008] : [0.008, h, b - a],
+          // One shade per wall: alternating shades per drawn tile (a block of real tiles) read as a checkerboard.
+          color: wallColors[0],
           delay: 2.4 + r * 0.16 + c * 0.02,
           grow: "pop",
           // The wall's long span is along x for the n/s walls but along z for e/w ones.

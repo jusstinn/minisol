@@ -53,7 +53,9 @@ const CRISP_LAYERS: ReadonlySet<string> = new Set([
  *  be noise on something that isn't a cut, rigid product edge. */
 const FLAT_FINISHES: ReadonlySet<string> = new Set(["membrane", "soil", "grass"]);
 /** Ceramic tile (floor or wall) gets its own much crisper, smaller bevel class — see BEVEL_RADIUS. */
-const TILE_FINISHES: ReadonlySet<string> = new Set(["tile", "tileWall"]);
+// Wall tiles are drawn butted together with the joints in their texture: a bevel there only
+// catches the light along every seam (dotted white lines), so they stay plain boxes.
+const TILE_FINISHES: ReadonlySet<string> = new Set(["tile"]);
 /** Below this, any bevel radius would be bigger than the part itself — not worth the geometry. */
 const MIN_BEVEL_THICKNESS = 0.006;
 
@@ -69,6 +71,7 @@ export function shapeFor(part: Part, opts: { real: boolean; lite: boolean | "low
   if (!opts.real || opts.lite) return "box";
   if (PEDESTAL_LAYERS.has(part.layer)) return "pedestal";
   if (CAP_LAYERS.has(part.layer)) return "postCap";
+  if (part.finish?.kind === "tileWall") return "box";
   if (part.finish && TILE_FINISHES.has(part.finish.kind)) return "bevelTile";
   if (Math.min(part.size[0], part.size[1], part.size[2]) < MIN_BEVEL_THICKNESS) return "box";
   if (part.context) return "bevelFlat";

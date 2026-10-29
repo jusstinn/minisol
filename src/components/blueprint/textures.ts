@@ -294,14 +294,16 @@ function drawTileLike(ctx: CanvasRenderingContext2D, rng: () => number, w: numbe
 
 function drawTile(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
   // Floor: smooth ceramic, a thin crisp grout line — not the thick, speckled joint a paver gets.
-  drawTileLike(ctx, rng, w, h, 150, 0.018, 92);
+  drawTileLike(ctx, rng, w, h, 600, 0.014, 92);
 }
 
 /** Wall tiling: glossier and smoother again than the floor — fewer, fainter specks, an even
  *  thinner grout line (see textures.ts's own module doc on why this stays a separate finish
  *  from the floor's `tile` — the two read differently enough to need their own PBR numbers). */
 function drawTileWall(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
-  drawTileLike(ctx, rng, w, h, 36, 0.011, 86);
+  // ~3 px of 256 per border (≈ 3–4 mm on a 30 cm tile): wide enough not to break into dashes
+  // when the wall is seen at an angle.
+  drawTileLike(ctx, rng, w, h, 140, 0.012, 86);
 }
 
 function drawPaver(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
@@ -396,8 +398,8 @@ function drawMembrane(ctx: CanvasRenderingContext2D, rng: () => number, w: numbe
 const CANVAS_SIZE: Record<FinishKind, [number, number]> = {
   wood: [256, 64],
   wpc: [256, 64],
-  tile: [128, 128],
-  tileWall: [128, 128],
+  tile: [256, 256],
+  tileWall: [256, 256],
   paver: [128, 128],
   gravel: [128, 128],
   sand: [128, 128],
@@ -437,7 +439,8 @@ const DERIVE: Record<FinishKind, DeriveSpec> = {
   wood: { colorBase: 232, colorRange: 60, roughBase: 220, roughRange: 55 },
   wpc: { colorBase: 236, colorRange: 34, roughBase: 210, roughRange: 45 },
   tile: { colorBase: 248, colorRange: 30, roughBase: 236, roughRange: 30 },
-  tileWall: { colorBase: 250, colorRange: 18, roughBase: 240, roughRange: 18 },
+  // Enough range that the grout reads as a joint (~10% darker), not a faint scratch.
+  tileWall: { colorBase: 246, colorRange: 64, roughBase: 240, roughRange: 18 },
   paver: { colorBase: 228, colorRange: 46, roughBase: 222, roughRange: 42 },
   gravel: { colorBase: 222, colorRange: 68, roughBase: 236, roughRange: 24 },
   sand: { colorBase: 236, colorRange: 34, roughBase: 240, roughRange: 16 },
@@ -474,6 +477,17 @@ interface KindCanvases {
 }
 const canvasCache = new Map<FinishKind, KindCanvases>();
 
+/** A blurred copy (where the browser supports canvas filters; otherwise the original). */
+function softened(src: HTMLCanvasElement, px: number): HTMLCanvasElement {
+  const out = makeCanvas(src.width, src.height);
+  const ctx = out.getContext("2d");
+  if (!ctx || !("filter" in ctx)) return src;
+  ctx.filter = `blur(${px}px)`;
+  // Draw the 3 × 3 neighbourhood so the blur wraps like the repeating texture does.
+  for (const dx of [-1, 0, 1]) for (const dy of [-1, 0, 1]) ctx.drawImage(src, dx * src.width, dy * src.height);
+  return out;
+}
+
 function canvasesFor(kind: FinishKind): KindCanvases {
   const cached = canvasCache.get(kind);
   if (cached) return cached;
@@ -484,7 +498,10 @@ function canvasesFor(kind: FinishKind): KindCanvases {
   const spec = DERIVE[kind];
   const color = remap(pattern, (v) => spec.colorBase + ((v - 128) * spec.colorRange) / 128);
   const rough = remap(pattern, (v) => spec.roughBase + ((v - 128) * spec.roughRange) / 128);
-  const set: KindCanvases = { color, rough, bump: pattern };
+  // Glazed tile: a hard 1-px step in the bump map makes the clearcoat glint along every grout
+  // line (white dashes); a softened edge reads as a rounded, recessed joint instead.
+  const bump = kind === "tile" || kind === "tileWall" ? softened(pattern, 1.2) : pattern;
+  const set: KindCanvases = { color, rough, bump };
   canvasCache.set(kind, set);
   return set;
 }
@@ -524,6 +541,9 @@ export function finishTextures(finish: Finish, size: Vec3): FinishTextureSet {
   for (const t of [map, roughnessMap, bumpMap]) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(rx, ry);
+    // Boards, tiles and pavers are mostly seen at a slant: without anisotropic filtering their
+    // fine lines blur or break into dashes there (three.js clamps this to what the GPU allows).
+    t.anisotropy = 8;
     t.needsUpdate = true;
   }
   const set: FinishTextureSet = {
