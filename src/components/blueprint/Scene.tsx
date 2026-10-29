@@ -15,8 +15,14 @@ import { captureHighRes, computeCaptureSize, EXCLUDE_FROM_CAPTURE } from "./capt
 import { deckScrewInstances } from "./detail/deckScrews";
 import { bevelGeometryFor, slatsGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
 import { isBevelShape, isRealSized, shapeFor } from "./detail/shapes";
+import { daylightFor } from "./daylight";
 import { groundHaloTexture } from "./groundHalo";
 import Lighting from "./Lighting";
+import { patched, windSway } from "./surroundings/materials";
+import type { WindUniforms } from "./surroundings/materials";
+import { useSurroundings } from "./surroundings/pref";
+import { groundPartRole, planSurroundings } from "./surroundings/plan";
+import Surroundings from "./surroundings/Surroundings";
 import { shadowBoundsFor } from "./shadowBounds";
 import type { SunLight } from "./sunLighting";
 import { finishTextures } from "./textures";
@@ -66,6 +72,8 @@ interface Shared {
   reduced: boolean;
   /** Current world offset of the drawing (it is recentred on its plan centre). */
   offset: THREE.Vector3;
+  /** Wind for the instanced grass (sway amplitude 0 under reduced motion) — see surroundings/materials.ts. */
+  wind: WindUniforms;
 }
 
 /** Holds the drawing and eases it to its new centre after an edit (snaps on a full build). */
@@ -162,6 +170,7 @@ function Driver({ shared, mode }: { shared: Shared; mode: ViewMode }) {
     const realTarget = mode === "real" ? 1 : 0;
     const realRate = shared.reduced ? 20 : 1.6; // snap instantly under reduced motion
     shared.realT.current += (realTarget - shared.realT.current) * Math.min(1, dt * realRate);
+    shared.wind.uTime.value = shared.clock.current;
   });
   return null;
 }
@@ -177,6 +186,7 @@ function PartMesh({
   accent,
   edges = "all",
   lite = false,
+  hidden = false,
 }: {
   part: Part;
   anim: Anim;
@@ -190,6 +200,8 @@ function PartMesh({
   edges?: EdgeBudget;
   /** Phones / low-end: flat colour, no procedural textures (see Scene's own `lite` prop). */
   lite?: boolean | "low";
+  /** Drawn by something else in this view (a lawn replaces the builders' ghost ground): stays mounted, never shown. */
+  hidden?: boolean;
 }) {
   const ref = useRef<THREE.Mesh>(null);
   const mat = useRef<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
@@ -227,7 +239,7 @@ function PartMesh({
     if (anim.start === undefined) anim.start = now + anim.offset;
     const age = now - anim.start;
     const t = shared.reduced ? (leaving ? 1 : 1) : clamp01(age / (anim.kind === "changed" ? MORPH_DUR : PART_DUR));
-    mesh.visible = leaving ? t < 0.999 : t > 0.001;
+    mesh.visible = !hidden && (leaving ? t < 0.999 : t > 0.001);
     if (!mesh.visible) return;
     const e = easeOutCubic(t);
     let [x, y, z] = part.pos;
@@ -404,6 +416,13 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
     settled.current = 0;
   }, [data]);
   const blue = mode !== "real";
+  const material = useMemo(
+    () => patched(new THREE.MeshStandardMaterial({ color: "#5fa04a", roughness: 0.9, side: THREE.DoubleSide, vertexColors: true }), "grass-wind", windSway(shared.wind)),
+    [shared.wind],
+  );
+  useEffect(() => {
+    material.color.set(blue ? "#9fd3a0" : "#5fa04a");
+  }, [material, blue]);
   // Per-blade hue/lightness jitter — several greens, not one flat tint — set once per data/mode
   // change (it never animates, so it doesn't belong in the per-frame loop below).
   useEffect(() => {
@@ -453,11 +472,11 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
     settled.current = allDone ? settled.current + 1 : 0;
   });
   return (
-    <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, undefined, data.length]} frustumCulled={false}>
+    <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, material, data.length]} frustumCulled={false} receiveShadow={!blue}>
       {/* height/width are applied through instance scale — see the geometry's own doc. Vertex
           colours (baked into the blade geometry) lighten the tip; instance colours (above) vary
-          the hue/lightness blade to blade — three.js multiplies both into the base colour. */}
-      <meshStandardMaterial color={blue ? "#9fd3a0" : "#5fa04a"} roughness={0.9} side={THREE.DoubleSide} vertexColors />
+          the hue/lightness blade to blade — three.js multiplies both into the base colour; the
+          material sways them in the wind (see surroundings/materials.ts's `windSway`). */}
     </instancedMesh>
   );
 }
@@ -795,16 +814,16 @@ function CameraRig({
  * once per canvas, so `onCaptureReady` is only called when the renderer itself actually changes
  * (device quality flips), not on every render.
  */
-function CaptureBridge({ lightRef, build, onCaptureReady }: { lightRef: React.RefObject<THREE.DirectionalLight | null>; build: Build; onCaptureReady?: (fn: CaptureFn) => void }) {
+function CaptureBridge({ lightRef, extent, onCaptureReady }: { lightRef: React.RefObject<THREE.DirectionalLight | null>; extent: Vec3; onCaptureReady?: (fn: CaptureFn) => void }) {
   const { gl, scene, camera } = useThree();
   const capture = useCallback<CaptureFn>(
     (maxWidth) => {
       if (gl.domElement.clientWidth < 10 || gl.domElement.clientHeight < 10) return null;
       const { width, height } = computeCaptureSize(gl.domElement.clientWidth, gl.domElement.clientHeight, gl.getPixelRatio(), maxWidth);
-      const mapSize = shadowBoundsFor(build.extent, { capture: true }).mapSize;
+      const mapSize = shadowBoundsFor(extent, { capture: true }).mapSize;
       return captureHighRes({ gl, scene, camera: camera as THREE.PerspectiveCamera, light: lightRef.current, width, height, mapSize });
     },
-    [gl, scene, camera, lightRef, build.extent],
+    [gl, scene, camera, lightRef, extent],
   );
   useEffect(() => {
     onCaptureReady?.(capture);
@@ -953,7 +972,8 @@ export default function Scene({
   const explode = useRef(0);
   const realT = useRef(mode === "real" ? 1 : 0);
   const reduced = typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-  const shared = useMemo(() => ({ clock, explode, realT, reduced, offset: new THREE.Vector3() }), [reduced]);
+  const wind = useMemo<WindUniforms>(() => ({ uTime: { value: 0 }, uWind: { value: reduced ? 0 : 1 } }), [reduced]);
+  const shared = useMemo(() => ({ clock, explode, realT, reduced, offset: new THREE.Vector3(), wind }), [reduced, wind]);
   /** Shared with the canvas' OrbitControls: grabbing the camera stops a tour (and any in-flight glide). */
   const camAnim = useRef({ grabbed: false });
 
@@ -981,7 +1001,17 @@ export default function Scene({
   const shadowSize = Math.max(build.extent[0], build.extent[2]) * 1.6 + 2;
   const noAnim: Anim = { kind: "still", offset: 0, start: -Infinity };
   const edges: EdgeBudget = !lite ? "all" : build.parts.length > MANY_PARTS ? "major" : "products";
-  const shadowBounds = useMemo(() => shadowBoundsFor(build.extent), [build.extent]);
+  // The garden/house/room dressing around the build (never part of `build.parts`: see surroundings/plan.ts).
+  const [surroundingsPref] = useSurroundings();
+  const plan = useMemo(() => (lite ? null : planSurroundings(build)), [build, lite]);
+  const sOn = surroundingsPref && plan !== null;
+  // A patio's layers are inspected through its cut-away: the lawn steps aside while one is highlighted.
+  const section = Boolean(highlightLayer) || buildSimLayer != null;
+  const lawnShown = sOn && !(plan?.kind === "paving" && section);
+  // Shadows must reach what stands around the build (the house wall, shrubs), not just the build itself.
+  const shadowExtent = useMemo<Vec3>(() => (sOn ? [build.extent[0] + 2.6, Math.max(build.extent[1], plan?.house ? 3.3 : 2.2), build.extent[2] + 2.6] : build.extent), [build.extent, sOn, plan?.house]);
+  const shadowBounds = useMemo(() => shadowBoundsFor(shadowExtent), [shadowExtent]);
+  const dl = useMemo(() => daylightFor(sun ?? null, Boolean(build.interior)), [sun, build.interior]);
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const realNow = mode === "real" && !lite;
 
@@ -1007,11 +1037,11 @@ export default function Scene({
     >
       <Driver shared={shared} mode={mode} />
       <Lighting mode={mode} lite={lite} sun={sun} shadowBounds={shadowBounds} lightRef={lightRef} interior={build.interior} />
-      <CaptureBridge lightRef={lightRef} build={build} onCaptureReady={onCaptureReady} />
+      <CaptureBridge lightRef={lightRef} extent={shadowExtent} onCaptureReady={onCaptureReady} />
       {onSnapshotReady && <SnapshotBridge onSnapshotReady={onSnapshotReady} />}
 
       <World build={build} epoch={current.epoch} shared={shared}>
-      {!lite && <GroundHalo build={build} shared={shared} />}
+      {!lite && (!sOn || plan?.kind === "room" || !lawnShown) && <GroundHalo build={build} shared={shared} />}
       {build.parts.map((p) => {
         const li = layerIndex.get(p.layer);
         const simGhost = buildSimLayer != null && !p.context && li !== undefined && li > buildSimLayer;
@@ -1029,6 +1059,7 @@ export default function Scene({
             accent={accent}
             edges={edges}
             lite={lite}
+            hidden={lawnShown && plan !== null && groundPartRole(p, plan.kind) === "hide"}
           />
         );
       })}
@@ -1048,6 +1079,7 @@ export default function Scene({
         />
       ))}
       {build.grass && <Grass grass={build.grass} shared={shared} mode={mode} epoch={current.epoch} />}
+      {plan && sOn && <Surroundings plan={plan} realT={realT} active={lawnShown} reduced={reduced} wind={wind} day={dl.day} night={sun?.nightFactor ?? 0} />}
       <DeckScrews parts={build.parts} shared={shared} show={realNow} />
       <DimLines build={build} mode={mode} shared={shared} epoch={current.epoch} />
       {extra}
