@@ -20,7 +20,7 @@ import type { Vec3 } from "./builders";
  * (tileable, wrapped) value noise.
  */
 
-export type FinishKind = "wood" | "wpc" | "tile" | "tileWall" | "paver" | "gravel" | "sand" | "soil" | "concrete" | "plaster" | "metal" | "membrane" | "fence" | "grass";
+export type FinishKind = "wood" | "wpc" | "tile" | "tileWall" | "paver" | "gravel" | "sand" | "soil" | "concrete" | "plaster" | "metal" | "membrane" | "fence" | "fenceBoard" | "grass";
 
 export interface Finish {
   kind: FinishKind;
@@ -56,6 +56,7 @@ const DEFAULT_UNIT: Record<FinishKind, [number, number]> = {
   metal: [0.22, 0.22],
   membrane: [0.18, 0.18],
   fence: [0.14, 1.8],
+  fenceBoard: [0.3, 1.8],
   grass: [0.5, 0.5],
 };
 
@@ -73,6 +74,7 @@ const DEFAULT_AXES: Record<FinishKind, "xz" | "xy" | "zy"> = {
   metal: "xy",
   membrane: "xz",
   fence: "xy",
+  fenceBoard: "xy",
   grass: "xz",
 };
 
@@ -115,6 +117,7 @@ const STYLE: Record<FinishKind, Style> = {
   metal: { roughness: 0.4, metalness: 0.75, bumpScale: 0.0008 },
   membrane: { roughness: 0.88, metalness: 0, bumpScale: 0.0014 },
   fence: { roughness: 0.72, metalness: 0.02, bumpScale: 0.002 },
+  fenceBoard: { roughness: 0.72, metalness: 0.02, bumpScale: 0.002 },
   grass: { roughness: 0.92, metalness: 0, bumpScale: 0.0022 },
 };
 
@@ -272,6 +275,12 @@ function drawFence(ctx: CanvasRenderingContext2D, rng: () => number, w: number, 
   }
 }
 
+/** The same grain as `drawFence`, without its painted board lines: for slatted panels whose
+ *  boards and gaps are real geometry (detail/geometries.ts's `slatsGeometryFor`). */
+function drawFenceBoard(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
+  fillNoise(ctx, w, h, 16, hashSeed("fence-grain") ^ Math.floor(rng() * 1e6), 128, 60);
+}
+
 function drawTileLike(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number, specks: number, groutFrac: number, groutV: number) {
   ctx.fillStyle = "rgb(195,195,195)";
   ctx.fillRect(0, 0, w, h);
@@ -409,6 +418,7 @@ const CANVAS_SIZE: Record<FinishKind, [number, number]> = {
   metal: [160, 64],
   membrane: [128, 128],
   fence: [128, 128],
+  fenceBoard: [128, 128],
   grass: [160, 160],
 };
 
@@ -426,6 +436,7 @@ const DRAW: Record<FinishKind, (ctx: CanvasRenderingContext2D, rng: () => number
   metal: drawMetal,
   membrane: drawMembrane,
   fence: drawFence,
+  fenceBoard: drawFenceBoard,
   grass: drawGrassGround,
 };
 
@@ -450,6 +461,7 @@ const DERIVE: Record<FinishKind, DeriveSpec> = {
   metal: { colorBase: 224, colorRange: 46, roughBase: 196, roughRange: 55 },
   membrane: { colorBase: 226, colorRange: 40, roughBase: 232, roughRange: 20 },
   fence: { colorBase: 224, colorRange: 58, roughBase: 216, roughRange: 38 },
+  fenceBoard: { colorBase: 224, colorRange: 58, roughBase: 216, roughRange: 38 },
   grass: { colorBase: 222, colorRange: 85, roughBase: 236, roughRange: 20 },
 };
 

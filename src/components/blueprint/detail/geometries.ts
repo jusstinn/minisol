@@ -93,7 +93,7 @@ function buildBladeGeometry(): THREE.BufferGeometry {
 
 export const UNIT_BLADE: THREE.BufferGeometry = buildBladeGeometry();
 
-const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp">, THREE.BufferGeometry> = {
+const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "slats">, THREE.BufferGeometry> = {
   box: UNIT_BOX,
   pedestal: UNIT_PEDESTAL,
   postCap: UNIT_POST_CAP,
@@ -104,7 +104,7 @@ const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelS
 
 /** The shared unit geometry for a non-bevel shape (bevels are built to real size — see below). */
 export function unitGeometryFor(shape: ShapeKind): THREE.BufferGeometry {
-  return isBevelShape(shape) ? UNIT_BOX : UNIT_SHAPES[shape];
+  return isBevelShape(shape) || shape === "slats" ? UNIT_BOX : UNIT_SHAPES[shape];
 }
 
 const bevelCache = new Map<string, THREE.BufferGeometry>();
@@ -128,4 +128,59 @@ export function bevelGeometryFor(shape: "bevelFlat" | "bevelTile" | "bevelSoft" 
 /** Test/diagnostic hook: how many distinct bevel geometries are currently cached. */
 export function bevelCacheSize(): number {
   return bevelCache.size;
+}
+
+/** Fence boards: ~9 cm wide with ~1.2 cm gaps, like a slatted garden panel. */
+export const SLAT_TARGET_WIDTH = 0.09;
+export const SLAT_GAP = 0.012;
+
+/** How a panel `length` metres long is divided into boards: count and exact board width. */
+export function slatLayout(length: number): { count: number; width: number } {
+  const count = Math.max(1, Math.round((length + SLAT_GAP) / (SLAT_TARGET_WIDTH + SLAT_GAP)));
+  return { count, width: (length - (count - 1) * SLAT_GAP) / count };
+}
+
+const slatsCache = new Map<string, THREE.BufferGeometry>();
+
+/**
+ * A slatted fence panel (or gate) at its real size: vertical boards with gaps you can see
+ * through, on two horizontal rails behind them. Its long side follows whichever horizontal
+ * axis the part is longer on. UVs are projected on the panel's face (u along it, v up), the
+ * same 0..1 a plain box's front face gets — so the finish's `repeatFor` scale still applies.
+ */
+export function slatsGeometryFor(size: Vec3): THREE.BufferGeometry {
+  const key = bevelKey("slats", size);
+  const cached = slatsCache.get(key);
+  if (cached) return cached;
+  const alongX = size[0] >= size[2];
+  const L = Math.max(alongX ? size[0] : size[2], 0.02);
+  const H = Math.max(size[1], 0.02);
+  const T = Math.max(alongX ? size[2] : size[0], 0.01);
+  const boardT = T * 0.55;
+  const railT = T - boardT;
+  const { count, width } = slatLayout(L);
+  const pieces: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < count; i++) {
+    const b = new RoundedBoxGeometry(width, H, boardT, 1, Math.min(0.003, width / 4, boardT / 4));
+    b.translate(-L / 2 + width / 2 + i * (width + SLAT_GAP), 0, T / 2 - boardT / 2);
+    pieces.push(b);
+  }
+  const railH = Math.min(0.07, H * 0.1);
+  for (const y of [-H * 0.32, H * 0.32]) {
+    const r = new THREE.BoxGeometry(L - 0.01, railH, railT);
+    r.translate(0, y, -T / 2 + railT / 2);
+    pieces.push(r);
+  }
+  // RoundedBoxGeometry is non-indexed and BoxGeometry indexed: merge them all as non-indexed.
+  const flat = pieces.map((g) => (g.index ? g.toNonIndexed() : g));
+  const merged = mergeGeometries(flat, false);
+  for (const g of new Set([...pieces, ...flat])) g.dispose();
+  const pos = merged.getAttribute("position");
+  const uv = merged.getAttribute("uv");
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) + L / 2) / L, (pos.getY(i) + H / 2) / H);
+  uv.needsUpdate = true;
+  if (!alongX) merged.rotateY(Math.PI / 2);
+  merged.computeBoundingSphere();
+  slatsCache.set(key, merged);
+  return merged;
 }

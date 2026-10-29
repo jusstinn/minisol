@@ -12,12 +12,17 @@ import type { Part } from "../builders";
  * to a drawing that's supposed to read as construction lines, not a rendered product.
  */
 
-export type ShapeKind = "box" | "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "pedestal" | "postCap" | "cylinder" | "cone" | "sphere";
+export type ShapeKind = "box" | "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "slats" | "pedestal" | "postCap" | "cylinder" | "cone" | "sphere";
 
 const BEVEL_SHAPES: ReadonlySet<ShapeKind> = new Set(["bevelFlat", "bevelTile", "bevelSoft", "bevelCrisp"]);
 
 export function isBevelShape(shape: ShapeKind): shape is "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" {
   return BEVEL_SHAPES.has(shape);
+}
+
+/** Shapes built at the part's real size (not a scaled unit shape): bevels and slatted panels. */
+export function isRealSized(shape: ShapeKind): boolean {
+  return BEVEL_SHAPES.has(shape) || shape === "slats";
 }
 
 /** Absolute, real-world chamfer radius (metres) per bevel class — small, believable arrises
@@ -34,6 +39,8 @@ export const BEVEL_RADIUS: Record<"bevelFlat" | "bevelTile" | "bevelSoft" | "bev
 
 /** Round paving-slab pedestals: base, column and levelling plate — never a plain post. */
 const PEDESTAL_LAYERS: ReadonlySet<string> = new Set(["deck_support"]);
+/** Fence panels and gates: real vertical boards with gaps on rails, not a painted slab. */
+const SLAT_LAYERS: ReadonlySet<string> = new Set(["fence_panel", "fence_gate"]);
 /** A small finial instead of a flat lid. */
 const CAP_LAYERS: ReadonlySet<string> = new Set(["post_cap"]);
 /** Framing/trim elements meant to read as a deliberately-cut, slightly crisper chamfer than a
@@ -71,6 +78,7 @@ export function shapeFor(part: Part, opts: { real: boolean; lite: boolean | "low
   if (!opts.real || opts.lite) return "box";
   if (PEDESTAL_LAYERS.has(part.layer)) return "pedestal";
   if (CAP_LAYERS.has(part.layer)) return "postCap";
+  if (SLAT_LAYERS.has(part.layer)) return "slats";
   if (part.finish?.kind === "tileWall") return "box";
   if (part.finish && TILE_FINISHES.has(part.finish.kind)) return "bevelTile";
   if (Math.min(part.size[0], part.size[1], part.size[2]) < MIN_BEVEL_THICKNESS) return "box";

@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/immutability */
 
 import { ContactShadows, Edges, Line, OrbitControls } from "@react-three/drei";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { addAfterEffect, Canvas, useFrame, useThree } from "@react-three/fiber";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -13,8 +13,8 @@ import { cameraFor, TOUR_LAP_SECONDS, tourFrame } from "./cameraPresets";
 import type { CameraPreset, FrameFit, TourArc } from "./cameraPresets";
 import { captureHighRes, computeCaptureSize, EXCLUDE_FROM_CAPTURE } from "./capture";
 import { deckScrewInstances } from "./detail/deckScrews";
-import { bevelGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
-import { isBevelShape, shapeFor } from "./detail/shapes";
+import { bevelGeometryFor, slatsGeometryFor, UNIT_BLADE, unitGeometryFor } from "./detail/geometries";
+import { isBevelShape, isRealSized, shapeFor } from "./detail/shapes";
 import { groundHaloTexture } from "./groundHalo";
 import Lighting from "./Lighting";
 import { shadowBoundsFor } from "./shadowBounds";
@@ -30,6 +30,9 @@ export type { CameraPreset };
 /** Imperative capture for "Randare foto" (see PhotoRender.tsx): a PNG data URL of the current
  *  frame at high resolution, or `null` if the canvas isn't ready yet. */
 export type CaptureFn = (maxWidth?: number) => string | null;
+/** Copy the next finished frame (post-processing included) into `target`, at the canvas's own
+ *  size; resolves false if no frame arrives (paused) or the copy fails. */
+export type SnapshotFn = (target: HTMLCanvasElement) => Promise<boolean>;
 
 const PART_DUR = 0.55;
 const MORPH_DUR = 0.7;
@@ -208,8 +211,11 @@ function PartMesh({
   // scaled unit cube), so a bevel stays a constant few millimetres regardless of how long the
   // part is — see geometries.ts's module doc for why that matters for a 4 m deck board.
   const shape = useMemo(() => shapeFor(part, { real: !blue, lite }), [part, blue, lite]);
-  const bevel = isBevelShape(shape);
-  const steadyGeometry = useMemo(() => (bevel ? bevelGeometryFor(shape, part.size) : unitGeometryFor(shape)), [bevel, shape, part.size]);
+  const bevel = isRealSized(shape);
+  const steadyGeometry = useMemo(
+    () => (shape === "slats" ? slatsGeometryFor(part.size) : isBevelShape(shape) ? bevelGeometryFor(shape, part.size) : unitGeometryFor(shape)),
+    [shape, part.size],
+  );
 
   useFrame(() => {
     const mesh = ref.current;
@@ -803,6 +809,61 @@ function CaptureBridge({ lightRef, build, onCaptureReady }: { lightRef: React.Re
   return null;
 }
 
+/**
+ * A cheap frame grab for crossfades (the start screen's hero): right after a frame is drawn —
+ * effects included — its pixels are copied GPU-to-GPU into a 2D canvas. No resize, no shadow-map
+ * reallocation and no PNG encode, unlike the photo export (`CaptureBridge`), which made every
+ * hero transition stall for 100–180 ms.
+ */
+function SnapshotBridge({ onSnapshotReady }: { onSnapshotReady?: (fn: SnapshotFn) => void }) {
+  const gl = useThree((s) => s.gl);
+  const pending = useRef<{ target: HTMLCanvasElement; resolve: (ok: boolean) => void } | null>(null);
+  useEffect(() => {
+    // After the frame is rendered and before it's presented, the drawing buffer still holds it.
+    const unsubscribe = addAfterEffect(() => {
+      const p = pending.current;
+      if (!p) return;
+      pending.current = null;
+      try {
+        const src = gl.domElement;
+        p.target.width = src.width;
+        p.target.height = src.height;
+        const ctx = p.target.getContext("2d");
+        if (!ctx) return p.resolve(false);
+        ctx.drawImage(src, 0, 0);
+        p.resolve(true);
+      } catch {
+        p.resolve(false);
+      }
+    });
+    return () => {
+      unsubscribe();
+      pending.current?.resolve(false);
+      pending.current = null;
+    };
+  }, [gl]);
+  const snapshot = useCallback<SnapshotFn>(
+    (target) =>
+      new Promise((resolve) => {
+        pending.current?.resolve(false);
+        let done = false;
+        const finish = (ok: boolean) => {
+          if (done) return;
+          done = true;
+          resolve(ok);
+        };
+        pending.current = { target, resolve: finish };
+        // No frame coming (a paused canvas): give up rather than wait forever.
+        setTimeout(() => finish(false), 400);
+      }),
+    [],
+  );
+  useEffect(() => {
+    onSnapshotReady?.(snapshot);
+  }, [onSnapshotReady, snapshot]);
+  return null;
+}
+
 export interface SceneProps {
   build: Build;
   mode: ViewMode;
@@ -845,6 +906,8 @@ export interface SceneProps {
   onTourEnd?: () => void;
   /** Called once the live renderer is ready with a `CaptureFn` for "Randare foto" (PhotoRender.tsx). */
   onCaptureReady?: (fn: CaptureFn) => void;
+  /** A cheap copy of the next frame, for crossfades (see `SnapshotBridge`). */
+  onSnapshotReady?: (fn: SnapshotFn) => void;
   /** The "Simulare" sun/time-of-day scrubber's current look (REAL mode only; null is today's fixed sun). */
   sun?: SunLight | null;
   /** The "Simulează montajul" scrubber's current `build.layers` index: later layers dim to a ghost
@@ -877,6 +940,7 @@ export default function Scene({
   presetSeq = 0,
   onTourEnd,
   onCaptureReady,
+  onSnapshotReady,
   sun = null,
   buildSimLayer = null,
   frame,
@@ -941,6 +1005,7 @@ export default function Scene({
       <Driver shared={shared} mode={mode} />
       <Lighting mode={mode} lite={lite} sun={sun} shadowBounds={shadowBounds} lightRef={lightRef} />
       <CaptureBridge lightRef={lightRef} build={build} onCaptureReady={onCaptureReady} />
+      {onSnapshotReady && <SnapshotBridge onSnapshotReady={onSnapshotReady} />}
 
       <World build={build} epoch={current.epoch} shared={shared}>
       {!lite && <GroundHalo build={build} shared={shared} />}

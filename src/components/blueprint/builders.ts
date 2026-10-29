@@ -365,7 +365,8 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): B
         color: gateColor,
         delay: 2.2,
         grow: "slide",
-        finish: { kind: "fence" },
+        // Real boards in the REAL view (see detail/shapes.ts "slats"); grain runs along the panel's own face.
+        finish: { kind: "fenceBoard", axes: alongX ? "xy" : "zy" },
       });
       // The hinge-side post is the previous run's last post (or the corner); add the latch post.
       const p2 = at(Math.min(seg.length, c + g.width / 2 + 0.045));
@@ -393,7 +394,7 @@ function fence(l: Extract<Layout, { type: "fence" }>, lang: Lang, look: Look): B
             color: panelColors[idx % panelColors.length],
             delay: 1.4 + idx * 0.08,
             grow: "slide",
-            finish: { kind: "fence" },
+            finish: { kind: "fenceBoard", axes: alongX ? "xy" : "zy" },
           });
         }
         const end = at(t1);

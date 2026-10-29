@@ -9,7 +9,7 @@ import { useLiteGraphics } from "@/lib/useLiteGraphics";
 import { buildScene } from "../blueprint/builders";
 import { tourArcFor } from "../blueprint/cameraPresets";
 import type { FrameFit } from "../blueprint/cameraPresets";
-import type { CaptureFn } from "../blueprint/Scene";
+import type { SnapshotFn } from "../blueprint/Scene";
 import SceneBoundary from "../blueprint/SceneBoundary";
 import { heroCycle } from "./heroTiming";
 
@@ -46,8 +46,10 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
   const [reduced] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches));
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<"blueprint" | "real">(reduced ? "real" : "blueprint");
-  const [snapshot, setSnapshot] = useState<{ idx: number; url: string; visible: boolean } | null>(null);
-  const captureRef = useRef<CaptureFn | null>(null);
+  // The frozen last frame of the outgoing project, shown over the swap (see SnapshotFn).
+  const [snapshotVisible, setSnapshotVisible] = useState(false);
+  const snapshotRef = useRef<SnapshotFn | null>(null);
+  const snapshotCanvas = useRef<HTMLCanvasElement>(null);
 
   // A new project starts over: back to lines (or straight to real, reduced motion) and no
   // leftover snapshot — React's own "adjust state when a prop changes" pattern (computed during
@@ -56,7 +58,8 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
   if (seenIdx !== idx) {
     setSeenIdx(idx);
     setPhase(reduced ? "real" : "blueprint");
-    setSnapshot(null);
+    // Fades out (CSS transition) over the incoming project's first frames.
+    setSnapshotVisible(false);
   }
 
   const hero = HERO_BUILDS[idx];
@@ -94,32 +97,23 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
     const timers: ReturnType<typeof setTimeout>[] = [];
     let raf: number | null = null;
     if (!reduced) timers.push(setTimeout(() => setPhase("real"), timing.materializeAtMs));
+    let cancelled = false;
     timers.push(
-      setTimeout(() => {
-        let url: string | null = null;
-        try {
-          url = captureRef.current?.(960) ?? null;
-        } catch {
-          url = null;
-        }
-        if (!url) {
+      setTimeout(async () => {
+        const target = snapshotCanvas.current;
+        const ok = target && snapshotRef.current ? await snapshotRef.current(target).catch(() => false) : false;
+        if (cancelled) return;
+        if (!ok) {
           setIdx((i) => (i + 1) % HERO_BUILDS.length);
           return;
         }
-        // Mounted invisible first, then flipped to visible a frame later: a CSS opacity
-        // transition only animates a *change*, not an element's first style on insertion.
-        setSnapshot({ idx, url, visible: false });
-        raf = requestAnimationFrame(() => setSnapshot((s) => (s ? { ...s, visible: true } : s)));
+        raf = requestAnimationFrame(() => setSnapshotVisible(true));
         const holdMs = Math.max(0, timing.crossfadeDurationMs - SNAPSHOT_FADE_MS * 2);
-        timers.push(
-          setTimeout(() => {
-            setIdx((i) => (i + 1) % HERO_BUILDS.length);
-            setSnapshot((s) => (s ? { ...s, visible: false } : s));
-          }, SNAPSHOT_FADE_MS + holdMs),
-        );
+        timers.push(setTimeout(() => setIdx((i) => (i + 1) % HERO_BUILDS.length), SNAPSHOT_FADE_MS + holdMs));
       }, timing.crossfadeAtMs),
     );
     return () => {
+      cancelled = true;
       timers.forEach(clearTimeout);
       if (raf !== null) cancelAnimationFrame(raf);
     };
@@ -155,23 +149,18 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
               paused={paused}
               frame={HERO_FRAME}
               tourArc={tourArc}
-              onCaptureReady={(fn) => {
-                captureRef.current = fn;
+              onSnapshotReady={(fn) => {
+                snapshotRef.current = fn;
               }}
             />
           </SceneBoundary>
         </div>
-        {snapshot && (
-          // A transient client-generated data URL (a frozen canvas frame) — not an asset `next/image` can optimise.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={snapshot.url}
-            alt=""
-            aria-hidden
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover ease-in-out"
-            style={{ opacity: snapshot.visible ? 1 : 0, transitionProperty: "opacity", transitionDuration: `${SNAPSHOT_FADE_MS}ms` }}
-          />
-        )}
+        <canvas
+          ref={snapshotCanvas}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full ease-in-out"
+          style={{ opacity: snapshotVisible ? 1 : 0, transitionProperty: "opacity", transitionDuration: `${SNAPSHOT_FADE_MS}ms` }}
+        />
         <div className="pointer-events-none absolute left-5 top-5 sm:left-7 sm:top-6">
           <AnimatePresence mode="wait">
             {/* Solid colours (not the backdrop's own gradients) so the swap between the dark

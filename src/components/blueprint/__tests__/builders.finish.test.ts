@@ -33,9 +33,12 @@ describe("deck finishes", () => {
 });
 
 describe("fence finishes", () => {
-  it("panels and gates get the dedicated 'fence' finish, distinct from plain wood/WPC", () => {
+  it("panels and gates get the slatted-board finish, its grain along each panel's own face", () => {
     const b = buildScene("fence", {}, "ro");
-    expect(byLayer(b.parts, "fence_panel").every((p) => p.finish?.kind === "fence")).toBe(true);
+    const panels = byLayer(b.parts, "fence_panel");
+    expect(panels.every((p) => p.finish?.kind === "fenceBoard")).toBe(true);
+    // A panel running north–south (long along z) maps its texture on the z/y face, not x/y.
+    for (const p of panels) expect(p.finish?.axes).toBe(p.size[0] >= p.size[2] ? "xy" : "zy");
   });
 
   it("footings are concrete, caps are metal, posts default to wood", () => {
