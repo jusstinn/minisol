@@ -8,6 +8,7 @@ import { MATERIAL_ROLES } from "@/domain/types";
 import { isOutdoor, lowerFirst } from "@/domain/items";
 import type { ItemKind } from "@/domain/items";
 import type { SketchOp, Side } from "@/domain/layout";
+import type { DeckBoardLayout, PavingBond } from "@/domain/patterns";
 import { explainEditError } from "@/lib/editErrors";
 import { dec, km, lei, int } from "@/lib/format";
 import { scriptedPlan } from "./scripted-plans";
@@ -226,6 +227,36 @@ function parseItems(t: string, type: ProjectType): Partial<SketchOp>[] | null {
   return placed.map((p) => ({ op: "add_item", item: p.kind, ...p.where }));
 }
 
+/** How pavers are bonded, as customers say it (folded text): "în spic", "model herringbone", "în coș", "pavele în linie". */
+const BOND_PHRASES: [PavingBond, RegExp][] = [
+  ["herringbone", /\b(herring\s?-?bone|fish\s?-?bone|fischgrat|spic|spicul)\b/],
+  ["basketweave", /\b(basket\s?-?weave|basket|in cos|modelul? cos|cosulet\w*)\b/],
+  ["stack", /\b(stack(ed)?(\s+bond)?|in linie|pe linie|aliniat\w*|in grila|grid|randuri drepte)\b/],
+  ["running", /\b(running\s+bond|stretcher|randuri decalate|decalat\w*|caram(id|iz)\w*|brick\s?(bond|pattern)|offset rows?)\b/],
+];
+
+/** The bond named in a message, if any ("pavele în spic" → herringbone). */
+export function bondIn(t: string): PavingBond | undefined {
+  return BOND_PHRASES.find(([, re]) => re.test(t))?.[0];
+}
+
+const DECK_DIAGONAL = /\b(diagonal\w*|oblic\w*|la 45|45\s?(grade|deg\w*|\u00b0)|angled)\b/;
+const DECK_FRAME = /\b(rama|ramei|cu rama|chenar\w*|frame\w*|picture\s?-?frame|border\w*|perimetr\w*|pe margini|pe contur)\b/;
+const NOT_WORDS = /\b(fara|scoate\w*|elimina\w*|sterge\w*|remove|delete|without|no more|nu mai|no)\b/;
+
+/** How deck boards are laid, as customers say it ("deck pe diagonală", "cu ramă / chenar", "montaj drept"). */
+export function deckBoardsIn(t: string): DeckBoardLayout | undefined {
+  const diagonal = DECK_DIAGONAL.test(t);
+  const frame = DECK_FRAME.test(t);
+  const straight = /\b(drept|drepte|straight|normal)\b/.test(t);
+  if (!diagonal && !frame && !straight) return undefined;
+  const no = NOT_WORDS.test(t);
+  if ((diagonal || frame) && no) return "straight";
+  if (frame) return "frame";
+  if (diagonal) return straight ? "straight" : "diagonal";
+  return "straight";
+}
+
 export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>[] | null {
   // Placed items first, so "lângă ușă" doesn't read as "add a door".
   const items = parseItems(t, type);
@@ -253,6 +284,9 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
     }
     const base = /\b(pe|on)\s+(beton|placa|concrete|slab)\b/.test(t) ? "concrete_slab" : /\b(pe|on)\s+(pietris|gravel)\b/.test(t) ? "gravel" : /\b(pe|on)\s+(pamant|soil|earth)\b/.test(t) ? "soil" : undefined;
     if (base) edits.push({ op: "set_option", key: "base", value: base });
+    // "deck pe diagonală", "cu ramă / chenar", "montaj drept".
+    const boards = deckBoardsIn(t);
+    if (boards && !steps) edits.push({ op: "set_option", key: "boards", value: boards });
   }
   if (type === "paving") {
     // "fă-o pentru mașini", "make it a driveway", "fără borduri", "borduri pe margini".
@@ -267,6 +301,9 @@ export function parseSketchEdit(t: string, type: ProjectType): Partial<SketchOp>
     if (/\b(bordur\w*|edging|edges?|kerbs?|curbs?)\b/.test(t)) {
       edits.push({ op: "set_option", key: "edging", value: !(removing || /\b(no|nu)\s+(edging|kerbs?|curbs?|bordur\w*)\b/.test(t)) });
     }
+    // "pavele în spic", "model herringbone", "în coș", "în linie", "rânduri decalate".
+    const bond = bondIn(t);
+    if (bond) edits.push({ op: "set_option", key: "bond", value: bond });
   }
   if (type === "deck" || type === "laminate_floor" || type === "lawn" || type === "paving") {
     const addZone =
@@ -565,8 +602,10 @@ export function parseIntent(raw: string, state: SessionState): Intent {
       if (/\bdiagonal\w*\b/.test(t)) params.pattern = "diagonal";
       delete params.heightM;
       break;
-    case "deck":
+    case "deck": {
       params.base = /\b(beton|placa|concrete|slab)\b/.test(t) ? "concrete_slab" : /\b(pietris|gravel)\b/.test(t) ? "gravel" : "soil";
+      const boards = deckBoardsIn(t);
+      if (boards && boards !== "straight") params.boards = boards;
       if (!params.lengthM && area) params.lengthM = params.widthM = side(num(area[1]));
       // "ridicată la 50 cm", "la 40 cm de la sol"
       if (!params.heightM && RAISE.test(t)) {
@@ -574,7 +613,8 @@ export function parseIntent(raw: string, state: SessionState): Intent {
         if (cm) params.heightM = num(cm[1]) / 100;
       }
       break;
-    case "paving":
+    }
+    case "paving": {
       // What it carries decides the build-up: cars → driveway; "alee" → path; "terasă / curte" → patio.
       if (/\b(driveway|masin\w*|auto|parcare|cars?|vehicul\w*|garaj\w*)\b/.test(t)) params.use = "driveway";
       else if (/\b(alee|aleea|alei|path|pathway|footpath|walkway|trotuar\w*)\b/.test(t)) params.use = "path";
@@ -582,7 +622,12 @@ export function parseIntent(raw: string, state: SessionState): Intent {
       if (/\b(fara borduri|without (the )?(edging|kerbs?)|no (edging|kerbs?))\b/.test(t)) params.edging = false;
       if (!params.lengthM && area) params.lengthM = params.widthM = side(num(area[1]));
       delete params.heightM;
+      {
+        const bond = bondIn(t);
+        if (bond) params.bond = bond;
+      }
       break;
+    }
     case "paint_room":
       // "camera de 12 mp" (floor area, not the walls') → a square room of that area.
       if (!params.lengthM && area && !/\b(pereti|walls?)\b/.test(t)) params.lengthM = params.widthM = side(num(area[1]));
@@ -701,14 +746,14 @@ function askFor(missing: string, type: ProjectType, lang: Lang): string {
 
 /** Follow-ups the offline agent understands, per project (shown when a message isn't understood). */
 const EDIT_EXAMPLES: Record<ProjectType, [string, string]> = {
-  deck: ["„fă-o 5 × 4 m”, „adaugă 2 trepte în față”, „ridic-o la 40 cm”", "“make it 5 × 4 m”, “add 2 steps at the front”, “raise it to 40 cm”"],
+  deck: ["„fă-o 5 × 4 m”, „adaugă 2 trepte în față”, „deck pe diagonală”, „cu ramă”", "“make it 5 × 4 m”, “add 2 steps at the front”, “diagonal boards”, “with a picture-frame border”"],
   fence: ["„pune o poartă de mașină”, „fă un colț la dreapta de 6 m”, „fă-l de 1,2 m înălțime”", "“add a driveway gate”, “turn right for 6 m”, “make it 1.2 m high”"],
   paint_room: ["„adaugă o fereastră”, „fără tavan”, „fă-o 5 × 4 m”", "“add a window”, “no ceiling”, “make it 5 × 4 m”"],
   tiling: ["„faianță doar până la 1,2 m”, „adaugă o ușă”, „fă-o 3 × 2 m”", "“wall tiles only up to 1.2 m”, “add a door”, “make it 3 × 2 m”"],
   laminate_floor: ["„fă-o în L cu 2 × 2 m în dreapta”, „montaj diagonal”, „adaugă o ușă”", "“make it L-shaped with 2 × 2 m on the right”, “diagonal laying”, “add a door”"],
   drywall_partition: ["„fă-l de 4 m”, „adaugă o ușă”, „fă-l de 2,8 m înălțime”", "“make it 4 m long”, “add a door”, “make it 2.8 m high”"],
   lawn: ["„fă-o 10 × 8 m”, „adaugă o zonă de 3 × 3 m în spate”", "“make it 10 × 8 m”, “add another area of 3 × 3 m at the back”"],
-  paving: ["„fă-o în L cu 1,2 × 3 m în dreapta”, „fă-o 8 × 1,5 m”, „fă-o pentru mașini”, „fără borduri”", "“make it L-shaped with 1.2 × 3 m on the right”, “make it 8 × 1.5 m”, “make it a driveway”, “no edging”"],
+  paving: ["„fă-o în L cu 1,2 × 3 m în dreapta”, „pavele în spic”, „fă-o pentru mașini”, „fără borduri”", "“make it L-shaped with 1.2 × 3 m on the right”, “herringbone pattern”, “make it a driveway”, “no edging”"],
 };
 
 /** How to ask for a line the chosen product made unnecessary (the offline parser understands these). */

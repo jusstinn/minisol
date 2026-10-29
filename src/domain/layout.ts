@@ -3,6 +3,8 @@ import { ITEMS, ITEM_KINDS, ROT_FOR_WALL, footprint, isOutdoor, itemRect, lowerF
 import type { Item, ItemKind, Rect } from "./items";
 import { PAVING_USES, defaultPavingUse, isPavingUse, pavingDepth } from "./paving";
 import type { PavingUse } from "./paving";
+import { DECK_BOARD_SAYS, PAVING_BOND_SAYS, isDeckBoardLayout, isPavingBond, parseDeckBoards, parsePavingBond } from "./patterns";
+import type { DeckBoardLayout, PavingBond } from "./patterns";
 import type { Lang } from "./types";
 
 /**
@@ -56,10 +58,26 @@ export interface Point {
 export type Layout = LayoutShape & { items?: Item[] };
 
 type LayoutShape =
-  | { type: "deck"; zones: Zone[]; heightM: number; steps: Steps[]; direction: "x" | "z"; base: "soil" | "gravel" | "concrete_slab" }
+  | {
+      type: "deck";
+      zones: Zone[];
+      heightM: number;
+      steps: Steps[];
+      direction: "x" | "z";
+      base: "soil" | "gravel" | "concrete_slab";
+      /** How the boards are laid; absent = straight (older saved sketches and share links). */
+      boards?: DeckBoardLayout;
+    }
   | { type: "laminate_floor"; zones: Zone[]; openings: Opening[]; pattern: "straight" | "diagonal"; subfloor: "concrete" | "wood" | "old_tiles" }
   | { type: "lawn"; zones: Zone[]; mode: "new" | "overseed" }
-  | { type: "paving"; zones: Zone[]; use: PavingUse; edging: boolean }
+  | {
+      type: "paving";
+      zones: Zone[];
+      use: PavingUse;
+      edging: boolean;
+      /** How the pavers are bonded; absent = running bond (older saved sketches and share links). */
+      bond?: PavingBond;
+    }
   | {
       type: "paint_room";
       w: number;
@@ -213,6 +231,7 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
         steps: [],
         direction: i.direction === "z" ? "z" : "x",
         base: (i.base as "soil") ?? "soil",
+        ...(parseDeckBoards(i.boards) ? { boards: parseDeckBoards(i.boards) } : {}),
       };
     }
     case "laminate_floor": {
@@ -237,7 +256,13 @@ export function defaultLayout(type: ProjectType, i: Record<string, unknown>): La
     case "paving": {
       const L = num(i.lengthM, 6);
       const W = num(i.widthM, 1.2);
-      return { type, zones: [{ id: "A", x: -L / 2, z: -W / 2, w: L, d: W }], use: isPavingUse(i.use) ? i.use : defaultPavingUse(L, W), edging: i.edging !== false };
+      return {
+        type,
+        zones: [{ id: "A", x: -L / 2, z: -W / 2, w: L, d: W }],
+        use: isPavingUse(i.use) ? i.use : defaultPavingUse(L, W),
+        edging: i.edging !== false,
+        ...(parsePavingBond(i.bond) ? { bond: parsePavingBond(i.bond) } : {}),
+      };
     }
     case "paint_room": {
       const doors = typeof i.doors === "number" ? i.doors : 1;
@@ -298,7 +323,7 @@ function shapeParams(l: Layout): Record<string, unknown> {
   switch (l.type) {
     case "deck": {
       const b = bbox(l.zones);
-      return { lengthM: r2(b.w), widthM: r2(b.d), zones: l.zones, heightM: l.heightM, steps: l.steps, direction: l.direction, base: l.base };
+      return { lengthM: r2(b.w), widthM: r2(b.d), zones: l.zones, heightM: l.heightM, steps: l.steps, direction: l.direction, base: l.base, ...(l.boards ? { boards: l.boards } : {}) };
     }
     case "laminate_floor": {
       const b = bbox(l.zones);
@@ -308,7 +333,7 @@ function shapeParams(l: Layout): Record<string, unknown> {
       return { areaM2: zoneArea(l.zones), zones: l.zones, mode: l.mode };
     case "paving": {
       const b = bbox(l.zones);
-      return { lengthM: r2(b.w), widthM: r2(b.d), zones: l.zones, use: l.use, edging: l.edging };
+      return { lengthM: r2(b.w), widthM: r2(b.d), zones: l.zones, use: l.use, edging: l.edging, ...(l.bond ? { bond: l.bond } : {}) };
     }
     case "paint_room":
       return {
@@ -696,6 +721,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         const bool = v === true || v === "true" || v === "da" || v === "yes";
         if (l.type === "deck" && key === "base" && ["soil", "gravel", "concrete_slab"].includes(String(v))) l.base = v as "soil";
         else if (l.type === "deck" && key === "direction" && ["x", "z"].includes(String(v))) l.direction = v as "x";
+        else if (l.type === "deck" && key === "boards" && parseDeckBoards(v)) l.boards = parseDeckBoards(v);
         else if (l.type === "laminate_floor" && key === "pattern" && ["straight", "diagonal"].includes(String(v))) l.pattern = v as "straight";
         else if (l.type === "laminate_floor" && key === "subfloor" && ["concrete", "wood", "old_tiles"].includes(String(v))) l.subfloor = v as "concrete";
         else if (l.type === "paint_room" && key === "ceiling") l.ceiling = bool;
@@ -708,6 +734,7 @@ export function applyOps(layout: Layout, ops: SketchOp[], lang: Lang = "ro"): { 
         else if (l.type === "lawn" && key === "mode" && ["new", "overseed"].includes(String(v))) l.mode = v as "new";
         else if (l.type === "paving" && key === "use" && isPavingUse(v)) l.use = v;
         else if (l.type === "paving" && key === "edging") l.edging = bool;
+        else if (l.type === "paving" && key === "bond" && parsePavingBond(v)) l.bond = parsePavingBond(v);
         else fail(`Opțiunea „${key}” = ${JSON.stringify(v)} nu e validă pentru acest proiect`, `Option "${key}" = ${JSON.stringify(v)} is not valid for this project`);
         const [ro, enTxt] = optionSays(key, v, bool);
         say(ro, enTxt);
@@ -790,6 +817,10 @@ function optionSays(key: string, v: unknown, on: boolean): [string, string] {
       return v === "driveway" ? ["Intrare auto (pavele de 8 cm, fundație de 25 cm)", "Driveway (8 cm pavers on a 25 cm base)"] : v === "patio" ? ["Terasă / curte", "Patio"] : ["Alee pietonală", "Footpath"];
     case "edging":
       return on ? ["Cu borduri pe margini", "Kerbs along the edges"] : ["Fără borduri", "No edging"];
+    case "bond":
+      return [PAVING_BOND_SAYS[parsePavingBond(v) ?? "running"].ro, PAVING_BOND_SAYS[parsePavingBond(v) ?? "running"].en];
+    case "boards":
+      return [DECK_BOARD_SAYS[parseDeckBoards(v) ?? "straight"].ro, DECK_BOARD_SAYS[parseDeckBoards(v) ?? "straight"].en];
     default:
       return [`Setare actualizată: ${key}`, `Updated setting: ${key}`];
   }
@@ -835,7 +866,8 @@ export function describeLayout(l: Layout): unknown {
         zones: l.zones.map((z) => ({ id: z.id, w: z.w, d: z.d, x: z.x, z: z.z })),
         ...("steps" in l ? { steps: l.steps, heightM: l.heightM } : {}),
         ...("openings" in l ? { openings: l.openings } : {}),
-        ...(l.type === "paving" ? { use: l.use, edging: l.edging } : {}),
+        ...(l.type === "paving" ? { use: l.use, edging: l.edging, bond: l.bond ?? "running" } : {}),
+        ...(l.type === "deck" ? { boards: l.boards ?? "straight", direction: l.direction } : {}),
         ...describeItems(l),
       };
     case "fence":
@@ -1170,6 +1202,7 @@ export function checkLayout(raw: unknown, type: ProjectType): Layout | null {
           fin(l.heightM, 0.1, 1.2) &&
           ["x", "z"].includes(l.direction as string) &&
           ["soil", "gravel", "concrete_slab"].includes(l.base as string) &&
+          (l.boards === undefined || isDeckBoardLayout(l.boards)) &&
           Array.isArray(l.steps) &&
           l.steps.length <= 4 &&
           (l.steps as Steps[]).every((s) => s && str(s.id) && str(s.zone, 4) && SIDES.includes(s.side) && fin(s.width, 0.5, 30) && fin(s.count, 1, 6))
@@ -1179,7 +1212,7 @@ export function checkLayout(raw: unknown, type: ProjectType): Layout | null {
       case "lawn":
         return okZones(l.zones) && ["new", "overseed"].includes(l.mode as string);
       case "paving":
-        return okZones(l.zones) && (PAVING_USES as readonly string[]).includes(l.use as string) && typeof l.edging === "boolean";
+        return okZones(l.zones) && (PAVING_USES as readonly string[]).includes(l.use as string) && typeof l.edging === "boolean" && (l.bond === undefined || isPavingBond(l.bond));
       case "paint_room":
         return (
           fin(l.w, 0.8, 20) &&
@@ -1245,6 +1278,7 @@ function rebuild(l: Layout): Layout {
         steps: l.steps.map((st) => ({ id: st.id, zone: st.zone, side: st.side, width: st.width, count: st.count })),
         direction: l.direction,
         base: l.base,
+        ...(l.boards ? { boards: l.boards } : {}),
         ...items,
       };
     case "laminate_floor":
@@ -1252,7 +1286,7 @@ function rebuild(l: Layout): Layout {
     case "lawn":
       return { type: l.type, zones: zones(l.zones), mode: l.mode, ...items };
     case "paving":
-      return { type: l.type, zones: zones(l.zones), use: l.use, edging: l.edging, ...items };
+      return { type: l.type, zones: zones(l.zones), use: l.use, edging: l.edging, ...(l.bond ? { bond: l.bond } : {}), ...items };
     case "paint_room":
       return { type: l.type, w: l.w, d: l.d, h: l.h, openings: openings(l.openings), ceiling: l.ceiling, coats: l.coats, surface: l.surface, ...items };
     case "tiling":

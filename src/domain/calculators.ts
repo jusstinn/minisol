@@ -4,6 +4,19 @@ import { bbox, unionPerimeter, zoneArea } from "./layout";
 import type { Zone } from "./layout";
 import { PAVING_BUILDUP, defaultPavingUse, isPavingUse, pavingDepth } from "./paving";
 import type { PavingUse } from "./paving";
+import {
+  DECK_BOARD_PITCH,
+  DECK_BOARD_SAYS,
+  DECK_BOARD_WASTE,
+  DECK_FRAME_WASTE,
+  DECK_JOIST_SPACING,
+  PAVING_BOND_SAYS,
+  deckFrameFor,
+  deckFrameSides,
+  parseDeckBoards,
+  parsePavingBond,
+  pavingWaste,
+} from "./patterns";
 import type { BaseUnit, Lang, MaterialRole, Requirement } from "./types";
 import { MATERIAL_ROLES } from "./types";
 
@@ -366,6 +379,9 @@ interface ZoneIn {
   id: string;
   w: number;
   d: number;
+  /** Plan position (an edited sketch); only the picture-frame layout needs it, to tell open sides from shared ones. */
+  x: number;
+  z: number;
 }
 interface StepsIn {
   zone: string;
@@ -378,40 +394,72 @@ function deck(p: Params, lang: Lang): CalculationResult {
   const b = new Builder(lang);
   // Zones come from an edited sketch; a plain request is one rectangle.
   const zones: ZoneIn[] = Array.isArray(p.zones) && p.zones.length
-    ? (p.zones as ZoneIn[]).map((z) => ({ id: z.id, w: positive("zone.w", z.w, { max: 30 }), d: positive("zone.d", z.d, { max: 30 }) }))
-    : [{ id: "A", w: positive("lengthM", p.lengthM, { max: 30 }), d: positive("widthM", p.widthM, { max: 30 }) }];
+    ? (p.zones as ZoneIn[]).map((z) => ({ id: z.id, x: Number(z.x) || 0, z: Number(z.z) || 0, w: positive("zone.w", z.w, { max: 30 }), d: positive("zone.d", z.d, { max: 30 }) }))
+    : [{ id: "A", x: 0, z: 0, w: positive("lengthM", p.lengthM, { max: 30 }), d: positive("widthM", p.widthM, { max: 30 }) }];
   const steps: StepsIn[] = Array.isArray(p.steps) ? (p.steps as StepsIn[]) : [];
   const heightM = p.heightM === undefined ? 0.18 : Math.min(1.2, Math.max(0.1, Number(p.heightM) || 0.18));
   const direction = p.direction === "z" ? "z" : "x";
   const base = (["concrete_slab", "soil", "gravel"] as const).includes(p.base as never)
     ? (p.base as "concrete_slab" | "soil" | "gravel")
     : "soil";
-  const boardPitch = 0.15; // 145 mm board + 5 mm gap
-  const joistSpacing = 0.4;
+  // How the boards are laid changes the waste, and a diagonal deck needs closer joists (patterns.ts).
+  const boards = parseDeckBoards(p.boards) ?? "straight";
+  const boardPitch = DECK_BOARD_PITCH; // 145 mm board + 5 mm gap
+  const joistSpacing = DECK_JOIST_SPACING[boards];
+  const fieldWaste = DECK_BOARD_WASTE[boards];
+  const pct = (f: number) => Math.round(f * 100);
+  const frameSides = boards === "frame" ? deckFrameSides(zones) : [];
 
   let area = 0;
   let rows = 0;
-  let boardM = 0;
+  /** Metres of field boards (the straight or diagonal run), of frame boards, of step treads. */
+  let fieldM = 0;
+  let frameM = 0;
+  let stepM = 0;
+  let frameBoards = 0;
   let joists = 0;
   let joistM = 0;
   let screws = 0;
   let supports = 0;
   /** Joists by length (each one is a single bar where the stock is long enough). */
   const joistRuns = new Map<number, number>();
-  for (const z of zones) {
+  zones.forEach((z, zi) => {
     const run = direction === "x" ? z.w : z.d; // boards run along this
     const across = direction === "x" ? z.d : z.w;
-    const r = Math.ceil(across / boardPitch);
+    const frame = boards === "frame" ? deckFrameFor(z, frameSides[zi]) : null;
     const j = Math.ceil(run / joistSpacing) + 1;
+    let r: number;
+    if (frame) {
+      // A border board on every open side, mitred at the corners; the field boards fill the rest.
+      const fw = frame.field.x1 - frame.field.x0;
+      const fd = frame.field.z1 - frame.field.z0;
+      r = Math.ceil((direction === "x" ? fd : fw) / boardPitch);
+      fieldM += r * (direction === "x" ? fw : fd);
+      const s = frame.sides;
+      const alongX = Number(s.n) + Number(s.s); // border boards running east–west
+      const alongZ = Number(s.e) + Number(s.w); // border boards running north–south
+      frameM += alongX * z.w + alongZ * z.d;
+      frameBoards += alongX + alongZ;
+      // Border boards that run with the joists need a joist of their own underneath; the others lie across them.
+      const parallel = direction === "x" ? alongZ : alongX;
+      const across0 = direction === "x" ? alongX : alongZ;
+      joists += parallel;
+      joistM += parallel * across;
+      if (parallel) joistRuns.set(r2(across), (joistRuns.get(r2(across)) ?? 0) + parallel);
+      supports += parallel * (Math.ceil(across / 0.6) + 1);
+      screws += across0 * j * 2 + parallel * (Math.ceil(run / 0.4) + 1) * 2;
+    } else {
+      r = Math.ceil(across / boardPitch);
+      fieldM += r * run;
+    }
     area += z.w * z.d;
     rows += r;
-    boardM += r * run;
     joists += j;
     joistM += j * across;
     joistRuns.set(r2(across), (joistRuns.get(r2(across)) ?? 0) + j);
     screws += r * j * 2;
     supports += j * (Math.ceil(across / 0.6) + 1);
-  }
+  });
   // Steps: 2 boards per tread, stringers every 60 cm (from joist timber), ~30 cm going per step.
   let treads = 0;
   for (const st of steps) {
@@ -419,7 +467,7 @@ function deck(p: Params, lang: Lang): CalculationResult {
     const count = Math.max(1, Math.round(Number(st.count) || 1));
     const stringers = 2 + Math.floor(width / 0.6);
     treads += count;
-    boardM += count * 2 * width;
+    stepM += count * 2 * width;
     joistM += stringers * count * 0.3 * 1.25;
     joistRuns.set(r2(count * 0.3 * 1.25), (joistRuns.get(r2(count * 0.3 * 1.25)) ?? 0) + stringers);
     screws += count * 2 * stringers * 2;
@@ -428,19 +476,39 @@ function deck(p: Params, lang: Lang): CalculationResult {
   b.measure("Suprafață terasă", "Deck area", area, "m²");
   if (zones.length > 1) b.measure("Zone", "Sections", zones.length, "buc");
   b.measure("Rânduri de deck", "Board rows", rows, "rânduri");
+  if (frameBoards) b.measure("Scânduri de ramă", "Frame boards", frameBoards, "buc");
   b.measure("Grinzi suport", "Joists", joists, "buc");
   if (treads) b.measure("Trepte", "Steps", treads, "buc");
   b.assume("Deck de ~145 mm lățime cu rost de 5 mm.", "~145 mm boards with 5 mm gaps.");
-  b.assume("Grinzi la 40 cm interax, suporturi la max. 60 cm.", "Joists at 40 cm centres, supports every 60 cm max.");
-  b.assume("10% pierderi la deck, 5% la grinzi.", "10% waste on boards, 5% on joists.");
+  b.assume(
+    `Grinzi la ${pct(joistSpacing)} cm interax, suporturi la max. 60 cm.`,
+    `Joists at ${pct(joistSpacing)} cm centres, supports every 60 cm max.`,
+  );
+  b.assume(
+    boards === "straight"
+      ? "10% pierderi la deck, 5% la grinzi."
+      : boards === "diagonal"
+        ? `${DECK_BOARD_SAYS.diagonal.ro}: ${pct(fieldWaste)}% pierderi la deck (fiecare capăt se taie la 45°), 5% la grinzi; grinzile sunt mai dese (30 cm în loc de 40 cm).`
+        : `${DECK_BOARD_SAYS.frame.ro}: ${pct(fieldWaste)}% pierderi la deck, ${pct(DECK_FRAME_WASTE)}% la ramă (colțuri tăiate la 45°), 5% la grinzi; sub scândurile de ramă paralele cu grinzile vine o grindă în plus.`,
+    boards === "straight"
+      ? "10% waste on boards, 5% on joists."
+      : boards === "diagonal"
+        ? `${DECK_BOARD_SAYS.diagonal.en}: ${pct(fieldWaste)}% waste on boards (both ends are cut at 45°), 5% on joists; joists are closer (30 cm instead of 40 cm).`
+        : `${DECK_BOARD_SAYS.frame.en}: ${pct(fieldWaste)}% waste on boards, ${pct(DECK_FRAME_WASTE)}% on the frame (corners are mitred), 5% on joists; border boards that run with the joists get an extra joist underneath.`,
+  );
   if (zones.length > 1) b.assume("Fiecare zonă are structura ei de grinzi.", "Each section gets its own joist frame.");
   if (treads) b.assume("Treaptă: ~17 cm înălțime, ~30 cm adâncime, 2 deck-uri pe treaptă.", "Steps: ~17 cm rise, ~30 cm going, 2 boards per tread.");
 
   // Pedestal height = deck height − joist − board.
   const pedestalMm = Math.round(heightM * 1000 - 98);
-  b.need("deck_board", boardM * 1.1, `${rows} rânduri${treads ? ` + ${treads} trepte` : ""} + 10%`, `${rows} rows${treads ? ` + ${treads} steps` : ""} + 10%`, {
-    scaleBySpec: { key: "widthMm", reference: 145 },
-  });
+  const boardNeed = fieldM * (1 + fieldWaste) + frameM * (1 + DECK_FRAME_WASTE) + stepM * 1.1;
+  b.need(
+    "deck_board",
+    boardNeed,
+    `${rows} rânduri${frameBoards ? ` + ${frameBoards} de ramă` : ""}${treads ? ` + ${treads} trepte` : ""} + ${pct(fieldWaste)}%`,
+    `${rows} rows${frameBoards ? ` + ${frameBoards} frame` : ""}${treads ? ` + ${treads} steps` : ""} + ${pct(fieldWaste)}%`,
+    { scaleBySpec: { key: "widthMm", reference: 145 } },
+  );
   b.need("deck_joist", joistM * 1.05, `${joists} grinzi${treads ? " + vanguri trepte" : ""} + 5%`, `${joists} joists${treads ? " + step stringers" : ""} + 5%`, {
     members: [...joistRuns].map(([lengthM, count]) => ({ count, lengthM })),
   });
@@ -490,7 +558,7 @@ function deck(p: Params, lang: Lang): CalculationResult {
   return {
     projectType: "deck",
     title: b.t(zones.length > 1 ? "Terasă din deck în L" : "Terasă din deck", zones.length > 1 ? "L-shaped garden deck" : "Garden deck"),
-    inputs: { lengthM: p.lengthM ?? zones[0].w, widthM: p.widthM ?? zones[0].d, base, heightM, direction },
+    inputs: { lengthM: p.lengthM ?? zones[0].w, widthM: p.widthM ?? zones[0].d, base, heightM, direction, ...(parseDeckBoards(p.boards) ? { boards } : {}) },
     measurements: b.measurements,
     requirements: b.requirements,
     assumptions: b.assumptions,
@@ -729,7 +797,9 @@ function paving(p: Params, lang: Lang): CalculationResult {
   const outline = unionPerimeter(zones);
   const dug = area * depth;
   const cm = (m: number) => Math.round(m * 100);
-  const waste = zones.length > 1 ? 0.07 : 0.05;
+  const bond = parsePavingBond(p.bond) ?? "running";
+  // Every bond wastes a different amount in cuts (see patterns.ts); more corners add a little.
+  const waste = pavingWaste(bond, zones.length);
   // Small paths are tamped by hand; patios and driveways need a plate compactor (usually hired).
   const bigJob = area > 10 || use === "driveway";
 
@@ -745,9 +815,15 @@ function paving(p: Params, lang: Lang): CalculationResult {
   );
   b.assume("Piatra spartă: +15% pentru compactare (~1,8 t/m³); nisipul: +10%.", "Crushed stone: +15% for compaction (~1.8 t/m³); sand: +10%.");
   b.assume(
-    `${Math.round(waste * 100)}% rezervă de pavele pentru tăieturi${zones.length > 1 ? " (mai multe colțuri)" : ""}.`,
-    `${Math.round(waste * 100)}% spare pavers for cuts${zones.length > 1 ? " (more corners)" : ""}.`,
+    `${PAVING_BOND_SAYS[bond].ro}: ${Math.round(waste * 100)}% rezervă de pavele pentru tăieturi${zones.length > 1 ? " (mai multe colțuri)" : ""}.`,
+    `${PAVING_BOND_SAYS[bond].en}: ${Math.round(waste * 100)}% spare pavers for cuts${zones.length > 1 ? " (more corners)" : ""}.`,
   );
+  if (bond === "herringbone" || bond === "basketweave") {
+    b.assume(
+      "Modelul cere pavele dreptunghiulare 2:1 (ex. 20 × 10 cm) — verifică „model de pozare” pe fișa produsului.",
+      "This pattern needs 2:1 rectangular pavers (e.g. 20 × 10 cm) — check the product's “laying pattern”.",
+    );
+  }
   b.assume("Pantă de 1–2% dinspre casă, ca apa să se scurgă.", "Keep a 1–2% fall away from the house so rain drains off.");
   if (use === "driveway") {
     b.assume(
@@ -846,7 +922,7 @@ function paving(p: Params, lang: Lang): CalculationResult {
   return {
     projectType: "paving",
     title: b.t(zones.length > 1 ? `${tRo} în L` : tRo, zones.length > 1 ? `L-shaped ${tEn.toLowerCase()}` : tEn),
-    inputs: { lengthM: r2(box.w), widthM: r2(box.d), areaM2: area, use, edging },
+    inputs: { lengthM: r2(box.w), widthM: r2(box.d), areaM2: area, use, edging, ...(parsePavingBond(p.bond) ? { bond } : {}) },
     measurements: b.measurements,
     requirements: b.requirements,
     assumptions: b.assumptions,
@@ -901,10 +977,10 @@ export const PROJECT_PARAM_DOCS: Record<ProjectType, string> = {
     "lengthM, widthM, pattern: straight | diagonal, doorways (default 1), subfloor: concrete | wood | old_tiles (default concrete)",
   tiling:
     "lengthM, widthM (room floor), roomType: bathroom | kitchen | other, tileFloor (default true), wallTileHeightM (default 2.1 for bathroom, 0 otherwise), doors (default 1), largeFormat (≥60 cm tiles, default true)",
-  deck: "lengthM, widthM, base: soil | gravel | concrete_slab (default soil)",
+  deck: "lengthM, widthM, base: soil | gravel | concrete_slab (default soil), boards: straight | diagonal | frame (default straight; diagonal = boards at 45°, +10% boards, joists at 30 cm; frame = picture-frame border of boards around the edge)",
   fence: "lengthM, heightM: 0.9 | 1.2 | 1.8 (default 1.8)",
   drywall_partition: "lengthM, heightM (default 2.6), doors (default 0), insulation (default true), doubleLayer (default false), wetRoom (default false)",
   lawn: "areaM2 (or lengthM + widthM), mode: new | overseed (default new)",
   paving:
-    "lengthM, widthM (or areaM2) of a garden path, patio or driveway laid with concrete pavers; use: path | patio | driveway (default path when ≤ 1.5 m wide, else patio; driveway = cars → 8 cm pavers on a 25 cm base), edging (kerbs along the outline, default true)",
+    "lengthM, widthM (or areaM2) of a garden path, patio or driveway laid with concrete pavers; use: path | patio | driveway (default path when ≤ 1.5 m wide, else patio; driveway = cars → 8 cm pavers on a 25 cm base), edging (kerbs along the outline, default true), bond: running | herringbone | basketweave | stack (default running; waste 5% / 10% / 7% / 5%)",
 };
