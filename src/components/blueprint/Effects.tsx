@@ -1,6 +1,7 @@
 "use client";
 
-import { Bloom, EffectComposer, N8AO, SMAA } from "@react-three/postprocessing";
+import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping } from "@react-three/postprocessing";
+import { ToneMappingMode } from "postprocessing";
 
 /**
  * Image quality, desktop only (`Scene.tsx` mounts this whenever `!lite`, lazy-loaded so it never
@@ -20,8 +21,12 @@ export default function Effects({ aoEnabled = true, night = false }: { aoEnabled
   return (
     <EffectComposer multisampling={0} enableNormalPass={false}>
       <N8AO enabled={aoEnabled} aoRadius={0.45} distanceFalloff={1} intensity={2.2} color="black" quality="medium" />
-      <SMAA />
+      {/* HDR work (bloom) first, then the film curve, then anti-aliasing on the finished LDR image.
+          The composer switches the renderer's own tone mapping off, so without this the sun-lit
+          highlights simply clipped to white. */}
       {night && <Bloom luminanceThreshold={0.85} luminanceSmoothing={0.3} intensity={0.5} mipmapBlur radius={0.65} />}
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      <SMAA />
     </EffectComposer>
   );
 }

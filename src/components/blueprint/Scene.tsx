@@ -34,6 +34,9 @@ export type CaptureFn = (maxWidth?: number) => string | null;
  *  size; resolves false if no frame arrives (paused) or the copy fails. */
 export type SnapshotFn = (target: HTMLCanvasElement) => Promise<boolean>;
 
+/** PCF is the fallback; drei's SoftShadows (see Lighting.tsx) swaps the map type for its own PCSS filter.
+ *  A module constant: R3F re-applies the `shadows` prop whenever its content changes. */
+const DESKTOP_SHADOWS = { type: THREE.PCFShadowMap } as const;
 const PART_DUR = 0.55;
 const MORPH_DUR = 0.7;
 const GLOW_DUR = 1.8;
@@ -998,12 +1001,12 @@ export default function Scene({
       // Stays tied to the DEVICE, not the view: switching PLAN ↔ REAL used to toggle this and
       // reconfigure the renderer (a visible flash) — now only each mesh's castShadow/receiveShadow
       // (and the light's own castShadow, below) change with the mode.
-      shadows={!lite ? { type: THREE.VSMShadowMap } : false}
+      shadows={!lite ? DESKTOP_SHADOWS : false}
       frameloop={paused ? "never" : "always"}
       style={{ touchAction: interactive ? "none" : "auto" }}
     >
       <Driver shared={shared} mode={mode} />
-      <Lighting mode={mode} lite={lite} sun={sun} shadowBounds={shadowBounds} lightRef={lightRef} />
+      <Lighting mode={mode} lite={lite} sun={sun} shadowBounds={shadowBounds} lightRef={lightRef} interior={build.interior} />
       <CaptureBridge lightRef={lightRef} build={build} onCaptureReady={onCaptureReady} />
       {onSnapshotReady && <SnapshotBridge onSnapshotReady={onSnapshotReady} />}
 
