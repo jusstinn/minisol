@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Card, ProjectSnapshot } from "@/agent/types";
+import type { Card, ProjectSnapshot, SessionState } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
 import { exposedEdges, fenceSegments } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
@@ -15,6 +15,7 @@ import { dec, unitText } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { UiSignal } from "@/lib/useAgent";
 import type { LiteGraphics } from "@/lib/useLiteGraphics";
+import ArMenu from "../blueprint/ArMenu";
 import { buildScene } from "../blueprint/builders";
 import CameraMenu from "../blueprint/CameraMenu";
 import { CAMERA_PRESETS } from "../blueprint/cameraPresets";
@@ -44,6 +45,8 @@ export interface SketchControls {
   error: string | null;
   clearError: () => void;
   canUndo: boolean;
+  /** The session as it is now (basket, store, quality) — what "AR on the phone" sends in its QR. */
+  getState?: () => SessionState;
 }
 
 
@@ -459,6 +462,7 @@ function SketchView({
                 .map((d) => d.label)
                 .join(" × ")}
             />
+            <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} inline={inline} getState={sketch?.getState} />
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>

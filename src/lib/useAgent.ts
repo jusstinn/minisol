@@ -505,7 +505,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     state: stateRef,
     mode,
     ui,
-    sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0 },
+    sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0, getState: () => stateRef.current },
   };
 }
 

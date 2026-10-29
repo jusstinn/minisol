@@ -120,6 +120,37 @@ const STRINGS = {
   photoRender: { ro: "Randare foto", en: "Photo render" },
   photoRendering: { ro: "Se randează…", en: "Rendering…" },
   photoRenderFailed: { ro: "Randarea foto n-a mers. Încearcă din nou.", en: "The photo render didn't work. Please try again." },
+  // AR and the 3D model download (the sketch toolbar's "AR" menu).
+  arButton: { ro: "AR", en: "AR" },
+  arTitleOutdoor: { ro: "Vezi în curte", en: "See it in your garden" },
+  arTitleIndoor: { ro: "Vezi la tine acasă", en: "See it at home" },
+  arView: { ro: "Vezi în AR", en: "View in AR" },
+  arPreparing: { ro: "Se pregătește modelul…", en: "Preparing the model…" },
+  arHintPhone: {
+    ro: "Îndreaptă camera spre podea, apoi atinge locul unde vrei proiectul. Apare la mărimea reală.",
+    en: "Point the camera at the floor, then tap where you want it. It appears at its real size.",
+  },
+  arHintDesktop: {
+    ro: "Scanează codul cu telefonul. Proiectul se deschide acolo, iar butonul AR îl pune la mărime reală în curte sau acasă.",
+    en: "Scan the code with your phone. The project opens there, and its AR button puts it at real size in your garden or home.",
+  },
+  arHintNoAr: {
+    ro: "Telefonul acesta nu poate afișa AR. Încearcă pe alt telefon sau descarcă modelul 3D.",
+    en: "This phone can't show AR. Try another phone, or download the 3D model.",
+  },
+  arHintInsecure: {
+    ro: "AR cere o conexiune sigură (https). Deschide proiectul prin adresa https.",
+    en: "AR needs a secure connection (https). Open the project through its https address.",
+  },
+  arQr: { ro: "Cod QR care deschide proiectul pe telefon", en: "QR code that opens the project on your phone" },
+  arDownload: { ro: "Descarcă modelul 3D (.glb)", en: "Download the 3D model (.glb)" },
+  arDownloading: { ro: "Se creează fișierul…", en: "Creating the file…" },
+  arIndicative: {
+    ro: "Model orientativ, nu proiect tehnic. Dimensiunile sunt cele din schiță.",
+    en: "Indicative model, not a technical drawing. Sizes are those of the sketch.",
+  },
+  arFailed: { ro: "Modelul 3D nu s-a putut crea. Încearcă din nou.", en: "The 3D model couldn't be created. Please try again." },
+  arLaunchFailed: { ro: "AR nu a pornit. Încearcă din nou sau descarcă modelul.", en: "AR didn't start. Try again, or download the model." },
 } as const;
 
 type Key = keyof typeof STRINGS;
