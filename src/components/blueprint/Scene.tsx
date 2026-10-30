@@ -967,6 +967,9 @@ export interface SceneProps {
   /** An opt-in restricted sweep for "tour" (see cameraPresets.ts's `tourArcFor`) — only the hero
    *  passes this; the workspace's own "tour" camera stays a full revolution. */
   tourArc?: TourArc;
+  /** REAL-view surroundings (surroundings/plan.ts): "full" (default), "garden" — lawn and low
+   *  planting only, no house or trees, for the hero's tight framing — or "off". */
+  surroundings?: "full" | "garden" | "off";
 }
 
 export default function Scene({
@@ -993,6 +996,7 @@ export default function Scene({
   buildSimLayer = null,
   frame,
   tourArc,
+  surroundings = "full",
 }: SceneProps) {
   const clock = useRef(0);
   const explode = useRef(0);
@@ -1029,7 +1033,10 @@ export default function Scene({
   const edges: EdgeBudget = !lite ? "all" : build.parts.length > MANY_PARTS ? "major" : "products";
   // The garden/house/room dressing around the build (never part of `build.parts`: see surroundings/plan.ts).
   const [surroundingsPref] = useSurroundings();
-  const plan = useMemo(() => (lite ? null : planSurroundings(build)), [build, lite]);
+  const plan = useMemo(() => {
+    const p = lite || surroundings === "off" ? null : planSurroundings(build);
+    return p && surroundings === "garden" ? { ...p, house: null, trees: [] } : p;
+  }, [build, lite, surroundings]);
   const sOn = surroundingsPref && plan !== null;
   // A patio's layers are inspected through its cut-away: the lawn steps aside while one is highlighted.
   const section = Boolean(highlightLayer) || buildSimLayer != null;

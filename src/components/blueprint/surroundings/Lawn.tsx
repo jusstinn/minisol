@@ -14,7 +14,7 @@ import type { UniformRef, WindUniforms } from "./materials";
 import { distToRect, expand, mulberry32 } from "./plan";
 import type { SurroundingsPlan } from "./plan";
 
-const LAWN = { healthy: "#68904c", dry: "#8f9a5e" } as const;
+const LAWN = { healthy: "#68904c", dry: "#87975c" } as const;
 
 /**
  * The lawn the project stands in: one big faded disc (see groundHalo.ts's `lawnFadeTexture`) with

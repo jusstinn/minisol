@@ -149,6 +149,7 @@ export default function Hero({ lang, accent }: { lang: Lang; accent: string }) {
               paused={paused}
               frame={HERO_FRAME}
               tourArc={tourArc}
+              surroundings="garden"
               onSnapshotReady={(fn) => {
                 snapshotRef.current = fn;
               }}
