@@ -452,7 +452,7 @@ function SketchView({
               <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{tr("simulate", lang)}</span>
             </button>
             {up.button}
-            {materials && <MaterialsPicker {...materials} lang={lang} dark={dark} sheet={Boolean(inline)} />}
+            {materials && !inline && <MaterialsPicker {...materials} lang={lang} dark={dark} sheet={false} />}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
             <PhotoRenderButton
               captureRef={captureRef}
@@ -479,9 +479,10 @@ function SketchView({
               <IconRotate size={15} />
             </RoundBtn>
           </div>
-          {/* Phones: the row above already runs into the title, so AR gets the next row (left of the upload button). */}
+          {/* Phones: the row above already runs into the title, so Materials and AR get the next row (left of the upload button). */}
           {inline && (
-            <div className={canEdit ? "mr-[38px]" : ""}>
+            <div className={`flex gap-1.5 ${canEdit ? "mr-[38px]" : ""}`}>
+              {materials && <MaterialsPicker {...materials} lang={lang} dark={dark} sheet />}
               <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} inline getState={sketch?.getState} />
             </div>
           )}
