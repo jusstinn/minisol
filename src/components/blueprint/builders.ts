@@ -5,14 +5,14 @@ import { defaultLayout, exposedEdges, fenceSegments, itemContainer, SIDES } from
 import type { Layout, Opening, Side, Zone } from "@/domain/layout";
 import { shades } from "@/domain/look";
 import { PAVING_BUILDUP, pavingDepth } from "@/domain/paving";
-import { DECK_BOARD_PITCH, DECK_JOIST_SPACING, deckFrameFor, deckFrameSides } from "@/domain/patterns";
+import { DECK_JOIST_SPACING, deckFrameFor, deckFrameSides } from "@/domain/patterns";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
 import { diagonalBoards, frameBoards } from "./detail/deckBoards";
 import { bondUnit, paverPieces } from "./detail/pavingBond";
 import { pedestalGrid } from "./detail/pedestals";
-import { boundsOf, prismOf } from "./detail/prism";
+import { prismOf } from "./detail/prism";
 import type { Pt, PrismShape } from "./detail/prism";
 import type { Finish } from "./textures";
 
