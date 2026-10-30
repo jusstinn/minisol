@@ -21,3 +21,6 @@ eval-results/
 .claude/worktrees/
 # guest passwords from scripts/make-users.mjs
 accounts-for-sharing*.txt
+
+# local QA screenshots (put shareable ones in docs/screenshots explicitly)
+/qa-shots/
