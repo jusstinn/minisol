@@ -79,7 +79,7 @@ export default function Lighting({
         <orthographicCamera attach="shadow-camera" args={[-shadowBounds.half, shadowBounds.half, shadowBounds.half, -shadowBounds.half, near, far]} />
       </directionalLight>
       <hemisphereLight args={sky ? [dl.hemiSky, dl.hemiGround, dl.hemiIntensity] : [legacy.hemiSky, legacy.hemiGround, legacy.hemiIntensity]} />
-      {!lite && <SoftShadows size={32} samples={16} focus={0.4} />}
+      {!lite && <SoftShadows size={14} samples={16} focus={0.4} />}
       {/* Mounted for the whole desktop session (PLAN too — unlit materials ignore it), so entering REAL
           never pays the cube-map/PMREM shader compile mid-animation. */}
       {!lite && <SkyEnvironment daylight={dl} interior={interior} />}
