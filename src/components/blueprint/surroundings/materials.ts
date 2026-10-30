@@ -141,6 +141,13 @@ export const windSway =
     );
   };
 
+/**
+ * Cache key for every material whose only patch is `dissolve`: the program depends on the patch
+ * set (and three's own material parameters), not on the material, so they all share programs —
+ * a room or a house appearing compiles a couple of shaders, not one per material.
+ */
+export const DISSOLVE_KEY = "sur-dissolve";
+
 /** Applies the patches in order and gives the material a stable cache key built from `key`. */
 export function patched<T extends THREE.Material>(material: T, key: string, ...patches: ShaderPatch[]): T {
   material.onBeforeCompile = (shader) => {

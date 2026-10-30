@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { finishTextures } from "../textures";
 import { foliageFor } from "./foliage";
 import { blobGeometry, cardGeometry, dotGeometry, leafCardTexture, standingBoxGeometry, trunkGeometry } from "./geometry";
-import { dissolve, foliageLook, leafNormals, patched } from "./materials";
+import { DISSOLVE_KEY, dissolve, foliageLook, leafNormals, patched } from "./materials";
 import type { UniformRef } from "./materials";
 import type { SurroundingsPlan } from "./plan";
 
@@ -51,14 +51,14 @@ export default function Vegetation({ plan, fade }: { plan: SurroundingsPlan; fad
         dissolve(fade),
         leafNormals,
       ),
-      dot: patched(new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 }), "sur-dot", dissolve(fade)),
-      trunk: patched(new THREE.MeshStandardMaterial({ color: "#5a4a3d", roughness: 0.95, metalness: 0 }), "sur-trunk", dissolve(fade)),
+      dot: patched(new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 }), DISSOLVE_KEY, dissolve(fade)),
+      trunk: patched(new THREE.MeshStandardMaterial({ color: "#5a4a3d", roughness: 0.95, metalness: 0 }), DISSOLVE_KEY, dissolve(fade)),
       planter: patched(
         new THREE.MeshStandardMaterial({ color: "#8a6a4a", roughness: 0.85, metalness: 0, map: woodTex.map, roughnessMap: woodTex.roughnessMap, bumpMap: woodTex.bumpMap, bumpScale: 0.0015 }),
-        "sur-planter",
+        DISSOLVE_KEY,
         dissolve(fade),
       ),
-      soil: patched(new THREE.MeshStandardMaterial({ color: "#3a2d22", roughness: 1, metalness: 0 }), "sur-soil", dissolve(fade)),
+      soil: patched(new THREE.MeshStandardMaterial({ color: "#3a2d22", roughness: 1, metalness: 0 }), DISSOLVE_KEY, dissolve(fade)),
     };
   }, [fade]);
 

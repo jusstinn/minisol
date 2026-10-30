@@ -5,7 +5,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo } from "react";
 import * as THREE from "three";
-import { dissolve, patched } from "./materials";
+import { DISSOLVE_KEY, dissolve, patched } from "./materials";
 import type { UniformRef } from "./materials";
 import type { OpeningSpec, RoomSpec } from "./plan";
 
@@ -44,11 +44,11 @@ export default function RoomDressing({ spec, fade, day }: { spec: RoomSpec; fade
     const d = dissolve(fade);
     const pane = new THREE.MeshBasicMaterial({ map: skyPaneTexture(), toneMapped: true });
     return {
-      white: patched(new THREE.MeshStandardMaterial({ color: "#f3f0e9", roughness: 0.5 }), "room-white", d),
-      leaf: patched(new THREE.MeshStandardMaterial({ color: "#e9e4d9", roughness: 0.55 }), "room-leaf", d),
-      panel: patched(new THREE.MeshStandardMaterial({ color: "#f4f1ea", roughness: 0.5 }), "room-panel", d),
-      chrome: patched(new THREE.MeshStandardMaterial({ color: "#d4d7da", roughness: 0.32, metalness: 0.6 }), "room-chrome", d),
-      sill: patched(new THREE.MeshStandardMaterial({ color: "#ece8de", roughness: 0.6 }), "room-sill", d),
+      white: patched(new THREE.MeshStandardMaterial({ color: "#f3f0e9", roughness: 0.5 }), DISSOLVE_KEY, d),
+      leaf: patched(new THREE.MeshStandardMaterial({ color: "#e9e4d9", roughness: 0.55 }), DISSOLVE_KEY, d),
+      panel: patched(new THREE.MeshStandardMaterial({ color: "#f4f1ea", roughness: 0.5 }), DISSOLVE_KEY, d),
+      chrome: patched(new THREE.MeshStandardMaterial({ color: "#d4d7da", roughness: 0.32, metalness: 0.6 }), DISSOLVE_KEY, d),
+      sill: patched(new THREE.MeshStandardMaterial({ color: "#ece8de", roughness: 0.6 }), DISSOLVE_KEY, d),
       pane: patched(pane, "room-pane", d),
     };
   }, [fade]);

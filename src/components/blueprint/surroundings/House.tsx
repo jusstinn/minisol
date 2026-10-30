@@ -6,7 +6,7 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo } from "react";
 import * as THREE from "three";
 import { finishTextures } from "../textures";
-import { dissolve, patched } from "./materials";
+import { DISSOLVE_KEY, dissolve, patched } from "./materials";
 import type { UniformRef } from "./materials";
 import type { HouseSpec } from "./plan";
 import { wallPieces } from "./wallPieces";
@@ -67,18 +67,18 @@ export default function House({ spec, groundY, fade, night }: { spec: HouseSpec;
     const tiles = finishTextures({ kind: "paver", unit: [0.3, 0.18], axes: "xy" }, [wallW + 0.4, 4, t]);
     const std = (p: THREE.MeshStandardMaterialParameters, key: string) => patched(new THREE.MeshStandardMaterial(p), key, d);
     return {
-      wall: std({ color: "#cdc5b6", roughness: 0.92, map: plaster.map, roughnessMap: plaster.roughnessMap, bumpMap: plaster.bumpMap, bumpScale: 0.0018 }, "sur-wall"),
-      plinth: std({ color: "#8d8a83", roughness: 0.9 }, "sur-plinth"),
-      white: std({ color: "#f4f2ec", roughness: 0.45, metalness: 0 }, "sur-white"),
-      dark: std({ color: "#2f3338", roughness: 0.42, metalness: 0.55 }, "sur-frame"),
-      stone: std({ color: "#d8d2c4", roughness: 0.78 }, "sur-stone"),
-      fascia: std({ color: "#4b4038", roughness: 0.8 }, "sur-fascia"),
-      roof: std({ color: "#76473a", roughness: 0.82, map: tiles.map, roughnessMap: tiles.roughnessMap, bumpMap: tiles.bumpMap, bumpScale: 0.004 }, "sur-roof"),
-      inside: std({ color: "#1c1814", roughness: 0.95, emissive: "#ff9a3c", emissiveIntensity: 0 }, "sur-inside"),
+      wall: std({ color: "#cdc5b6", roughness: 0.92, map: plaster.map, roughnessMap: plaster.roughnessMap, bumpMap: plaster.bumpMap, bumpScale: 0.0018 }, DISSOLVE_KEY),
+      plinth: std({ color: "#8d8a83", roughness: 0.9 }, DISSOLVE_KEY),
+      white: std({ color: "#f4f2ec", roughness: 0.45, metalness: 0 }, DISSOLVE_KEY),
+      dark: std({ color: "#2f3338", roughness: 0.42, metalness: 0.55 }, DISSOLVE_KEY),
+      stone: std({ color: "#d8d2c4", roughness: 0.78 }, DISSOLVE_KEY),
+      fascia: std({ color: "#4b4038", roughness: 0.8 }, DISSOLVE_KEY),
+      roof: std({ color: "#76473a", roughness: 0.82, map: tiles.map, roughnessMap: tiles.roughnessMap, bumpMap: tiles.bumpMap, bumpScale: 0.004 }, DISSOLVE_KEY),
+      inside: std({ color: "#1c1814", roughness: 0.95, emissive: "#ff9a3c", emissiveIntensity: 0 }, DISSOLVE_KEY),
       // Glazing as a photo shows it by day: mostly the sky and garden reflected (pale at the top,
       // darker toward the sill), a soft diagonal sheen, and only a hint of the dim room behind.
-      glass: patched(new THREE.MeshStandardMaterial({ color: "#ffffff", map: glassReflection(), roughness: 0.12, metalness: 0.1, envMapIntensity: 0.6 }), "sur-glass", d),
-      handle: std({ color: "#b9bcc0", roughness: 0.3, metalness: 0.85 }, "sur-handle"),
+      glass: patched(new THREE.MeshStandardMaterial({ color: "#ffffff", map: glassReflection(), roughness: 0.12, metalness: 0.1, envMapIntensity: 0.6 }), DISSOLVE_KEY, d),
+      handle: std({ color: "#b9bcc0", roughness: 0.3, metalness: 0.85 }, DISSOLVE_KEY),
     };
   }, [fade, wallW, height, t]);
   useFrame(() => {
