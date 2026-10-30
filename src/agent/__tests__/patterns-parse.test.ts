@@ -31,6 +31,14 @@ describe("paver bond phrases (offline parser)", () => {
     ["running bond", "running"],
     ["stretcher bond", "running"],
     ["ca la cărămizi", "running"],
+    // Typed without diacritics, as most phone keyboards send it.
+    ["pavele in spic", "herringbone"],
+    ["vreau in cos", "basketweave"],
+    ["pavele in linie", "stack"],
+    ["decalat", "running"],
+    ["pavele decalate", "running"],
+    ["Herringbone pavers", "herringbone"],
+    ["Basketweave pavers", "basketweave"],
   ])("%s → %s", (msg, bond) => {
     expect(bondIn(fold(msg))).toBe(bond);
     expect(edit(msg, "paving")).toEqual([{ op: "set_option", key: "bond", value: bond }]);
@@ -84,6 +92,14 @@ describe("deck board layout phrases (offline parser)", () => {
     ["montaj drept", "straight"],
     ["lay them straight", "straight"],
     ["nu mai vreau diagonal", "straight"],
+    ["deck pe diagonala", "diagonal"],
+    ["diagonal deck", "diagonal"],
+    ["Diagonal deck boards", "diagonal"],
+    ["cu rama", "frame"],
+    ["Deck cu ramă", "frame"],
+    ["picture frame", "frame"],
+    ["Straight deck boards", "straight"],
+    ["Deck montat drept", "straight"],
   ])("%s → %s", (msg, boards) => {
     expect(deckBoardsIn(fold(msg))).toBe(boards);
     expect(edit(msg, "deck")).toEqual([{ op: "set_option", key: "boards", value: boards }]);
