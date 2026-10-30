@@ -101,7 +101,8 @@ export default function ArPanel({ build, project, tenant, lang, dark, getState }
         const url = share.shareUrl(window.location, tenant.id, await share.encodeSnapshot(snap), lang);
         const svg = await qrcode.default.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "L", color: { dark: "#141311", light: "#ffffff00" } });
         if (!live) return;
-        setQr(svg);
+        // Crisp module edges: a dense code on a 1x screen is far easier for a phone to read unblurred.
+        setQr(svg.replace("<svg ", '<svg shape-rendering="crispEdges" '));
         if (!qrTracked.current) {
           qrTracked.current = true;
           track("ar_opened", { platform: "desktop" });
@@ -196,9 +197,10 @@ export default function ArPanel({ build, project, tenant, lang, dark, getState }
       )}
 
       {support && !support.canAr && (
-        <div className="flex items-center gap-3">
+        <div className="space-y-2.5">
           {support.reason === "desktop" && (
-            <div className="grid h-[104px] w-[104px] shrink-0 place-items-center rounded-lg bg-white p-1.5" data-testid="ar-qr">
+            // The share link carries the whole project, so the code is dense: big enough for a phone camera.
+            <div className="mx-auto grid h-[208px] w-[208px] place-items-center rounded-lg bg-white p-2" data-testid="ar-qr">
               {qr ? (
                 <div className="h-full w-full [&>svg]:h-full [&>svg]:w-full" role="img" aria-label={tr("arQr", lang)} dangerouslySetInnerHTML={{ __html: qr }} />
               ) : (
@@ -206,7 +208,7 @@ export default function ArPanel({ build, project, tenant, lang, dark, getState }
               )}
             </div>
           )}
-          <p className={`text-[12px] leading-snug ${body}`}>{support.reason === "desktop" ? tr("arHintDesktop", lang) : support.reason === "insecure" ? tr("arHintInsecure", lang) : tr("arHintNoAr", lang)}</p>
+          <p className={`text-[12px] leading-snug ${support.reason === "desktop" ? "text-center" : ""} ${body}`}>{support.reason === "desktop" ? tr(build.outdoor ? "arHintDesktop" : "arHintDesktopIndoor", lang) : support.reason === "insecure" ? tr("arHintInsecure", lang) : tr("arHintNoAr", lang)}</p>
         </div>
       )}
 

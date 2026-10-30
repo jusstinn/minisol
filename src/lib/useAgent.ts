@@ -102,6 +102,9 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     return () => clearTimeout(t);
   }, [messages, board, busy, opts.tenant, opts.memberId]);
 
+  // Stable, so a consumer can keep it in an effect's dependencies.
+  const getState = useCallback(() => stateRef.current, []);
+
   const patchAssistant = useCallback((id: string, fn: (m: ChatMessage) => ChatMessage) => {
     setMessages((ms) => ms.map((m) => (m.id === id ? fn(m) : m)));
   }, []);
@@ -505,7 +508,7 @@ export function useAgent(opts: { memberId: string; tenant: string; lang: Lang; f
     state: stateRef,
     mode,
     ui,
-    sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0, getState: () => stateRef.current },
+    sketch: { edit: editSketch, undo: undoSketch, open: openSketch, busy: sketchBusy, error: sketchError, clearError: clearSketchError, canUndo: undoDepth > 0, getState },
   };
 }
 

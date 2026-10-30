@@ -462,7 +462,7 @@ function SketchView({
                 .map((d) => d.label)
                 .join(" × ")}
             />
-            <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} inline={inline} getState={sketch?.getState} />
+            {!inline && <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} getState={sketch?.getState} />}
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>
@@ -470,6 +470,12 @@ function SketchView({
               <IconRotate size={15} />
             </RoundBtn>
           </div>
+          {/* Phones: the row above already runs into the title, so AR gets the next row (left of the upload button). */}
+          {inline && (
+            <div className={canEdit ? "mr-[38px]" : ""}>
+              <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} inline getState={sketch?.getState} />
+            </div>
+          )}
         </div>
 
         {/* what the last edit did to the 3D model */}

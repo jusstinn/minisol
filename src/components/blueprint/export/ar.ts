@@ -8,9 +8,12 @@
  * - Android Chrome: WebXR `immersive-ar` with hit-test placement, through `@google/model-viewer`
  *   (loaded only now, ~1 MB, never in the first load). It runs the WebXR session — floor detection,
  *   a reticle, tap to place, light estimation, the exit button — which is far better tested than a
- *   hand-written session could be here. `ar-modes` lists webxr first: Scene Viewer cannot load a
- *   `blob:` URL, so it is only ever the last resort, and the caller only offers AR on Android
- *   when `navigator.xr.isSessionSupported("immersive-ar")` says yes (see capability.ts).
+ *   hand-written session could be here. `ar-modes` is webxr ONLY: model-viewer's fallbacks are no
+ *   use for a model that exists only in this tab — Scene Viewer is a separate app that cannot read
+ *   a `blob:` URL (it would open and fail, or bounce the page to a fallback URL), and Quick Look is
+ *   iOS. The caller only offers AR on Android when `navigator.xr.isSessionSupported("immersive-ar")`
+ *   says yes (see capability.ts); if the session still fails, `launch()` rejects and the panel says
+ *   so next to the .glb download.
  */
 
 /** The bit of <model-viewer> this uses. */
@@ -60,12 +63,15 @@ export async function mountWebXrLauncher(host: HTMLElement, glbUrl: string, alt:
   el.setAttribute("src", glbUrl);
   el.setAttribute("alt", alt);
   el.setAttribute("ar", "");
-  // webxr first: Scene Viewer can't read blob: URLs, so it is only a last resort.
-  el.setAttribute("ar-modes", "webxr scene-viewer quick-look");
+  // WebXR only: Scene Viewer can't read blob: URLs (see above).
+  el.setAttribute("ar-modes", "webxr");
   el.setAttribute("ar-scale", "fixed");
   el.setAttribute("ar-placement", "floor");
   el.setAttribute("camera-controls", "");
   el.setAttribute("auto-rotate", "");
+  // A three-quarter view from above, the whole model in frame; no "drag me" hand over a small preview.
+  el.setAttribute("camera-orbit", "35deg 65deg auto");
+  el.setAttribute("interaction-prompt", "none");
   el.setAttribute("shadow-intensity", "1");
   el.setAttribute("environment-image", "neutral");
   el.setAttribute("touch-action", "pan-y");
@@ -90,7 +96,20 @@ export async function mountWebXrLauncher(host: HTMLElement, glbUrl: string, alt:
     async launch() {
       await ready;
       if (!el.canActivateAR) throw new Error("AR is not available on this device");
-      await el.activateAR();
+      // model-viewer doesn't reject when the session fails: it reports "failed" through ar-status
+      // and drops to its next mode (none here), after which it can no longer activate AR.
+      let failed = false;
+      const onStatus = (e: Event) => {
+        if ((e as CustomEvent<{ status?: string }>).detail?.status === "failed") failed = true;
+      };
+      el.addEventListener("ar-status", onStatus);
+      try {
+        await el.activateAR();
+        await new Promise((r) => setTimeout(r, 0));
+      } finally {
+        el.removeEventListener("ar-status", onStatus);
+      }
+      if (failed || !el.canActivateAR) throw new Error("AR session failed to start");
     },
     dispose() {
       el.remove();

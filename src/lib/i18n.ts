@@ -131,8 +131,12 @@ const STRINGS = {
     en: "Point the camera at the floor, then tap where you want it. It appears at its real size.",
   },
   arHintDesktop: {
-    ro: "Scanează codul cu telefonul. Proiectul se deschide acolo, iar butonul AR îl pune la mărime reală în curte sau acasă.",
-    en: "Scan the code with your phone. The project opens there, and its AR button puts it at real size in your garden or home.",
+    ro: "Scanează cu telefonul ca să vezi proiectul în curtea ta, la mărime reală.",
+    en: "Scan with your phone to see it in AR, at real size in your garden.",
+  },
+  arHintDesktopIndoor: {
+    ro: "Scanează cu telefonul ca să vezi proiectul la tine acasă, la mărime reală.",
+    en: "Scan with your phone to see it in AR, at real size in your home.",
   },
   arHintNoAr: {
     ro: "Telefonul acesta nu poate afișa AR. Încearcă pe alt telefon sau descarcă modelul 3D.",
