@@ -18,11 +18,12 @@ import { isBevelShape, isRealSized, shapeFor } from "./detail/shapes";
 import { daylightFor } from "./daylight";
 import { groundHaloTexture } from "./groundHalo";
 import Lighting from "./Lighting";
-import { patched, windSway } from "./surroundings/materials";
+import { patched, turfNormals, windSway } from "./surroundings/materials";
 import type { WindUniforms } from "./surroundings/materials";
 import { useSurroundings } from "./surroundings/pref";
 import { groundPartRole, planSurroundings } from "./surroundings/plan";
 import Surroundings from "./surroundings/Surroundings";
+import { hasVariation, partVariation } from "./partVariation";
 import { shadowBoundsFor } from "./shadowBounds";
 import type { SunLight } from "./sunLighting";
 import { finishTextures } from "./textures";
@@ -210,7 +211,13 @@ function PartMesh({
   const lastGlow = useRef(-1);
   const leaving = anim.kind === "leave";
   const blue = mode !== "real";
-  const baseColor = highlighted ? accent : blue ? (part.context ? "#4f82ea" : "#5b8cf0") : part.color;
+  // REAL view: each board/paver/tile its own subtle tone and grain position (seeded by its id — see partVariation.ts).
+  const variation = useMemo(() => (lite ? null : partVariation(part)), [part, lite]);
+  const realColor = useMemo(() => {
+    if (!variation || !hasVariation(variation)) return part.color;
+    return `#${new THREE.Color(part.color).offsetHSL(variation.dh, variation.ds, variation.dl).getHexString()}`;
+  }, [part.color, variation]);
+  const baseColor = highlighted ? accent : blue ? (part.context ? "#4f82ea" : "#5b8cf0") : realColor;
   // REAL mode ghosts (a dimmed layer, or a build-simulation step not reached yet) need to read
   // clearly fainter than the blueprint's own dim, since they sit over a light, busy background.
   const baseOpacity = blue ? (highlighted ? 0.6 : part.context || dimmed ? 0.06 : 0.28) : dimmed ? 0.11 : (part.opacity ?? 1);
@@ -219,7 +226,26 @@ function PartMesh({
   const outlined = highlighted || edges === "all" || (!part.context && (edges === "products" || !minor));
   // Procedural PBR maps for the REAL view only — desktop/tablet; phones keep a flat colour.
   const useFinish = !blue && !lite && Boolean(part.finish);
-  const finish = useMemo(() => (useFinish && part.finish ? finishTextures(part.finish, part.size) : null), [useFinish, part.finish, part.size]);
+  const finish = useMemo(() => {
+    if (!useFinish || !part.finish) return null;
+    const set = finishTextures(part.finish, part.size);
+    if (!variation || (variation.du === 0 && variation.dv === 0)) return set;
+    // Same image on the GPU (a clone shares its Source), only this part's own offset into it.
+    const slide = (t: THREE.Texture) => {
+      const c = t.clone();
+      c.offset.set(variation.du, variation.dv);
+      return c;
+    };
+    return { ...set, map: slide(set.map), roughnessMap: slide(set.roughnessMap), bumpMap: slide(set.bumpMap), owned: true };
+  }, [useFinish, part.finish, part.size, variation]);
+  useEffect(() => {
+    if (!finish || !("owned" in finish)) return;
+    return () => {
+      finish.map.dispose();
+      finish.roughnessMap.dispose();
+      finish.bumpMap.dispose();
+    };
+  }, [finish]);
   // Higher-fidelity geometry for the REAL view, desktop only (see detail/shapes.ts): a chamfered
   // edge at the part's own real size, a round pedestal, a post cap, or a furniture/BBQ/lamp
   // highlight — PLAN/EXPLODED and phones stay plain boxes. Built to the part's *real* size (not a
@@ -417,7 +443,7 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
   }, [data]);
   const blue = mode !== "real";
   const material = useMemo(
-    () => patched(new THREE.MeshStandardMaterial({ color: "#5fa04a", roughness: 0.9, side: THREE.DoubleSide, vertexColors: true }), "grass-wind", windSway(shared.wind)),
+    () => patched(new THREE.MeshStandardMaterial({ color: "#5fa04a", roughness: 0.9, side: THREE.DoubleSide, vertexColors: true }), "grass-wind", windSway(shared.wind), turfNormals),
     [shared.wind],
   );
   useEffect(() => {
