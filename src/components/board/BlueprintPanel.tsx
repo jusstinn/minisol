@@ -28,6 +28,8 @@ import { useUploads } from "../blueprint/uploads/useUploads";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconSun, IconUndo, IconUsers, IconWarn } from "../ui/icons";
 import ChangeCard, { Rolling, signed } from "./ChangeCard";
 import SceneBoundary from "../blueprint/SceneBoundary";
+import MaterialsPicker from "./MaterialsPicker";
+import type { MaterialsControls } from "./MaterialsPicker";
 import { useSketchMode } from "../workspace/NextStepChips";
 
 const Scene = dynamic(() => import("../blueprint/Scene"), {
@@ -61,6 +63,7 @@ export default function BlueprintPanel({
   lite,
   paused,
   location,
+  materials,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -80,6 +83,8 @@ export default function BlueprintPanel({
   paused?: boolean;
   /** Where the "Simulare" sun scrubber computes solar position for (defaults to Bucharest). */
   location?: Location;
+  /** The list's per-job options, for the "Materiale" swatches in the toolbar. */
+  materials?: MaterialsControls;
 }) {
   const sketchMode = useSketchMode(tenant);
   const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
@@ -108,6 +113,7 @@ export default function BlueprintPanel({
       lite={lite}
       paused={paused}
       location={location}
+      materials={materials}
     />
   );
 }
@@ -126,6 +132,7 @@ function SketchView({
   lite,
   paused,
   location = DEFAULT_LOCATION,
+  materials,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -140,6 +147,7 @@ function SketchView({
   lite?: LiteGraphics;
   paused?: boolean;
   location?: Location;
+  materials?: MaterialsControls;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -441,6 +449,7 @@ function SketchView({
               <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{tr("simulate", lang)}</span>
             </button>
             {up.button}
+            {materials && <MaterialsPicker {...materials} lang={lang} dark={dark} sheet={Boolean(inline)} />}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
             <PhotoRenderButton
               captureRef={captureRef}
