@@ -266,6 +266,25 @@ AI section.
   construction layer by layer, with later layers as ghosts and an hours/day counter from the
   project's estimate.
 
+- **Împrejurimi / Surroundings** (`blueprint/surroundings/*`, toggle in the camera menu, on by
+  default, remembered per browser): a house wall with a door and window behind decks and patios, a
+  lawn that moves gently in the wind (still under reduced motion) and shrubs and planters kept clear
+  of the project; indoors, a window, a door frame and skirting. Drawn outside `build.parts`, so the
+  quote, counts and 3D export never see it. Each board, paver and tile gets a small tone/grain
+  variation seeded from its part id (`partVariation.ts`), appearance only. Desktop only.
+- **Laying patterns** (`domain/patterns.ts`): pavers in running bond, herringbone (*în spic*),
+  basketweave (*în coș*) or stack bond (*în linie*); decks straight, diagonal or with a
+  picture-frame border (*cu ramă / chenar*). Waste factors and the extra joists for a diagonal deck
+  come from the calculator, and every change shows the change card with the price difference.
+- **Materiale** (`board/MaterialsPicker.tsx`): swatches per finish (decking, tiles, pavers, fence
+  panels, paint, laminate) built from the quote's `choices`, each with the engine's price difference
+  and stock. Choosing one uses the same `chooseOption` path as the list's options drawer. A popover
+  on desktop, a bottom sheet on phones.
+- **AR and 3D model** (`blueprint/export/*`, `ArMenu.tsx`): the project exported at real size as
+  GLB (and USDZ for iOS AR Quick Look), around 0.3–0.9 MB. Android opens it in WebXR through
+  model-viewer; a desktop shows a QR code that opens the project on a phone. Everything is
+  lazy-loaded on click. Usage events: `ar_opened`, `model_downloaded`.
+
 ### Put anything in the sketch
 
 "Pune o toaletă lângă ușă, un lavoar pe peretele din stânga cu o oglindă deasupra și o plafonieră" —

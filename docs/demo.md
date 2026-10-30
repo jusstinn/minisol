@@ -32,6 +32,9 @@ Live AI tips:
 | Tap **REAL**, then **EXPLODAT** in the sketch | The realistic view (wood grain, tiles and pavers at their real size, soft shadows), then the exploded view (layers apart). |
 | Tap ☀ **Simulare** in the sketch toolbar | The sun over Bucharest for the chosen day: drag the time and the shadows move, sunrise and sunset are shown, and at night the lamps placed in the sketch light up. The **Montaj** tab replays the build layer by layer with a day counter. |
 | Tap the camera-photo button (**Randare foto**) | A high-resolution picture of the project, cropped and branded (title, size, retailer, date, "Schiță orientativă"), downloaded on a laptop or shared from a phone. No prices in it. |
+| `deck pe diagonală`, then `cu ramă` | The boards turn 45° and get a mitred picture-frame border; the change card shows the extra joists and waste. |
+| Tap the **Materiale** swatch button | Every decking option with its price difference and stock; pick one and the sketch and list follow. |
+| Tap the **AR** button | On an iPhone or Android phone the deck appears in the garden at real size; on a laptop a QR code opens it on the phone. Download the 3D model (.glb) from the same menu. |
 | `arată-mi grinzile` | The joists are highlighted in the sketch and in the list. |
 | `arată-mi de sus`, then `fă-mi un tur` | The camera glides to the top view, then flies one lap around the deck. The camera button in the sketch toolbar has all six views. |
 | `Am doar 2.000 lei` | The budget card: the largest deck that fits in the budget range, priced by the engine. Tap **Aplică** and the sketch and list follow. |
@@ -54,6 +57,7 @@ Live AI tips:
 | `fă-o pentru mașini` | It becomes a driveway: 8 cm pavers on a 25 cm base. |
 | `fă-o de 8 m lungime` | One side changes and the other stays. |
 | `fără borduri` | The kerbs and their concrete leave the list. |
+| `pavele în spic` | Herringbone bond, with the extra cutting waste priced in. Also *în coș* (basketweave) and *în linie* (stack). |
 
 ## Flow 4 — in English (for an international audience)
 
