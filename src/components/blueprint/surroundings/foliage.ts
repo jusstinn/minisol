@@ -92,8 +92,10 @@ const hsl = (h: number, s: number, l: number): string => {
 
 /** A foliage colour for one blob: a family picked by `tone`, then a per-blob jitter. */
 function leafColor(rnd: () => number, tone: number, lift = 0): string {
-  const hue = 0.235 + tone * 0.085 + (rnd() - 0.5) * 0.025;
-  return hsl(hue, 0.36 + rnd() * 0.16, 0.22 + tone * 0.04 + lift + (rnd() - 0.5) * 0.07);
+  // Garden greens, not game greens: muted saturation; `tone` also sets the plant's own value, so
+  // neighbouring shrubs read as different species (a light yellow-green beside a deep blue-green).
+  const hue = 0.21 + tone * 0.1 + (rnd() - 0.5) * 0.02;
+  return hsl(hue, 0.24 + rnd() * 0.12, 0.25 - tone * 0.06 + lift + (rnd() - 0.5) * 0.05);
 }
 
 /**

@@ -50,6 +50,14 @@ describe("surroundings plan (REAL view dressing)", () => {
     }
   });
 
+  it("keeps the camera's side clear: nothing planted in front of a deck, patio or lawn (the sketch's UI corners)", () => {
+    for (const [name, b] of OUTDOOR.filter(([n]) => !n.startsWith("fence"))) {
+      const plan = planSurroundings(b)!;
+      const items = [...plan.shrubs.map((x) => ({ z: x.z, r: x.r })), ...plan.trees.map((t) => ({ z: t.z, r: t.crown })), ...plan.planters.map((p) => ({ z: p.z, r: Math.hypot(p.w, p.d) / 2 }))];
+      for (const it of items) expect(it.z + it.r, name).toBeLessThanOrEqual(plan.footprint.maxZ + 0.6);
+    }
+  });
+
   it("stands the house wall behind a deck or patio, against it but never over it", () => {
     for (const [name, b] of OUTDOOR.filter(([n]) => n.startsWith("deck") || n.startsWith("paving"))) {
       const plan = planSurroundings(b)!;
@@ -133,5 +141,29 @@ describe("partVariation (per-part tone and grain offset)", () => {
     }
     expect(partVariation({ id: "wall-back", finish: { kind: "plaster" }, context: true })).toEqual({ dh: 0, ds: 0, dl: 0, du: 0, dv: 0 });
     expect(partVariation({ id: "x", finish: { kind: "concrete" }, context: false })).toEqual({ dh: 0, ds: 0, dl: 0, du: 0, dv: 0 });
+  });
+
+  it("works with laying patterns: only wood slides its grain, along the board, never pavers", () => {
+    const builds = [
+      buildScene("deck", { lengthM: 4, widthM: 3, boards: "diagonal" }, "ro"),
+      buildScene("deck", { lengthM: 4, widthM: 3, boards: "frame" }, "ro"),
+      buildScene("paving", { lengthM: 4.5, widthM: 3.5, bond: "herringbone" }, "ro"),
+      buildScene("paving", { lengthM: 4.5, widthM: 3.5, bond: "basketweave" }, "ro"),
+    ];
+    let boards = 0;
+    let pavers = 0;
+    for (const b of builds) {
+      for (const p of b.parts) {
+        const v = partVariation(p);
+        expect(v.dv, p.id).toBe(0);
+        if (p.finish?.kind === "paver") {
+          pavers++;
+          expect(v.du, p.id).toBe(0);
+        }
+        if (p.layer === "deck_board") boards++;
+      }
+    }
+    expect(boards).toBeGreaterThan(10);
+    expect(pavers).toBeGreaterThan(10);
   });
 });

@@ -214,9 +214,11 @@ function PartMesh({
   // REAL view: each board/paver/tile its own subtle tone and grain position (seeded by its id — see partVariation.ts).
   const variation = useMemo(() => (lite ? null : partVariation(part)), [part, lite]);
   const realColor = useMemo(() => {
+    // The new turf's flat sheet under its blades: a lawn green, not the plan's bright swatch green.
+    if (part.layer === "grass_seed" && !lite) return `#${new THREE.Color(part.color).offsetHSL(-0.06, -0.12, -0.07).getHexString()}`;
     if (!variation || !hasVariation(variation)) return part.color;
     return `#${new THREE.Color(part.color).offsetHSL(variation.dh, variation.ds, variation.dl).getHexString()}`;
-  }, [part.color, variation]);
+  }, [part.color, part.layer, lite, variation]);
   const baseColor = highlighted ? accent : blue ? (part.context ? "#4f82ea" : "#5b8cf0") : realColor;
   // REAL mode ghosts (a dimmed layer, or a build-simulation step not reached yet) need to read
   // clearly fainter than the blueprint's own dim, since they sit over a light, busy background.
@@ -447,17 +449,20 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
     [shared.wind],
   );
   useEffect(() => {
-    material.color.set(blue ? "#9fd3a0" : "#5fa04a");
+    // REAL: the per-blade instance colours carry the green on their own (multiplying the same
+    // green in twice made near-black, game-green strokes).
+    material.color.set(blue ? "#9fd3a0" : "#ffffff");
   }, [material, blue]);
   // Per-blade hue/lightness jitter — several greens, not one flat tint — set once per data/mode
   // change (it never animates, so it doesn't belong in the per-frame loop below).
   useEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
-    const base = new THREE.Color(blue ? "#9fd3a0" : "#5fa04a");
+    const base = new THREE.Color(blue ? "#9fd3a0" : "#6f9444");
     for (let i = 0; i < data.length; i++) {
       const b = data[i];
-      tmpColor.copy(base).offsetHSL(b.hueJ, 0, b.lightJ);
+      // REAL: a quieter jitter — at a few metres the blades are sub-pixel and strong contrast reads as speckle.
+      tmpColor.copy(base).offsetHSL(blue ? b.hueJ : b.hueJ * 0.5, 0, blue ? b.lightJ : b.lightJ * 0.35);
       mesh.setColorAt(i, tmpColor);
     }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -498,7 +503,7 @@ function Grass({ grass, shared, mode, epoch }: { grass: NonNullable<Build["grass
     settled.current = allDone ? settled.current + 1 : 0;
   });
   return (
-    <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, material, data.length]} frustumCulled={false} receiveShadow={!blue}>
+    <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, material, data.length]} frustumCulled={false}>
       {/* height/width are applied through instance scale — see the geometry's own doc. Vertex
           colours (baked into the blade geometry) lighten the tip; instance colours (above) vary
           the hue/lightness blade to blade — three.js multiplies both into the base colour; the
@@ -1112,7 +1117,7 @@ export default function Scene({
         />
       ))}
       {build.grass && <Grass grass={build.grass} shared={shared} mode={mode} epoch={current.epoch} />}
-      {plan && sOn && <Surroundings plan={plan} realT={realT} active={lawnShown} reduced={reduced} wind={wind} day={dl.day} night={sun?.nightFactor ?? 0} />}
+      {plan && sOn && <Surroundings plan={plan} realT={realT} active={lawnShown} reduced={reduced} day={dl.day} night={sun?.nightFactor ?? 0} />}
       <DeckScrews parts={build.parts} shared={shared} show={realNow} />
       <DimLines build={build} mode={mode} shared={shared} epoch={current.epoch} />
       {extra}

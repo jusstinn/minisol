@@ -6,8 +6,8 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import type * as THREE from "three";
 import House from "./House";
-import { LawnBlades, LawnGround } from "./Lawn";
-import type { UniformRef, WindUniforms } from "./materials";
+import { LawnGround } from "./Lawn";
+import type { UniformRef } from "./materials";
 import type { SurroundingsPlan } from "./plan";
 import RoomDressing from "./Room";
 import Vegetation from "./Vegetation";
@@ -26,7 +26,6 @@ export default function Surroundings({
   realT,
   active,
   reduced,
-  wind,
   day,
   night,
 }: {
@@ -34,7 +33,6 @@ export default function Surroundings({
   realT: React.RefObject<number>;
   active: boolean;
   reduced: boolean;
-  wind: WindUniforms;
   /** 0 night → 1 day (window glow); and its mirror for lit interiors. */
   day: number;
   night: number;
@@ -55,7 +53,6 @@ export default function Surroundings({
   return (
     <group ref={group} visible={false}>
       {plan.kind !== "room" && <LawnGround plan={plan} opacity={ground} />}
-      {plan.kind !== "room" && <LawnBlades plan={plan} fade={fade} wind={wind} />}
       {plan.house && <House spec={plan.house} groundY={plan.groundY} fade={fade} night={night} />}
       {plan.kind !== "room" && <Vegetation plan={plan} fade={fade} />}
       {plan.room && <RoomDressing spec={plan.room} fade={fade} day={day} />}

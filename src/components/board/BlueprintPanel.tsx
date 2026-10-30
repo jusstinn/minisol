@@ -352,6 +352,15 @@ function SketchView({
           </SceneBoundary>
         </div>
 
+        {/* REAL view: a soft paper-coloured scrim under the title block, so it stays legible over
+            a lawn, a tree or a house wall (the blueprint's dark grid needs none). */}
+        {!dark && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-0 top-0 h-[230px] w-[min(640px,70%)]"
+            style={{ background: "radial-gradient(100% 100% at 0% 0%, color-mix(in srgb, var(--paper) 94%, transparent) 0%, color-mix(in srgb, var(--paper) 82%, transparent) 45%, transparent 100%)" }}
+          />
+        )}
         {/* title block — kept clear of the controls column on the right (the "Simulare" toggle made
             that column one icon wider, ≈12.5 rem on phones now, ≈18 rem with labels from sm) */}
         <div className="pointer-events-none absolute left-4 right-[12.5rem] top-4 sm:left-6 sm:right-[18.5rem] sm:top-5">
@@ -772,7 +781,7 @@ function QuickControls({ layout, lang, dark, busy, onCommit }: { layout: Layout;
 
 function Estimate({ project, lang, dark }: { project: ProjectSnapshot; lang: Lang; dark: boolean }) {
   return (
-    <div className={`self-end border font-mono text-[10px] uppercase tracking-[0.12em] ${dark ? "border-[#dce9ff]/35 text-[#dce9ff]" : "border-ink/20 text-ink-2"}`}>
+    <div className={`self-end border font-mono text-[10px] uppercase tracking-[0.12em] ${dark ? "border-[#dce9ff]/35 text-[#dce9ff]" : "border-ink/15 bg-paper/90 text-ink-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] backdrop-blur-md"}`}>
       <EstRow dark={dark} icon={<IconClock size={12} />} k={lang === "en" ? "Est. time" : "Timp estimat"} v={`${project.estimate.hoursMin}–${project.estimate.hoursMax} ${tr("hours", lang)}`} />
       <EstRow dark={dark} icon={<IconUsers size={12} />} k={lang === "en" ? "Crew" : "Echipă"} v={`${project.estimate.people} ${tr("people", lang)}`} />
       <EstRow

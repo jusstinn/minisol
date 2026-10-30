@@ -323,16 +323,19 @@ function drawPaver(ctx: CanvasRenderingContext2D, rng: () => number, w: number, 
  *  strokes in varying brightness — reads as thick turf even before any instanced blade sits on
  *  top of it (see `lawn()` in builders.ts and `Scene.tsx`'s own `Grass`). */
 function drawGrassGround(ctx: CanvasRenderingContext2D, rng: () => number, w: number, h: number) {
-  fillNoise(ctx, w, h, 7, hashSeed("grass-ground") ^ Math.floor(rng() * 1e6), 150, 70);
-  const blades = Math.round(w * h * 0.85);
+  // A mown lawn seen from a few metres: soft, low-contrast mottling with fine blade strokes only
+  // slightly lighter or darker than it — no near-black strokes that alias into speckle at a
+  // distance (the mipmaps average them out cleanly instead).
+  fillNoise(ctx, w, h, 7, hashSeed("grass-ground") ^ Math.floor(rng() * 1e6), 150, 38);
+  const blades = Math.round(w * h * 0.6);
   for (let i = 0; i < blades; i++) {
     const x = rng() * w;
     const y = rng() * h;
-    const len = 1.4 + rng() * 3.2;
+    const len = 1.4 + rng() * 2.6;
     const ang = rng() * Math.PI * 2;
-    const v = 85 + rng() * 150;
-    ctx.strokeStyle = `rgba(${v},${v},${v},${(0.3 + rng() * 0.35).toFixed(2)})`;
-    ctx.lineWidth = 0.7 + rng() * 1;
+    const v = 120 + rng() * 90;
+    ctx.strokeStyle = `rgba(${v},${v},${v},${(0.18 + rng() * 0.22).toFixed(2)})`;
+    ctx.lineWidth = 0.8 + rng() * 0.8;
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);

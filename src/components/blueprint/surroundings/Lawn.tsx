@@ -1,20 +1,17 @@
 "use client";
-/* three.js instance buffers and materials are filled imperatively, once per plan, by design. */
- 
 
 import { useFrame } from "@react-three/fiber";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { UNIT_BLADE } from "../detail/geometries";
 import { lawnFadeTexture } from "../groundHalo";
 import { finishTextures } from "../textures";
 import { groundGeometry } from "./geometry";
-import { dissolve, lawnLook, patched, turfNormals, windSway } from "./materials";
-import type { UniformRef, WindUniforms } from "./materials";
-import { distToRect, expand, mulberry32 } from "./plan";
+import { lawnLook, patched } from "./materials";
+import type { UniformRef } from "./materials";
 import type { SurroundingsPlan } from "./plan";
 
-const LAWN = { healthy: "#68904c", dry: "#87975c" } as const;
+// Daylight lawn after the tone curve lands around #5f7f3a–#6b8a45: a real, slightly yellow green.
+const LAWN = { healthy: "#5b7a2f", dry: "#7c8748" } as const;
 
 /**
  * The lawn the project stands in: one big faded disc (see groundHalo.ts's `lawnFadeTexture`) with
@@ -56,62 +53,4 @@ export function LawnGround({ plan, opacity }: { plan: SurroundingsPlan; opacity:
       <primitive object={material} ref={mat} attach="material" />
     </mesh>
   );
-}
-
-const BLADES = 5200;
-
-/**
- * Short tufts of grass scattered on the lawn around the build — thinning with distance, never
- * under it — so a close look at the ground finds blades, not a flat texture. Instanced, lit and
- * shadowed like the rest, and swaying in the same world-space wind as the lawn project's own turf
- * (see materials.ts `windSway`).
- */
-export function LawnBlades({ plan, fade, wind }: { plan: SurroundingsPlan; fade: UniformRef; wind: WindUniforms }) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  const data = useMemo(() => {
-    const rnd = mulberry32(0x9e3779b9 ^ Math.round(plan.footprint.maxX * 100) ^ Math.round(plan.footprint.maxZ * 977));
-    const fp = plan.footprint;
-    const solid = expand(fp, 0.04);
-    const cx = (fp.minX + fp.maxX) / 2;
-    const cz = (fp.minZ + fp.maxZ) / 2;
-    const reach = Math.max(fp.maxX - fp.minX, fp.maxZ - fp.minZ) / 2 + 3.2;
-    const out: { x: number; z: number; h: number; w: number; r: number; lean: number; hue: number; light: number }[] = [];
-    let guard = 0;
-    while (out.length < BLADES && guard++ < BLADES * 12) {
-      const a = rnd() * Math.PI * 2;
-      const rr = Math.sqrt(rnd()) * reach;
-      const x = cx + Math.cos(a) * rr * 1.25;
-      const z = cz + Math.sin(a) * rr;
-      const dist = distToRect(x, z, fp);
-      if (dist === 0 || distToRect(x, z, solid) === 0) continue;
-      if (plan.hole && distToRect(x, z, plan.hole) < 0.02) continue;
-      if (plan.house && z < fp.minZ + 0.02 && x > plan.house.x0 && x < plan.house.x1) continue;
-      if (rnd() > Math.exp(-dist / 1.9)) continue;
-      out.push({ x, z, h: 0.05 + rnd() * 0.075, w: 0.9 + rnd() * 0.9, r: rnd() * Math.PI, lean: (rnd() - 0.5) * 0.5, hue: (rnd() - 0.5) * 0.07, light: (rnd() - 0.5) * 0.26 });
-    }
-    return out;
-  }, [plan]);
-  const material = useMemo(
-    () => patched(new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, side: THREE.DoubleSide, vertexColors: true }), "sur-blades", windSway(wind), turfNormals, dissolve(fade)),
-    [wind, fade],
-  );
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    const tmp = new THREE.Object3D();
-    const c = new THREE.Color();
-    const base = new THREE.Color(plan.lawnTone === "dry" ? "#949f5c" : "#6a944a");
-    data.forEach((b, i) => {
-      tmp.position.set(b.x, plan.groundY, b.z);
-      tmp.rotation.set(b.lean, b.r, 0);
-      tmp.scale.set(b.w, b.h, b.w);
-      tmp.updateMatrix();
-      mesh.setMatrixAt(i, tmp.matrix);
-      mesh.setColorAt(i, c.copy(base).offsetHSL(b.hue, 0, b.light));
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    mesh.computeBoundingSphere();
-  }, [data, plan.groundY, plan.lawnTone]);
-  return <instancedMesh key={data.length} ref={ref} args={[UNIT_BLADE, material, data.length]} receiveShadow frustumCulled={false} raycast={() => null} />;
 }

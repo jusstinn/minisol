@@ -28,7 +28,6 @@ export type SurroundingsKind = "deck" | "paving" | "fence" | "lawn" | "room";
 /** Clear space kept around the build's own footprint: nothing is planted inside it. */
 export const MARGIN = 0.45;
 export const WALL_HEIGHT = 2.8;
-const TAU = Math.PI * 2;
 
 export function mulberry32(seed: number) {
   let a = seed | 0;
@@ -343,24 +342,22 @@ export function planSurroundings(build: Build): SurroundingsPlan | null {
   if (kind === "deck" || kind === "paving") {
     const house = houseFor(footprint, build, rnd);
     base.house = house;
-    const east = rnd() < 0.5 ? 1 : -1;
     const sideX = (s: number, off: number) => (s > 0 ? footprint.maxX + MARGIN + off : footprint.minX - MARGIN - off);
-    // Foundation planting along the wall on both sides of the deck.
-    for (const s of [-1, 1]) {
-      for (let i = 0; i < 2; i++) {
-        const r = J(0.45, 0.7);
-        addShrub(() => [sideX(s, r + i * 1.1 + J(0, 0.35)), footprint.minZ + J(0.15, 0.5)], r, J(0.55, 1.05), 0.6);
-      }
+    // Screen layout of the default 3/4 camera (from the south-east): north-west lands under the
+    // title, the south corners under the material chips and the estimate card. So the planting
+    // keeps to the wall's east end and the sides' back half, low on the west, nothing in front.
+    for (let i = 0; i < 2; i++) {
+      const r = J(0.45, 0.7);
+      addShrub(() => [sideX(1, r + i * 1.1 + J(0, 0.35)), footprint.minZ + J(0.15, 0.5)], r, J(0.6, 1.05), 0.6);
     }
-    // A tall, informal hedge on one side, lower beds on the other; both stay clear of the camera's south-east.
-    for (let i = 0; i < 3; i++) addShrub(() => [sideX(-east, J(1.5, 2.3)), J(footprint.minZ + 0.2, footprint.maxZ - 0.3)], J(0.55, 0.85), J(1.0, 1.5), 0.35);
-    for (let i = 0; i < 2; i++) addShrub(() => [sideX(east, J(1.4, 2.4)), J(footprint.minZ + 0.1, cz + d * 0.15)], J(0.4, 0.7), J(0.5, 0.95), 0.7);
-    // A tree on the hedge side, far enough back to read as a garden tree rather than a prop.
-    addTree(() => [sideX(-east, J(3.2, 4.3)), J(footprint.minZ - 0.2, cz)], J(1.55, 2.0), J(1.7, 2.1));
-    // Pots and low planters at the front corners.
-    addPlanter(() => [sideX(-east, J(0.5, 0.9)), footprint.maxZ + J(0.4, 0.9)], 0.9, 0.42);
-    addPlanter(() => [sideX(east, J(0.4, 0.8)), footprint.maxZ + J(0.3, 0.8)], 0.6, 0.6);
-    addShrub(() => [sideX(-east, J(0.9, 1.6)), footprint.maxZ + J(0.9, 1.6)], J(0.35, 0.5), J(0.3, 0.5), 0.9);
+    addShrub(() => [sideX(-1, J(0.4, 0.7)), footprint.minZ + J(0.2, 0.5)], J(0.3, 0.45), J(0.35, 0.55), 0.7);
+    const back = (lo: number) => J(footprint.minZ + lo, Math.max(footprint.minZ + lo + 0.1, cz + d * 0.1));
+    for (let i = 0; i < 2; i++) addShrub(() => [sideX(-1, J(1.2, 2.0)), back(0.6)], J(0.45, 0.7), J(0.7, 1.1), 0.35);
+    for (let i = 0; i < 2; i++) addShrub(() => [sideX(1, J(1.4, 2.4)), back(0.3)], J(0.4, 0.7), J(0.5, 0.95), 0.7);
+    // A garden tree off the east end of the house, well back: top right, clear of the title.
+    addTree(() => [sideX(1, J(3.0, 4.0)), footprint.minZ + J(-1.2, 0.3)], J(1.55, 2.0), J(1.7, 2.1));
+    addPlanter(() => [sideX(1, J(2.4, 3.0)), footprint.minZ + J(0.2, 0.6)], 0.9, 0.42);
+    addPlanter(() => [sideX(-1, J(0.4, 0.8)), cz + J(-0.4, 0.1)], 0.6, 0.6);
     if (kind === "paving") {
       // The patio sits flush with the lawn: the ground is the paved top, with a hole for the build.
       const top = build.parts.filter((p) => p.layer === "pavers").reduce((m, p) => Math.max(m, p.pos[1] + p.size[1] / 2), 0);
@@ -377,7 +374,6 @@ export function planSurroundings(build: Build): SurroundingsPlan | null {
     // only beyond its ends; the planting is the neighbour's side, peeking over the top.
     const L = alongX ? w : d;
     const along0 = alongX ? footprint.minX : footprint.minZ;
-    const near = alongX ? footprint.maxZ + MARGIN : footprint.maxX + MARGIN;
     const far = alongX ? footprint.minZ - MARGIN : footprint.minX - MARGIN;
     const at = (u: number, side: number, off: number): [number, number] => (alongX ? [u, side + off] : [side + off, u]);
     let u = along0 + J(0.1, 0.5);
@@ -387,28 +383,27 @@ export function planSurroundings(build: Build): SurroundingsPlan | null {
       addShrub(() => at(uu + J(-0.2, 0.2), far, -(r + J(0.05, 0.4))), r, J(1.2, 2.3), 0.25);
       u += r * 1.7 + J(0.3, 1.2);
     }
-    // Beyond each end of the run, on the camera's side: a low bed and a planter.
+    // Beyond each end of the run, on the far side (the near corners sit under the sketch's UI).
     for (const end of [-1, 1]) {
       const u0 = end < 0 ? along0 - MARGIN : along0 + L + MARGIN;
-      addShrub(() => at(u0 + end * J(0.5, 1.0), near, J(-0.2, 0.6)), J(0.35, 0.55), J(0.4, 0.8), 0.7);
-      addShrub(() => at(u0 + end * J(1.2, 2.0), near, J(0.2, 1.2)), J(0.3, 0.5), J(0.3, 0.6), 0.8);
+      addShrub(() => at(u0 + end * J(0.4, 0.9), far, -J(0.3, 0.8)), J(0.4, 0.6), J(0.6, 1.1), 0.6);
     }
-    addPlanter(() => at(along0 + L + MARGIN + J(0.4, 0.9), near, J(0.8, 1.6)), 0.6, 0.6);
+    addPlanter(() => at(along0 + L + MARGIN + J(0.3, 0.7), far, -J(1.4, 1.9)), 0.6, 0.6);
     // The neighbour's garden: a tree well back, and one beyond the far end.
     addTree(() => at(along0 + L * J(0.15, 0.4), far, -J(3.0, 4.2)), J(1.6, 2.1), J(1.8, 2.2));
-    addTree(() => at(along0 - MARGIN - J(2.2, 3.2), near, J(-2.5, -1.0)), J(1.3, 1.7), J(1.5, 1.9));
+    addTree(() => at(along0 + L + MARGIN + J(2.2, 3.2), far, -J(1.0, 2.5)), J(1.3, 1.7), J(1.5, 1.9));
   } else if (kind === "lawn") {
-    // New turf in the middle; a mixed border around it, never on it.
+    // New turf in the middle; a mixed border round its back and sides, never on it, and nothing
+    // in front (the camera's side, where the sketch's chips and estimate sit) or top-left (title).
     for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * TAU + J(-0.25, 0.25);
+      const a = Math.PI * (1.02 + (i / 8) * 0.96) + J(-0.06, 0.06);
       const rr = Math.max(w, d) * 0.5 + J(1.3, 2.4);
-      // Keep the camera's south-east a little clearer than the rest.
-      const south = Math.sin(a) > 0.3 && Math.cos(a) > -0.2;
-      addShrub(() => [cx + Math.cos(a) * rr * 1.15, cz + Math.sin(a) * rr], south ? J(0.3, 0.5) : J(0.5, 0.9), south ? J(0.3, 0.55) : J(0.8, 1.4), 0.6);
+      const nw = Math.cos(a) < -0.35 && Math.sin(a) < -0.35;
+      addShrub(() => [cx + Math.cos(a) * rr * 1.15, cz + Math.sin(a) * rr], nw ? J(0.3, 0.45) : J(0.5, 0.85), nw ? J(0.3, 0.5) : J(0.8, 1.3), 0.6);
     }
-    addTree(() => [footprint.minX - J(1.5, 2.4), footprint.minZ - J(0.8, 1.8)], J(1.7, 2.2), J(1.8, 2.2));
-    addPlanter(() => [footprint.maxX + J(0.9, 1.6), footprint.minZ + J(0.3, 1.5)], 0.9, 0.42);
-    addPlanter(() => [footprint.minX + J(0.3, 1.5), footprint.maxZ + J(0.9, 1.5)], 0.6, 0.6);
+    addTree(() => [footprint.maxX + J(1.2, 2.2), footprint.minZ - J(1.0, 2.0)], J(1.7, 2.2), J(1.8, 2.2));
+    addPlanter(() => [footprint.maxX + J(0.4, 1.0), footprint.minZ - J(0.8, 1.4)], 0.9, 0.42);
+    addPlanter(() => [cx + J(-0.5, 0.5), footprint.minZ - J(0.9, 1.4)], 0.6, 0.6);
   }
 
   return { ...base, shrubs, trees, planters };
