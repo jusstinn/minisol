@@ -6,6 +6,7 @@ import type { Lang } from "@/domain/types";
 import { tr } from "@/lib/i18n";
 import { CAMERA_PRESETS } from "./cameraPresets";
 import type { CameraPreset } from "./cameraPresets";
+import { useSurroundings } from "./surroundings/pref";
 import { IconCamEye, IconCamFront, IconCamIso, IconCamSide, IconCamTop, IconCamTour } from "../ui/icons";
 
 type IconFn = (p: { size?: number }) => React.ReactNode;
@@ -20,6 +21,7 @@ const LABEL_KEY = { iso: "cameraIso", top: "cameraTop", front: "cameraFront", si
  */
 export default function CameraMenu({ preset, onChoose, dark, lang }: { preset: CameraPreset; onChoose: (p: CameraPreset) => void; dark: boolean; lang: Lang }) {
   const [open, setOpen] = useState(false);
+  const [surroundings, setSurroundings] = useSurroundings();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,6 +86,21 @@ export default function CameraMenu({ preset, onChoose, dark, lang }: { preset: C
                 </button>
               );
             })}
+            {/* The REAL view's garden / room dressing (never part of the quote) — remembered per browser. */}
+            <div className={`mx-1 my-1 h-px ${dark ? "bg-[#dce9ff]/15" : "bg-ink/10"}`} />
+            <button
+              role="switch"
+              aria-checked={surroundings}
+              onClick={() => setSurroundings(!surroundings)}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left font-mono text-[10.5px] uppercase tracking-wider transition ${
+                dark ? "text-[#dce9ff] hover:bg-[#dce9ff]/10" : "text-ink-2 hover:bg-ink/5"
+              }`}
+            >
+              <span className="min-w-0 flex-1 truncate">{tr("surroundings", lang)}</span>
+              <span aria-hidden className={`relative h-[14px] w-[24px] shrink-0 rounded-full transition ${surroundings ? "bg-accent" : dark ? "bg-[#dce9ff]/25" : "bg-ink/20"}`}>
+                <span className={`absolute top-[2px] h-[10px] w-[10px] rounded-full bg-white shadow transition-all ${surroundings ? "left-[12px]" : "left-[2px]"}`} />
+              </span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

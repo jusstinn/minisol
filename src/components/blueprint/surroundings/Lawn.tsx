@@ -1,6 +1,6 @@
 "use client";
 /* three.js instance buffers and materials are filled imperatively, once per plan, by design. */
-/* eslint-disable react-hooks/immutability */
+ 
 
 import { useFrame } from "@react-three/fiber";
 import { useLayoutEffect, useMemo, useRef } from "react";

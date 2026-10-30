@@ -1,6 +1,6 @@
 "use client";
 /* three.js materials are tuned imperatively (window glow by time of day) by design. */
-/* eslint-disable react-hooks/immutability */
+ 
 
 import { useFrame } from "@react-three/fiber";
 import { useMemo } from "react";

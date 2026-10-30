@@ -72,6 +72,7 @@ const STRINGS = {
   cameraSide: { ro: "Din lateral", en: "Side" },
   cameraEye: { ro: "La nivelul ochilor", en: "Eye level" },
   cameraTour: { ro: "Tur", en: "Tour" },
+  surroundings: { ro: "Împrejurimi", en: "Surroundings" },
   simulate: { ro: "Simulare", en: "Simulate" },
   simSun: { ro: "Soare și umbre", en: "Sun & shadows" },
   simBuild: { ro: "Montaj", en: "Build" },
