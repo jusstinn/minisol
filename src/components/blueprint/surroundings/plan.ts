@@ -163,7 +163,8 @@ export interface SurroundingsPlan {
   room: RoomSpec | null;
 }
 
-const FLOWERS = ["#f4f1ea", "#f2a3b8", "#f6d34d", "#d9558a", "#b9a5f2", "#ffffff"];
+// Garden-centre colours, a little muted (a photo, not a cartoon): white, blush, butter, cerise, lavender.
+const FLOWERS = ["#efece4", "#e3b6c2", "#ddc874", "#b85a7a", "#b3a6d2", "#f4f1ea"];
 
 export function surroundingsKind(build: Build): SurroundingsKind | null {
   if (build.interior) return "room";
@@ -221,7 +222,9 @@ function shrub(rnd: () => number, x: number, z: number, r: number, h: number, fl
 
 /** Dimensions of the lawn disc, big enough that its soft edge sits far outside any sensible camera. */
 function groundRadius(fp: Rect): number {
-  return Math.max(fp.maxX - fp.minX, fp.maxZ - fp.minZ) * 0.5 + 9;
+  // Solid out to half this radius (see lawnFadeTexture): every camera preset stands on real lawn,
+  // and the fade to the backdrop happens far off, near the horizon.
+  return Math.max(fp.maxX - fp.minX, fp.maxZ - fp.minZ) * 0.5 + 28;
 }
 
 function houseFor(fp: Rect, build: Build, rnd: () => number): HouseSpec {
@@ -297,8 +300,9 @@ export function planSurroundings(build: Build): SurroundingsPlan | null {
   const keepOut = expand(footprint, MARGIN);
   const w = footprint.maxX - footprint.minX;
   const d = footprint.maxZ - footprint.minZ;
-  // Same build → same garden; a different size → a different (but equally stable) one.
-  const rnd = mulberry32(hashString(`${kind}:${w.toFixed(2)}:${d.toFixed(2)}`));
+  // Seeded by the kind of project only: an edit (4 × 3 → 5 × 3) reshuffles nothing but what the
+  // new footprint forces to move — the garden stays recognisably the same garden.
+  const rnd = mulberry32(hashString(kind));
   const base: SurroundingsPlan = {
     kind,
     footprint,
@@ -326,7 +330,8 @@ export function planSurroundings(build: Build): SurroundingsPlan | null {
     if (at) shrubs.push(shrub(rnd, at[0], at[1], r, h, flowering));
   };
   const addTree = (want: () => [number, number], crown: number, trunkH: number) => {
-    const at = place(want, crown * 0.55, keepOut, placed, 0.2, 18);
+    // The whole crown stays off the project, not just the trunk: it hangs over whatever is below it.
+    const at = place(want, crown, keepOut, placed, 0.6, 24);
     if (at) trees.push({ x: at[0], z: at[1], trunkH, crown, seed: Math.floor(rnd() * 1e9), tone: rnd() });
   };
   const addPlanter = (want: () => [number, number], pw: number, pd: number) => {
@@ -367,30 +372,31 @@ export function planSurroundings(build: Build): SurroundingsPlan | null {
     }
   } else if (kind === "fence") {
     const alongX = w >= d;
-    // Garden on the south (alongX) / east (along z) side — the side the camera looks at.
+    // The camera looks at the south (alongX) / east (along z) face. Nothing is planted on that
+    // side along the run — the posts, footings and panels being quoted stay in full view —
+    // only beyond its ends; the planting is the neighbour's side, peeking over the top.
     const L = alongX ? w : d;
     const along0 = alongX ? footprint.minX : footprint.minZ;
-    const side = alongX ? footprint.maxZ + MARGIN : footprint.maxX + MARGIN;
-    const at = (u: number, off: number): [number, number] => (alongX ? [u, side + off] : [side + off, u]);
-    let u = along0 + J(0.2, 0.7);
-    while (u < along0 + L - 0.3) {
-      const r = J(0.38, 0.75);
-      const uu = u;
-      addShrub(() => at(uu + J(-0.2, 0.2), r + J(0.02, 0.5)), r, J(0.45, 1.25), 0.65);
-      u += r * 1.5 + J(0.2, 0.8);
-    }
-    // A second, lower row further out and a couple of planters — the "garden" side.
-    for (let i = 0; i < 4; i++) addShrub(() => at(along0 + J(0, L), J(1.5, 2.6)), J(0.3, 0.5), J(0.3, 0.6), 0.9);
-    addPlanter(() => at(along0 + J(0.1, L * 0.35), J(1.2, 1.8)), 0.8, 0.4);
-    addPlanter(() => at(along0 + L * 0.7 + J(0, L * 0.25), J(1.2, 1.8)), 0.6, 0.6);
-    // The neighbour's side: a few taller shrubs a good way back, and a tree beyond the end.
+    const near = alongX ? footprint.maxZ + MARGIN : footprint.maxX + MARGIN;
     const far = alongX ? footprint.minZ - MARGIN : footprint.minX - MARGIN;
-    for (let i = 0; i < 3; i++) {
-      const uu = along0 + J(0, L);
-      addShrub(() => (alongX ? [uu, far - J(1.6, 3)] : [far - J(1.6, 3), uu]), J(0.6, 0.9), J(1.1, 1.7), 0.2);
+    const at = (u: number, side: number, off: number): [number, number] => (alongX ? [u, side + off] : [side + off, u]);
+    let u = along0 + J(0.1, 0.5);
+    while (u < along0 + L) {
+      const r = J(0.5, 0.85);
+      const uu = u;
+      addShrub(() => at(uu + J(-0.2, 0.2), far, -(r + J(0.05, 0.4))), r, J(1.2, 2.3), 0.25);
+      u += r * 1.7 + J(0.3, 1.2);
     }
-    addTree(() => (alongX ? [along0 + L * J(0.15, 0.4), far - J(3.0, 4.2)] : [far - J(3.0, 4.2), along0 + L * J(0.15, 0.4)]), J(1.6, 2.1), J(1.8, 2.2));
-    addTree(() => (alongX ? [along0 + L + J(2.2, 3.2), footprint.maxZ + J(0.5, 1.8)] : [footprint.maxX + J(0.5, 1.8), along0 + L + J(2.2, 3.2)]), J(1.3, 1.7), J(1.5, 1.9));
+    // Beyond each end of the run, on the camera's side: a low bed and a planter.
+    for (const end of [-1, 1]) {
+      const u0 = end < 0 ? along0 - MARGIN : along0 + L + MARGIN;
+      addShrub(() => at(u0 + end * J(0.5, 1.0), near, J(-0.2, 0.6)), J(0.35, 0.55), J(0.4, 0.8), 0.7);
+      addShrub(() => at(u0 + end * J(1.2, 2.0), near, J(0.2, 1.2)), J(0.3, 0.5), J(0.3, 0.6), 0.8);
+    }
+    addPlanter(() => at(along0 + L + MARGIN + J(0.4, 0.9), near, J(0.8, 1.6)), 0.6, 0.6);
+    // The neighbour's garden: a tree well back, and one beyond the far end.
+    addTree(() => at(along0 + L * J(0.15, 0.4), far, -J(3.0, 4.2)), J(1.6, 2.1), J(1.8, 2.2));
+    addTree(() => at(along0 - MARGIN - J(2.2, 3.2), near, J(-2.5, -1.0)), J(1.3, 1.7), J(1.5, 1.9));
   } else if (kind === "lawn") {
     // New turf in the middle; a mixed border around it, never on it.
     for (let i = 0; i < 9; i++) {

@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { ShaderChunk } from "three";
 
 /**
  * Small, shared `onBeforeCompile` patches for the REAL view's surroundings and grass. Each patch is
@@ -94,8 +95,8 @@ export const lawnLook =
       `{
         vec2 g = ( vAlphaMapUv - 0.5 ) * ${size.toFixed(2)};
         float blotch = sNoise( vec3( g * 0.22, 1.3 ) ) * 0.6 + sNoise( vec3( g * 0.9, 4.1 ) ) * 0.4;
-        diffuseColor.rgb *= 0.82 + 0.34 * blotch;
-        float band = smoothstep( -0.25, 0.25, sin( g.x * 3.14159265 / 0.62 ) );
+        diffuseColor.rgb *= 0.8 + 0.36 * blotch;
+        float band = smoothstep( -0.35, 0.35, sin( g.x * 3.14159265 / 0.9 ) );
         diffuseColor.rgb *= 1.0 + ( band - 0.5 ) * ${stripe.toFixed(3)};
         float wear = sNoise( vec3( g * 0.5, 9.0 ) );
         diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 1.12, 1.04, 0.74 ), smoothstep( 0.62, 0.9, wear ) * 0.55 );
@@ -148,3 +149,30 @@ export function patched<T extends THREE.Material>(material: T, key: string, ...p
   material.customProgramCacheKey = () => key;
   return material;
 }
+
+/**
+ * Leaf cards shade as the foliage mass they belong to: the vertex normal is replaced by the
+ * per-instance `aOut` (the mass's outward normal, pre-rotated into the card's own space so the
+ * instance transform turns it back), and the back face is not flipped — a card seen from behind
+ * is lit like its front, the way a sunlit hedge is lit whichever leaf you look at.
+ */
+export const leafNormals: ShaderPatch = (shader) => {
+  shader.vertexShader = inject(shader.vertexShader, "#include <common>", "attribute vec3 aOut;");
+  shader.vertexShader = inject(shader.vertexShader, "#include <beginnormal_vertex>", "objectNormal = normalize( aOut );");
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <normal_fragment_begin>",
+    ShaderChunk.normal_fragment_begin.replace("float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;", "float faceDirection = 1.0;"),
+  );
+};
+
+/**
+ * Grass blades shade like the turf they make up: normals bent mostly upward (and never flipped
+ * on the back face), so a blade seen edge-on or from behind is not a dark hair on the lawn.
+ */
+export const turfNormals: ShaderPatch = (shader) => {
+  shader.vertexShader = inject(shader.vertexShader, "#include <beginnormal_vertex>", "objectNormal = normalize( objectNormal * 0.3 + vec3( 0.0, 1.0, 0.0 ) );");
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <normal_fragment_begin>",
+    ShaderChunk.normal_fragment_begin.replace("float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;", "float faceDirection = 1.0;"),
+  );
+};

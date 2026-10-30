@@ -19,6 +19,34 @@ import type { Hole } from "./wallPieces";
  * camera. Glass is a smooth dark pane that mirrors the sky (the scene's own image-based light),
  * over a dim interior; at night the interior warms up. Boxes only: eight or so draw calls.
  */
+let glassTex: THREE.CanvasTexture | null = null;
+/** What a window pane shows by day (browser only): reflected sky fading to reflected garden, one soft sheen. */
+function glassReflection(): THREE.CanvasTexture {
+  if (glassTex) return glassTex;
+  const c = document.createElement("canvas");
+  c.width = 64;
+  c.height = 128;
+  const ctx = c.getContext("2d");
+  if (ctx) {
+    const g = ctx.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0, "#aebfcc");
+    g.addColorStop(0.35, "#8497a6");
+    g.addColorStop(0.7, "#56636c");
+    g.addColorStop(1, "#3f4a46");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 128);
+    const s = ctx.createLinearGradient(0, 128, 64, 0);
+    s.addColorStop(0.3, "rgba(255,255,255,0)");
+    s.addColorStop(0.45, "rgba(255,255,255,0.13)");
+    s.addColorStop(0.55, "rgba(255,255,255,0)");
+    ctx.fillStyle = s;
+    ctx.fillRect(0, 0, 64, 128);
+  }
+  glassTex = new THREE.CanvasTexture(c);
+  glassTex.colorSpace = THREE.SRGBColorSpace;
+  return glassTex;
+}
+
 export default function House({ spec, groundY, fade, night }: { spec: HouseSpec; groundY: number; fade: UniformRef; night: number }) {
   const { x0, x1, zFront, thickness: t, height, sillY, door, window: win } = spec;
   const baseY = groundY - 0.3;
@@ -39,15 +67,18 @@ export default function House({ spec, groundY, fade, night }: { spec: HouseSpec;
     const tiles = finishTextures({ kind: "paver", unit: [0.3, 0.18], axes: "xy" }, [wallW + 0.4, 4, t]);
     const std = (p: THREE.MeshStandardMaterialParameters, key: string) => patched(new THREE.MeshStandardMaterial(p), key, d);
     return {
-      wall: std({ color: "#eee7da", roughness: 0.92, map: plaster.map, roughnessMap: plaster.roughnessMap, bumpMap: plaster.bumpMap, bumpScale: 0.0018 }, "sur-wall"),
+      wall: std({ color: "#cdc5b6", roughness: 0.92, map: plaster.map, roughnessMap: plaster.roughnessMap, bumpMap: plaster.bumpMap, bumpScale: 0.0018 }, "sur-wall"),
       plinth: std({ color: "#8d8a83", roughness: 0.9 }, "sur-plinth"),
       white: std({ color: "#f4f2ec", roughness: 0.45, metalness: 0 }, "sur-white"),
       dark: std({ color: "#2f3338", roughness: 0.42, metalness: 0.55 }, "sur-frame"),
       stone: std({ color: "#d8d2c4", roughness: 0.78 }, "sur-stone"),
       fascia: std({ color: "#4b4038", roughness: 0.8 }, "sur-fascia"),
-      roof: std({ color: "#8d523f", roughness: 0.82, map: tiles.map, roughnessMap: tiles.roughnessMap, bumpMap: tiles.bumpMap, bumpScale: 0.004 }, "sur-roof"),
+      roof: std({ color: "#76473a", roughness: 0.82, map: tiles.map, roughnessMap: tiles.roughnessMap, bumpMap: tiles.bumpMap, bumpScale: 0.004 }, "sur-roof"),
       inside: std({ color: "#1c1814", roughness: 0.95, emissive: "#ff9a3c", emissiveIntensity: 0 }, "sur-inside"),
-      glass: patched(new THREE.MeshPhysicalMaterial({ color: "#415a70", roughness: 0.03, metalness: 0.7, clearcoat: 1, clearcoatRoughness: 0.02 }), "sur-glass", d),
+      // Glazing as a photo shows it by day: mostly the sky and garden reflected (pale at the top,
+      // darker toward the sill), a soft diagonal sheen, and only a hint of the dim room behind.
+      glass: patched(new THREE.MeshStandardMaterial({ color: "#ffffff", map: glassReflection(), roughness: 0.12, metalness: 0.1, envMapIntensity: 0.6 }), "sur-glass", d),
+      handle: std({ color: "#b9bcc0", roughness: 0.3, metalness: 0.85 }, "sur-handle"),
     };
   }, [fade, wallW, height, t]);
   useFrame(() => {
@@ -110,9 +141,8 @@ export default function House({ spec, groundY, fade, night }: { spec: HouseSpec;
             {panes === 2 && box(`${o.key}-m`, cu, (o.v0 + o.v1) / 2, glassZ + 0.005, 0.05, h - 2 * sec, 0.04, fm, false)}
             {!o.isDoor && box(`${o.key}-tr`, cu, o.v0 + h * 0.62, glassZ + 0.005, w - 2 * sec, 0.03, 0.035, fm, false)}
             {!o.isDoor && box(`${o.key}-sill`, cu, o.v0 - 0.02, zFront + 0.05, w + 0.2, 0.045, 0.16, mats.stone)}
-            {o.isDoor && box(`${o.key}-h1`, cu - 0.09, o.v0 + h * 0.45, zFront + 0.012, 0.02, 0.26, 0.025, mats.glass, false)}
-            {o.isDoor && box(`${o.key}-h2`, cu + 0.09, o.v0 + h * 0.45, zFront + 0.012, 0.02, 0.26, 0.025, mats.glass, false)}
-            {o.isDoor && box(`${o.key}-step`, cu, o.v0 - 0.015, zFront + 0.09, w + 0.1, 0.03, 0.2, mats.stone)}
+            {o.isDoor && box(`${o.key}-h1`, cu - 0.09, o.v0 + h * 0.45, glassZ + 0.03, 0.02, 0.2, 0.025, mats.handle, false)}
+            {o.isDoor && box(`${o.key}-h2`, cu + 0.09, o.v0 + h * 0.45, glassZ + 0.03, 0.02, 0.2, 0.025, mats.handle, false)}
           </group>
         );
       })}

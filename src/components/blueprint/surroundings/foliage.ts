@@ -28,13 +28,35 @@ export interface Dot {
   s: number;
   color: string;
 }
+/** A trunk or branch: a tapering cylinder from (x, y, z) along the unit direction (dx, dy, dz). */
 export interface Trunk {
   x: number;
+  y: number;
   z: number;
   h: number;
   r: number;
-  lean: number;
-  rotY: number;
+  dx: number;
+  dy: number;
+  dz: number;
+}
+/**
+ * One leaf card: a small alpha-cut quad of leaves on the outside of a foliage mass. `rx/ry/rz`
+ * is its (random) orientation; `nx/ny/nz` the *mass's* outward normal at that spot, which the
+ * shader shades with instead of the card's own — so a shrub lights as one leafy volume, not as
+ * a thousand flickering quads.
+ */
+export interface Card {
+  x: number;
+  y: number;
+  z: number;
+  s: number;
+  rx: number;
+  ry: number;
+  rz: number;
+  nx: number;
+  ny: number;
+  nz: number;
+  color: string;
 }
 export interface PlanterBox {
   x: number;
@@ -48,6 +70,7 @@ export interface PlanterBox {
 export interface Foliage {
   blobs: Blob[];
   dots: Dot[];
+  cards: Card[];
   trunks: Trunk[];
   planters: PlanterBox[];
   /** Soil tops inside the planters. */
@@ -73,17 +96,87 @@ function leafColor(rnd: () => number, tone: number, lift = 0): string {
   return hsl(hue, 0.36 + rnd() * 0.16, 0.22 + tone * 0.04 + lift + (rnd() - 0.5) * 0.07);
 }
 
+/**
+ * Covers one foliage mass with leaf cards: spread evenly over its ellipsoid shell (Fibonacci
+ * sphere, jittered), a little in and out of the surface so the silhouette is ragged, sparser
+ * underneath where nobody looks. `size` is a card's edge in metres.
+ */
+function cover(b: Blob, rnd: () => number, size: number, out: Foliage, density = 1.6) {
+  // Ellipsoid surface area (Knud Thomsen's approximation), in cards.
+  const p = 1.6;
+  const area = 4 * Math.PI * ((Math.pow(b.rx * b.ry, p) + Math.pow(b.rx * b.rz, p) + Math.pow(b.ry * b.rz, p)) / 3) ** (1 / p);
+  const n = Math.min(900, Math.max(12, Math.round((area / (size * size)) * density)));
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const yy = 1 - ((i + 0.5) / n) * 2;
+    if (yy < -0.55 && rnd() < 0.7) continue; // the underside, in its own shade
+    const rr = Math.sqrt(1 - yy * yy);
+    const th = i * golden + (rnd() - 0.5) * 0.6;
+    const ux = Math.cos(th) * rr;
+    const uz = Math.sin(th) * rr;
+    const k = 0.84 + rnd() * 0.22;
+    // Outward normal of the ellipsoid at that point.
+    let nx = ux / b.rx;
+    let ny = yy / b.ry;
+    let nz = uz / b.rz;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl;
+    ny /= nl;
+    nz /= nl;
+    const c = Math.cos(b.rotY);
+    const sn = Math.sin(b.rotY);
+    const lx = ux * b.rx * k;
+    const lz = uz * b.rz * k;
+    const light = 0.03 + (rnd() - 0.5) * 0.09 + (yy > 0.3 ? 0.025 : 0);
+    out.cards.push({
+      x: b.x + lx * c + lz * sn,
+      y: b.y + yy * b.ry * k,
+      z: b.z - lx * sn + lz * c,
+      s: size * (0.75 + rnd() * 0.5),
+      rx: rnd() * Math.PI * 2,
+      ry: rnd() * Math.PI * 2,
+      rz: rnd() * Math.PI * 2,
+      nx: nx * c + nz * sn,
+      ny,
+      nz: -nx * sn + nz * c,
+      color: shade(b.color, light, (rnd() - 0.5) * 0.02),
+    });
+  }
+}
+
+/** Lightness / hue nudge of a hex colour (renderer-free, like `hsl` above). */
+function shade(hex: string, dl: number, dh: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0;
+  let s = 0;
+  if (d > 1e-6) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  return hsl((h + dh + 1) % 1, s, Math.max(0.03, Math.min(0.9, l + dl)));
+}
+
 function shrubBlobs(s: ShrubSpec, out: Foliage) {
   const rnd = mulberry32(s.seed);
   const n = Math.max(3, Math.round(3 + s.r * 5));
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + rnd() * 0.9;
     const ring = i === 0 ? 0 : 0.35 + rnd() * 0.45;
-    const br = s.r * (0.5 + rnd() * 0.28);
-    const px = Math.cos(a) * s.r * ring * 0.62;
-    const pz = Math.sin(a) * s.r * ring * 0.62;
+    const px = Math.cos(a) * s.r * ring * 0.45;
+    const pz = Math.sin(a) * s.r * ring * 0.45;
+    // Every mass, leaves included (cards reach ~6% past it), stays inside the planned radius.
+    const br = Math.min(s.r * (0.5 + rnd() * 0.28), (s.r - Math.hypot(px, pz)) / 1.12);
     const ry = Math.max(br * 0.7, s.h * (0.32 + rnd() * 0.12) * (i === 0 ? 1.15 : 1));
     out.blobs.push({ x: s.x + px, y: ry * 0.82, z: s.z + pz, rx: br, ry, rz: br * (0.88 + rnd() * 0.2), rotY: rnd() * Math.PI, color: leafColor(rnd, s.tone, i === 0 ? 0.02 : 0) });
+    cover(out.blobs[out.blobs.length - 1], rnd, 0.12 + s.r * 0.05, out);
   }
   if (s.flower) {
     const count = Math.round(14 + s.r * s.r * 70);
@@ -92,12 +185,12 @@ function shrubBlobs(s: ShrubSpec, out: Foliage) {
       // On the upper shell of a blob.
       const theta = rnd() * Math.PI * 2;
       const phi = Math.acos(0.25 + rnd() * 0.75);
-      const k = 1.0;
+      const k = 1.03;
       out.dots.push({
         x: b.x + Math.sin(phi) * Math.cos(theta) * b.rx * k,
         y: b.y + Math.cos(phi) * b.ry * k,
         z: b.z + Math.sin(phi) * Math.sin(theta) * b.rz * k,
-        s: 0.022 + rnd() * 0.022,
+        s: 0.014 + rnd() * 0.014,
         color: s.flower,
       });
     }
@@ -106,18 +199,38 @@ function shrubBlobs(s: ShrubSpec, out: Foliage) {
 
 function treeBlobs(t: TreeSpec, out: Foliage) {
   const rnd = mulberry32(t.seed);
-  out.trunks.push({ x: t.x, z: t.z, h: t.trunkH + t.crown * 0.55, r: 0.075 + t.crown * 0.03, lean: (rnd() - 0.5) * 0.08, rotY: rnd() * Math.PI * 2 });
+  const lean = (rnd() - 0.5) * 0.06;
+  const lean2 = (rnd() - 0.5) * 0.06;
+  const r0 = 0.09 + t.crown * 0.035;
+  const trunkH = t.trunkH + t.crown * 0.55;
+  const tl = Math.hypot(lean, 1, lean2);
+  out.trunks.push({ x: t.x, y: -0.05, z: t.z, h: trunkH + 0.05, r: r0, dx: lean / tl, dy: 1 / tl, dz: lean2 / tl });
   const n = 8 + Math.floor(rnd() * 4);
   const cy = t.trunkH + t.crown * 0.55;
+  const topX = t.x + (lean / tl) * trunkH;
+  const topZ = t.z + (lean2 / tl) * trunkH;
   for (let i = 0; i < n; i++) {
     const u = rnd();
     const a = rnd() * Math.PI * 2;
-    const spread = t.crown * 0.62 * Math.sqrt(u);
-    const br = t.crown * (0.42 + rnd() * 0.22);
+    const spread = t.crown * 0.5 * Math.sqrt(u);
+    const br = Math.min(t.crown * (0.42 + rnd() * 0.22), (t.crown - spread) / 1.12);
     const y = cy + (rnd() - 0.35) * t.crown * 0.7;
     // Lower blobs sit further out and darker (the shaded underside of the crown).
     const lift = (y - cy) / (t.crown * 2) * 0.1;
-    out.blobs.push({ x: t.x + Math.cos(a) * spread, y, z: t.z + Math.sin(a) * spread, rx: br, ry: br * 0.85, rz: br, rotY: rnd() * Math.PI, color: leafColor(rnd, t.tone, lift) });
+    const b: Blob = { x: t.x + Math.cos(a) * spread, y, z: t.z + Math.sin(a) * spread, rx: br, ry: br * 0.85, rz: br, rotY: rnd() * Math.PI, color: leafColor(rnd, t.tone, lift) };
+    out.blobs.push(b);
+    cover(b, rnd, 0.2 + t.crown * 0.03, out, 1.35);
+    // A branch from the trunk out into most masses: what shows through the gaps in a crown.
+    if (i % 2 === 0 || i < 4) {
+      const fy = t.trunkH * (0.72 + rnd() * 0.25);
+      const fx = t.x + (topX - t.x) * (fy / trunkH);
+      const fz = t.z + (topZ - t.z) * (fy / trunkH);
+      const dx = b.x - fx;
+      const dy = b.y - fy;
+      const dz = b.z - fz;
+      const len = Math.hypot(dx, dy, dz) || 1;
+      out.trunks.push({ x: fx, y: fy, z: fz, h: len * 0.85, r: r0 * (0.32 + rnd() * 0.12), dx: dx / len, dy: dy / len, dz: dz / len });
+    }
   }
 }
 
@@ -137,18 +250,19 @@ function planterBlobs(p: PlanterSpec, out: Foliage) {
     const z = p.z - lx * sin + lz * cos;
     const y = p.h + r * 0.55;
     out.blobs.push({ x, y, z, rx: r, ry: r * 0.85, rz: r, rotY: rnd() * Math.PI, color: leafColor(rnd, rnd(), 0.03) });
+    cover(out.blobs[out.blobs.length - 1], rnd, 0.075, out);
     if (p.flower) {
       for (let k = 0; k < 7; k++) {
         const theta = rnd() * Math.PI * 2;
         const phi = Math.acos(0.3 + rnd() * 0.7);
-        out.dots.push({ x: x + Math.sin(phi) * Math.cos(theta) * r, y: y + Math.cos(phi) * r * 0.85, z: z + Math.sin(phi) * Math.sin(theta) * r, s: 0.02 + rnd() * 0.02, color: p.flower });
+        out.dots.push({ x: x + Math.sin(phi) * Math.cos(theta) * r, y: y + Math.cos(phi) * r * 0.85, z: z + Math.sin(phi) * Math.sin(theta) * r, s: 0.013 + rnd() * 0.012, color: p.flower });
       }
     }
   }
 }
 
 export function foliageFor(plan: SurroundingsPlan): Foliage {
-  const out: Foliage = { blobs: [], dots: [], trunks: [], planters: [], soils: [] };
+  const out: Foliage = { blobs: [], dots: [], cards: [], trunks: [], planters: [], soils: [] };
   for (const s of plan.shrubs) shrubBlobs(s, out);
   for (const t of plan.trees) treeBlobs(t, out);
   for (const p of plan.planters) planterBlobs(p, out);

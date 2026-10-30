@@ -9,12 +9,12 @@ import { UNIT_BLADE } from "../detail/geometries";
 import { lawnFadeTexture } from "../groundHalo";
 import { finishTextures } from "../textures";
 import { groundGeometry } from "./geometry";
-import { dissolve, lawnLook, patched, windSway } from "./materials";
+import { dissolve, lawnLook, patched, turfNormals, windSway } from "./materials";
 import type { UniformRef, WindUniforms } from "./materials";
 import { distToRect, expand, mulberry32 } from "./plan";
 import type { SurroundingsPlan } from "./plan";
 
-const LAWN = { healthy: "#7fae5e", dry: "#a9b36a" } as const;
+const LAWN = { healthy: "#68904c", dry: "#8f9a5e" } as const;
 
 /**
  * The lawn the project stands in: one big faded disc (see groundHalo.ts's `lawnFadeTexture`) with
@@ -46,7 +46,7 @@ export function LawnGround({ plan, opacity }: { plan: SurroundingsPlan; opacity:
       transparent: true,
       opacity: 0,
     });
-    return patched(m, `sur-lawn:${size.toFixed(1)}`, lawnLook(size, plan.lawnTone === "dry" ? 0.05 : 0.09));
+    return patched(m, `sur-lawn:${size.toFixed(1)}`, lawnLook(size, plan.lawnTone === "dry" ? 0.025 : 0.04));
   }, [size, plan.lawnTone]);
   useFrame(() => {
     if (mat.current) mat.current.opacity = opacity.value;
@@ -92,7 +92,7 @@ export function LawnBlades({ plan, fade, wind }: { plan: SurroundingsPlan; fade:
     return out;
   }, [plan]);
   const material = useMemo(
-    () => patched(new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, side: THREE.DoubleSide, vertexColors: true }), "sur-blades", windSway(wind), dissolve(fade)),
+    () => patched(new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, side: THREE.DoubleSide, vertexColors: true }), "sur-blades", windSway(wind), turfNormals, dissolve(fade)),
     [wind, fade],
   );
   useLayoutEffect(() => {
@@ -100,7 +100,7 @@ export function LawnBlades({ plan, fade, wind }: { plan: SurroundingsPlan; fade:
     if (!mesh) return;
     const tmp = new THREE.Object3D();
     const c = new THREE.Color();
-    const base = new THREE.Color(plan.lawnTone === "dry" ? "#9bab55" : "#6aa04a");
+    const base = new THREE.Color(plan.lawnTone === "dry" ? "#949f5c" : "#6a944a");
     data.forEach((b, i) => {
       tmp.position.set(b.x, plan.groundY, b.z);
       tmp.rotation.set(b.lean, b.r, 0);

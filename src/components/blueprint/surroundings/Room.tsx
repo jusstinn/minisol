@@ -47,7 +47,7 @@ export default function RoomDressing({ spec, fade, day }: { spec: RoomSpec; fade
       white: patched(new THREE.MeshStandardMaterial({ color: "#f3f0e9", roughness: 0.5 }), "room-white", d),
       leaf: patched(new THREE.MeshStandardMaterial({ color: "#e9e4d9", roughness: 0.55 }), "room-leaf", d),
       panel: patched(new THREE.MeshStandardMaterial({ color: "#f4f1ea", roughness: 0.5 }), "room-panel", d),
-      chrome: patched(new THREE.MeshStandardMaterial({ color: "#c9ccd0", roughness: 0.25, metalness: 0.9 }), "room-chrome", d),
+      chrome: patched(new THREE.MeshStandardMaterial({ color: "#d4d7da", roughness: 0.32, metalness: 0.6 }), "room-chrome", d),
       sill: patched(new THREE.MeshStandardMaterial({ color: "#ece8de", roughness: 0.6 }), "room-sill", d),
       pane: patched(pane, "room-pane", d),
     };

@@ -123,3 +123,60 @@ export function groundGeometry(size: number, hole: Rect | null): THREE.BufferGeo
   g.computeVertexNormals();
   return g;
 }
+
+let leafTex: THREE.CanvasTexture | null = null;
+/**
+ * A card's worth of leaves (browser only): a dozen pointed ovals of slightly different
+ * greys, each with a paler midrib, on a transparent ground. The grey is multiplied by each
+ * card's own green; alpha-tested, so it needs no sorting and casts leafy shadows.
+ */
+export function leafCardTexture(): THREE.CanvasTexture {
+  if (leafTex) return leafTex;
+  const S = 128;
+  const c = document.createElement("canvas");
+  c.width = c.height = S;
+  const ctx = c.getContext("2d");
+  if (ctx) {
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < 13; i++) {
+      const a = rnd() * Math.PI * 2;
+      const d = i === 0 ? 0 : 14 + rnd() * 30;
+      const x = S / 2 + Math.cos(a) * d;
+      const y = S / 2 + Math.sin(a) * d;
+      const len = 26 + rnd() * 16;
+      const wid = len * (0.36 + rnd() * 0.12);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rnd() * Math.PI * 2);
+      const v = Math.round(150 + rnd() * 105);
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.beginPath();
+      ctx.moveTo(-len / 2, 0);
+      ctx.quadraticCurveTo(-len * 0.1, -wid / 2, len / 2, 0);
+      ctx.quadraticCurveTo(-len * 0.1, wid / 2, -len / 2, 0);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255,255,255,0.35)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-len / 2, 0);
+      ctx.lineTo(len * 0.4, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  leafTex = new THREE.CanvasTexture(c);
+  leafTex.colorSpace = THREE.SRGBColorSpace;
+  leafTex.anisotropy = 4;
+  return leafTex;
+}
+
+/** A unit leaf card (1 × 1 quad) carrying a per-instance outward normal, `aOut`, sized for `count`. */
+export function cardGeometry(outLocal: Float32Array): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(1, 1);
+  g.setAttribute("aOut", new THREE.InstancedBufferAttribute(outLocal, 3));
+  return g;
+}
