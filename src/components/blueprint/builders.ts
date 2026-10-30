@@ -5,10 +5,15 @@ import { defaultLayout, exposedEdges, fenceSegments, itemContainer, SIDES } from
 import type { Layout, Opening, Side, Zone } from "@/domain/layout";
 import { shades } from "@/domain/look";
 import { PAVING_BUILDUP, pavingDepth } from "@/domain/paving";
+import { DECK_JOIST_SPACING, deckFrameFor, deckFrameSides } from "@/domain/patterns";
 import type { Look } from "@/domain/look";
 import type { Lang } from "@/domain/types";
 import { MATERIAL_ROLES } from "@/domain/types";
+import { diagonalBoards, frameBoards } from "./detail/deckBoards";
+import { bondUnit, paverPieces } from "./detail/pavingBond";
 import { pedestalGrid } from "./detail/pedestals";
+import { prismOf } from "./detail/prism";
+import type { Pt, PrismShape } from "./detail/prism";
 import type { Finish } from "./textures";
 
 /**
@@ -40,7 +45,7 @@ export interface Part {
    * (see `itemBoxes` below) — everything else infers its shape from layer/finish instead (see
    * `./detail/shapes.ts`'s `shapeFor`), so this stays rare and intentional.
    */
-  shape?: "cylinder" | "cone" | "sphere";
+  shape?: "cylinder" | "cone" | "sphere" | PrismShape;
 }
 
 export interface DimLine {
@@ -188,6 +193,32 @@ function roomShell(L: number, W: number, H: number, lowH: number, parts: Part[])
 /** Height a wall is drawn at in the cut-away room (back/left full, front/right low). */
 const drawnHeight = (side: Side, H: number, low: number) => (side === "n" || side === "w" ? H : low);
 
+/**
+ * A board with any convex outline (diagonal, mitred) as a part: its bounding box is the part's
+ * size, its outline travels in `shape` (see detail/prism.ts). The wood texture is re-scaled so the
+ * grain repeats at the real board length along the board, whatever the angle.
+ */
+function prismBoard(id: string, poly: Pt[], grain: number, y: number, t: number, color: string, delay: number, finish: Finish): Part {
+  const { center, shape, width, depth } = prismOf(poly, grain);
+  const gx = Math.cos(grain);
+  const gz = Math.sin(grain);
+  const along = poly.map(([x, z]) => x * gx + z * gz);
+  const length = Math.max(...along) - Math.min(...along);
+  // A whole number of half-repeats keeps the number of distinct textures small.
+  const repeats = Math.max(0.5, Math.round((length / 0.9) * 2) / 2);
+  return {
+    id,
+    layer: "deck_board",
+    pos: [center[0], y, center[1]],
+    size: [width, t, depth],
+    color,
+    delay,
+    grow: "drop",
+    shape,
+    finish: { ...finish, unit: [width / repeats, depth] },
+  };
+}
+
 // ───────────────────────────── deck ──────────────────────────────
 function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Build {
   const parts: Part[] = [];
@@ -203,6 +234,8 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
   const supColor = look.deck_support?.color ?? C.support;
   const supH = Math.max(0.03, top - boardT - joistH);
   const alongX = l.direction === "x";
+  const boards = l.boards ?? "straight";
+  const frameSides = boards === "frame" ? deckFrameSides(l.zones) : [];
   // WPC composite or aluminium read as a different material in the 3D sketch; everything else
   // (pin tratat, larice…) is wood.
   const boardFinish: Finish = /wpc/i.test(look.deck_board?.name ?? "") ? { kind: "wpc" } : { kind: "wood" };
@@ -224,9 +257,14 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
     }
     const run = alongX ? z.w : z.d;
     const across = alongX ? z.d : z.w;
-    const R = Math.ceil(across / pitch);
-    const grid = pedestalGrid(run, across);
-    grid.points.forEach(({ i, j, u, v }, k) => {
+    const grid = pedestalGrid(run, across, { pitchAlong: DECK_JOIST_SPACING[boards] });
+    // The edge supports and joists sit just inside the outline, under the boards' ends — not
+    // centred on it, half poking out past the deck (seen from above as bumps along the edge).
+    const supR = 0.05;
+    const inside = (t: number, len: number, r: number) => Math.min(Math.max(t, r), Math.max(r, len - r));
+    grid.points.forEach(({ i, j, u: u0, v: v0 }, k) => {
+      const u = inside(u0, run, supR);
+      const v = inside(v0, across, supR);
       const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
       parts.push({
         id: `${z.id}-sup-${i}-${j}`,
@@ -239,33 +277,59 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
         finish: { kind: "metal" },
       });
     });
+    const joistPart = (id: string, u0: number, delay: number): Part => {
+      const u = inside(u0, run, joistW / 2);
+      const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
+      return { id, layer: "deck_joist", pos: jp, size: alongX ? [joistW, joistH, across] : [across, joistH, joistW], color: joistColor, delay, grow: "drop", finish: joistFinish };
+    };
     for (let i = 0; i < grid.J; i++) {
       const u = grid.J > 1 ? (i * run) / (grid.J - 1) : 0;
-      const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
-      parts.push({
-        id: `${z.id}-joist-${i}`,
-        layer: "deck_joist",
-        pos: jp,
-        size: alongX ? [joistW, joistH, across] : [across, joistH, joistW],
-        color: joistColor,
-        delay: zd + 1.2 + i * (1 / grid.J),
-        grow: "drop",
-        finish: joistFinish,
-      });
+      parts.push(joistPart(`${z.id}-joist-${i}`, u, zd + 1.2 + i * (1 / grid.J)));
     }
-    for (let r = 0; r < R; r++) {
-      const v = Math.min(bw / 2 + r * pitch, across - bw / 2);
-      const bp: Vec3 = alongX ? [z.x + run / 2, top - boardT / 2, z.z + v] : [z.x + v, top - boardT / 2, z.z + run / 2];
-      parts.push({
-        id: `${z.id}-board-${r}`,
-        layer: "deck_board",
-        pos: bp,
-        size: alongX ? [run, boardT, bw] : [bw, boardT, run],
-        color: boardColors[r % boardColors.length],
-        delay: zd + 2.4 + r * (2 / R),
-        grow: "slide",
-        finish: boardFinish,
+
+    // Straight rows of boards in a rectangle (the whole zone, or the field inside a frame).
+    const rowsIn = (x0: number, x1: number, z0: number, z1: number) => {
+      const fAcross = alongX ? z1 - z0 : x1 - x0;
+      const fRun = alongX ? x1 - x0 : z1 - z0;
+      const R = Math.ceil(fAcross / pitch);
+      for (let r = 0; r < R; r++) {
+        // The last board is ripped to the width that is left, not slid back over its neighbour.
+        const w = Math.min(bw, fAcross - r * pitch);
+        if (w < 0.02) continue;
+        const v = r * pitch + w / 2;
+        const bp: Vec3 = alongX ? [x0 + fRun / 2, top - boardT / 2, z0 + v] : [x0 + v, top - boardT / 2, z0 + fRun / 2];
+        parts.push({
+          id: `${z.id}-board-${r}`,
+          layer: "deck_board",
+          pos: bp,
+          size: alongX ? [fRun, boardT, w] : [w, boardT, fRun],
+          color: boardColors[r % boardColors.length],
+          delay: zd + 2.4 + r * (2 / R),
+          grow: "slide",
+          finish: boardFinish,
+        });
+      }
+    };
+    const frame = boards === "frame" ? deckFrameFor(z, frameSides[zi], pitch) : null;
+    if (boards === "diagonal") {
+      // Boards at 45°, cut flush at the edge of the deck. "Across" flips the diagonal.
+      const strips = diagonalBoards(z, !alongX, pitch, bw);
+      strips.forEach((st, n) => {
+        parts.push(prismBoard(`${z.id}-dboard-${st.index}`, st.poly, st.grain, top - boardT / 2, boardT, boardColors[st.index % boardColors.length], zd + 2.4 + n * (2 / strips.length), boardFinish));
       });
+    } else if (frame) {
+      rowsIn(frame.field.x0, frame.field.x1, frame.field.z0, frame.field.z1);
+      // The border: one board on each open side, mitred where two open sides meet.
+      frameBoards(z, frame.sides, bw).forEach((fb, n) => {
+        parts.push(prismBoard(`${z.id}-frame-${fb.side}`, fb.poly, fb.grain, top - boardT / 2, boardT, boardColors[(n + 1) % boardColors.length], zd + 4.4 + n * 0.12, boardFinish));
+      });
+      // A border board that runs with the joists needs a joist of its own beneath it.
+      const rim: [boolean, number][] = alongX ? [[frame.sides.w, pitch / 2], [frame.sides.e, z.w - pitch / 2]] : [[frame.sides.n, pitch / 2], [frame.sides.s, z.d - pitch / 2]];
+      rim.forEach(([open, u], n) => {
+        if (open) parts.push(joistPart(`${z.id}-rim-${alongX ? (n ? "e" : "w") : n ? "s" : "n"}`, u, zd + 1.2 + n * 0.1));
+      });
+    } else {
+      rowsIn(z.x, z.x + z.w, z.z, z.z + z.d);
     }
   });
 
@@ -512,7 +576,8 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, lo
     }
   });
   // Skirting along the outline, transition profiles at doorways.
-  exposedEdges(l.zones).forEach((e, i) => {
+  const edges = exposedEdges(l.zones);
+  edges.forEach((e, i) => {
     const horizontal = e.side === "n" || e.side === "s";
     const len = horizontal ? Math.abs(e.x2 - e.x1) : Math.abs(e.z2 - e.z1);
     const inset = e.side === "n" || e.side === "w" ? 0.008 : -0.008;
@@ -800,8 +865,9 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const spec = PAVING_BUILDUP[l.use];
   // The pavers actually in the basket: format (long side along x), thickness and colour.
   const pv = look.pavers;
-  let [sx, sz] = pv?.w && pv.l ? [Math.max(pv.w, pv.l), Math.min(pv.w, pv.l)] : [0.2, 0.1];
-  const paverUnit: [number, number] = [sx, sz];
+  const [realL, realW] = pv?.w && pv.l ? [Math.max(pv.w, pv.l), Math.min(pv.w, pv.l)] : [0.2, 0.1];
+  // The herringbone and the basketweave need a 2:1 paver; the other bonds use the product's own format.
+  const unit = bondUnit(l.bond, realL, realW);
   const t = Math.min(0.12, pv?.t ?? spec.paver);
   const paverColors = shades(pv?.color ?? C.paver, 3, 0.05);
   const baseColor = look.paving_base?.color ?? C.gravel;
@@ -814,12 +880,10 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const sandBottom = Math.max(0.03, sandTop - spec.sand);
   // Small formats over a big area would mean thousands of parts: draw them larger, same
   // proportions — the joint pattern below still repeats at the real (pre-scale) paver format.
-  const area = l.zones.reduce((s, z) => s + z.w * z.d, 0);
-  const k = Math.max(1, Math.sqrt(area / (sx * sz) / 600));
-  sx *= k;
-  sz *= k;
-  // Rectangular pavers go in a running bond; squares in a straight grid.
-  const bond = sx >= 1.45 * sz;
+  const area = l.zones.reduce((sum, z) => sum + z.w * z.d, 0);
+  const k = Math.max(1, Math.sqrt(area / (unit.l * unit.w) / 600));
+  const drawnL = unit.l * k;
+  const drawnW = unit.w * k;
 
   l.zones.forEach((z, zi) => {
     const zd = zi * 0.6;
@@ -828,28 +892,20 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
     parts.push({ id: `${z.id}-membrane`, layer: "weed_membrane", pos: [cx, 0.003, cz], size: [z.w + 0.1, 0.006, z.d + 0.1], color: C.membrane, delay: zd + 0.2, grow: "fade", finish: { kind: "membrane" } });
     parts.push({ id: `${z.id}-base`, layer: "paving_base", pos: [cx, (0.006 + sandBottom) / 2, cz], size: [z.w, sandBottom - 0.006, z.d], color: baseColor, delay: zd + 0.5, grow: "rise", finish: { kind: "gravel" } });
     parts.push({ id: `${z.id}-sand`, layer: "paving_sand", pos: [cx, (sandBottom + sandTop) / 2, cz], size: [z.w, sandTop - sandBottom, z.d], color: sandColor, delay: zd + 1.1, grow: "slide", finish: { kind: "sand" } });
-    const rows = Math.ceil(z.d / sz - 1e-9);
-    for (let r = 0; r < rows; r++) {
-      const z0 = z.z + r * sz;
-      const z1 = Math.min(z0 + sz, z.z + z.d);
-      if (z1 - z0 < 0.02) continue;
-      const shift = bond && r % 2 ? sx / 2 : 0;
-      const cols = Math.ceil((z.w + shift) / sx - 1e-9);
-      for (let c = 0; c < cols; c++) {
-        const a = Math.max(z.x, z.x - shift + c * sx);
-        const b = Math.min(z.x - shift + (c + 1) * sx, z.x + z.w);
-        if (b - a < 0.02) continue;
-        parts.push({
-          id: `${z.id}-paver-${r}-${c}`,
-          layer: "pavers",
-          pos: [(a + b) / 2, top - t / 2, (z0 + z1) / 2],
-          size: [b - a - 0.004, t, z1 - z0 - 0.004],
-          color: paverColors[(r * 2 + c) % paverColors.length],
-          delay: zd + 1.6 + r * (2 / rows) + Math.min(0.6, c * 0.01),
-          grow: "drop",
-          finish: { kind: "paver", unit: paverUnit },
-        });
-      }
+    const pieces = paverPieces(z, drawnL, drawnW, l.bond);
+    const rows = Math.max(1, ...pieces.map((pc) => pc.r + 1));
+    for (const pc of pieces) {
+      parts.push({
+        id: `${z.id}-${pc.key}`,
+        layer: "pavers",
+        pos: [(pc.x0 + pc.x1) / 2, top - t / 2, (pc.z0 + pc.z1) / 2],
+        size: [pc.x1 - pc.x0 - 0.004, t, pc.z1 - pc.z0 - 0.004],
+        color: paverColors[(pc.r * 2 + pc.c) % paverColors.length],
+        delay: zd + 1.6 + pc.r * (2 / rows) + Math.min(0.6, pc.c * 0.01),
+        grow: "drop",
+        // The texture's joint pattern runs along the paver's long side, whichever way it lies.
+        finish: { kind: "paver", unit: pc.orient === "v" ? [unit.w, unit.l] : [unit.l, unit.w] },
+      });
     }
     // Swept into the joints: seen between the pavers, and as its own sheet when exploded.
     parts.push({ id: `${z.id}-joints`, layer: "joint_sand", pos: [cx, top - 0.015, cz], size: [z.w - 0.01, 0.01, z.d - 0.01], color: jointColor, delay: zd + 4.2, grow: "fade", finish: { kind: "sand" } });
@@ -859,15 +915,22 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const inside = (x: number, zz: number) => l.zones.some((z) => x > z.x + 1e-6 && x < z.x + z.w - 1e-6 && zz > z.z + 1e-6 && zz < z.z + z.d - 1e-6);
   const ring = l.edging ? kerbT + 0.05 : 0;
   const bedH = Math.max(0.05, top + 0.01 - kerbH);
-  exposedEdges(l.zones).forEach((e, i) => {
+  const edges = exposedEdges(l.zones);
+  edges.forEach((e, i) => {
     const horizontal = e.side === "n" || e.side === "s";
     const out = e.side === "n" || e.side === "w" ? -1 : 1;
     const [lo, hi] = horizontal ? [Math.min(e.x1, e.x2), Math.max(e.x1, e.x2)] : [Math.min(e.z1, e.z2), Math.max(e.z1, e.z2)];
     const line = (horizontal ? e.z1 : e.x1) + (out * kerbT) / 2;
     // Close outer corners (the kerb runs on past the end); stop at inner corners of an L.
     const at = (u: number) => (horizontal ? inside(u, line) : inside(line, u));
-    const a = at(lo - kerbT / 2) ? lo : lo - kerbT;
-    const b = at(hi + kerbT / 2) ? hi : hi + kerbT;
+    // Two zones flush on one side give two edges in a line: they just meet, end to end.
+    const continued = (u: number) =>
+      edges.some((o) => o !== e && o.side === e.side && Math.abs((horizontal ? o.z1 : o.x1) - (horizontal ? e.z1 : e.x1)) < 1e-6 && [o.x1, o.x2, o.z1, o.z2].some((v, k) => (horizontal ? k < 2 : k >= 2) && Math.abs(v - u) < 1e-6));
+    const endOf = (u: number, dir: -1 | 1, reach: number, inner: number) => (continued(u) ? u : at(u + (dir * kerbT) / 2) ? u - dir * inner : u + dir * reach);
+    // Corners: the n/s kerb fills the corner block, the e/w one butts against it — stopping short
+    // of an outer corner, pulling back at an inner one (two kerbs in one block would z-fight).
+    const a = endOf(lo, -1, horizontal ? kerbT : 0, horizontal ? 0 : kerbT);
+    const b = endOf(hi, 1, horizontal ? kerbT : 0, horizontal ? 0 : kerbT);
     const len = b - a;
     const mid = (a + b) / 2;
     const key = `${e.side}-${Math.round(e.x1 * 100)}-${Math.round(e.z1 * 100)}`;
@@ -878,9 +941,19 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
       const [bx, bz, bw, bd] = box((out * 0.03), kerbT + 0.08);
       parts.push({ id: `bed-${key}`, layer: "kerb_concrete", pos: [bx, (0.006 + bedH) / 2, bz], size: [bw, bedH - 0.006, bd], color: C.concrete, delay: 3.1 + i * 0.06, grow: "rise", finish: { kind: "concrete" } });
     }
-    const [sxp, szp, sw, sd] = box(out * (ring + 0.2 - kerbT / 2), 0.4);
-    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw + 0.8, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35, finish: { kind: "soil" } });
-    parts.push({ id: `turf-${key}`, layer: "structure", pos: [sxp, top - 0.002, szp], size: [sw + 0.8, 0.012, sd], color: C.lawnEdge, delay: 0, grow: "fade", context: true, opacity: 0.6 });
+    // The lawn strip outside the kerb, 40 cm wide. At an outer corner the n/s strip runs on to
+    // cover the corner square and the e/w strip stops where it begins; at an inner corner of an L
+    // it's the other way round: both pull back by the same amount, so the e/w strip fills the
+    // corner and neither lies over the other wing's kerb (two translucent strips overlapping
+    // would z-fight).
+    const reach = horizontal ? ring + 0.4 : ring;
+    const sa = endOf(lo, -1, reach, reach);
+    const sb = endOf(hi, 1, reach, reach);
+    const [sx0, sz0, sw0, sd0] = box(out * (ring + 0.2 - kerbT / 2), 0.4);
+    const [sxp, szp] = horizontal ? [(sa + sb) / 2, sz0] : [sx0, (sa + sb) / 2];
+    const [sw, sd] = horizontal ? [sb - sa, sd0] : [sw0, sb - sa];
+    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35, finish: { kind: "soil" } });
+    parts.push({ id: `turf-${key}`, layer: "structure", pos: [sxp, top - 0.002, szp], size: [sw, 0.012, sd], color: C.lawnEdge, delay: 0, grow: "fade", context: true, opacity: 0.6 });
   });
 
   return {

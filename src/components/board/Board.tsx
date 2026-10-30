@@ -90,6 +90,7 @@ export default function Board(props: Props) {
             change={current ? board.change : undefined}
             ui={current ? ui : undefined}
             look={current ? board.quote?.look : undefined}
+            materials={current && board.quote && onChoose ? { choices: board.quote.choices, lines: board.quote.quote.lines, onChoose } : undefined}
           />
           </SceneBoundary>
         );

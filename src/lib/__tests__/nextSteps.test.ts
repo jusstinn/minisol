@@ -190,3 +190,45 @@ async function expectChipWorks(chip: NextStep, state: SessionState, board: Board
       if (chip.id.startsWith("look.")) expect(r.ui.some((u) => u.highlight === chip.id.slice(5)), chip.text).toBe(true);
   }
 }
+
+describe("laying-pattern chips", () => {
+  const change = (cards: Card[]) => cards.find((c): c is Extract<Card, { kind: "change" }> => c.kind === "change")?.change;
+  const quoteTotal = (cards: Card[]) => cards.find((c): c is Extract<Card, { kind: "quote" }> => c.kind === "quote")?.quote.total;
+
+  it("walks a deck from straight to diagonal to a frame, each with a priced change card", async () => {
+    const first = await run(PROJECT_STARTERS[0].promptRo, { basket: [] }, "ro");
+    let board = boardOf(first.cards);
+    let chip = nextSteps({ board, lang: "ro", lastCards: first.cards, max: 12 }).find((c) => c.id === "deck.boards")!;
+    expect(chip.text).toBe("Deck pe diagonală");
+    const diag = await run(chip.text, first.state, "ro");
+    const c1 = change(diag.cards)!;
+    expect(c1.totalBefore).toBe(quoteTotal(first.cards));
+    expect(c1.totalAfter).toBe(quoteTotal(diag.cards));
+    expect(c1.delta).toBeGreaterThan(0);
+    expect(c1.delta).toBeCloseTo(c1.totalAfter - c1.totalBefore, 2);
+    board = boardOf(diag.cards, board);
+    chip = nextSteps({ board, lang: "ro", lastCards: diag.cards, max: 12 }).find((c) => c.id === "deck.boards")!;
+    expect(chip.text).toBe("Deck cu ramă");
+    const framed = await run(chip.text, diag.state, "ro");
+    const layout = framed.state.project?.layout;
+    expect(layout?.type === "deck" ? layout.boards : undefined).toBe("frame");
+    expect(change(framed.cards)?.delta).toBeCloseTo(change(framed.cards)!.totalAfter - change(framed.cards)!.totalBefore, 2);
+  }, 60000);
+
+  it("suggests herringbone pavers, then basketweave, in both languages", async () => {
+    for (const lang of ["ro", "en"] as const) {
+      // A 12 m² patio: the extra 5% of herringbone is more than the rounding to whole packs.
+      const prompt = lang === "en" ? "Paved patio 4 × 3 m" : "Terasă din pavele 4 × 3 m";
+      const first = await run(prompt, { basket: [] }, lang, lang === "en" ? "WL-RO-309877" : "WL-RO-100231");
+      const chip = nextSteps({ board: boardOf(first.cards), lang, lastCards: first.cards, max: 12 }).find((c) => c.id === "paving.bond")!;
+      expect(chip.text).toBe(lang === "en" ? "Herringbone pavers" : "Pavele în spic");
+      const r = await run(chip.text, first.state, lang, lang === "en" ? "WL-RO-309877" : "WL-RO-100231");
+      const layout = r.state.project?.layout;
+      expect(layout?.type === "paving" ? layout.bond : undefined).toBe("herringbone");
+      // Herringbone wastes more pavers than a running bond: the change card shows a higher total.
+      expect(change(r.cards)!.delta).toBeGreaterThan(0);
+      const next = nextSteps({ board: boardOf(r.cards, boardOf(first.cards)), lang, lastCards: r.cards, max: 12 }).find((c) => c.id === "paving.bond")!;
+      expect(next.text).toBe(lang === "en" ? "Basketweave pavers" : "Pavele în coș");
+    }
+  }, 60000);
+});

@@ -47,7 +47,28 @@ export interface NextStepsInput {
   max?: number;
 }
 
-const MAX_PER_KIND: Record<NextStepKind, number> = { fix: 2, shape: 2, look: 1, basket: 2, money: 2, info: 1 };
+const MAX_PER_KIND: Record<NextStepKind, number> = { fix: 2, shape: 2, look: 2, basket: 2, money: 2, info: 1 };
+
+/**
+ * The laying pattern worth trying next (it changes the drawing and the quantities): a plain deck
+ * goes diagonal, a diagonal one gets a frame, a framed one goes back to straight; running-bond
+ * pavers go herringbone, herringbone ones basketweave, the others herringbone.
+ */
+function patternStep(layout: Layout | undefined, lang: Lang): NextStep | undefined {
+  const en = lang === "en";
+  if (layout?.type === "deck") {
+    const now = layout.boards ?? "straight";
+    if (now === "straight") return { id: "deck.boards", kind: "look", text: en ? "Diagonal deck boards" : "Deck pe diagonală" };
+    if (now === "diagonal") return { id: "deck.boards", kind: "look", text: en ? "Add a picture-frame border" : "Deck cu ramă" };
+    return { id: "deck.boards", kind: "look", text: en ? "Straight deck boards" : "Deck montat drept" };
+  }
+  if (layout?.type === "paving") {
+    const now = layout.bond ?? "running";
+    if (now === "herringbone") return { id: "paving.bond", kind: "look", text: en ? "Basketweave pavers" : "Pavele în coș" };
+    return { id: "paving.bond", kind: "look", text: en ? "Herringbone pavers" : "Pavele în spic" };
+  }
+  return undefined;
+}
 
 /** Keep chip text short: numbers the way the customer would type them. */
 const n = (v: number, lang: Lang) => (lang === "en" ? String(v) : String(v).replace(".", ","));
@@ -279,6 +300,8 @@ export function nextSteps({ board, lang, lastCards = [], asked = [], sketchMode 
     } else if (look) {
       candidates.push({ id: `look.${look.role}`, kind: "look", text: en ? look.en : look.ro });
     }
+    const pattern = patternStep(project.layout, lang);
+    if (pattern && (sketchMode !== "on_demand" || project.sketched)) candidates.push(pattern);
   }
   if (shapes[1]) candidates.push(shapes[1]);
 

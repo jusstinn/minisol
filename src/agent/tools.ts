@@ -9,6 +9,7 @@ import type { CalculationResult, ProjectType } from "@/domain/calculators";
 import { FURNISHINGS, ITEMS, ITEM_KINDS, lowerFirst } from "@/domain/items";
 import { SIDES, SketchEditError, applyOps, defaultLayout, describeLayout, fenceSegments, isZoned, layoutParams } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
+import { DECK_BOARD_LAYOUTS, PAVING_BONDS } from "@/domain/patterns";
 import { distanceKm } from "@/domain/geo";
 import { LOYALTY } from "@/domain/loyalty";
 import { eligibleOffers } from "@/domain/offers";
@@ -93,7 +94,17 @@ export const PARAM_FIELDS: Record<string, Record<string, unknown>> = {
   mode: { type: "string", enum: ["new", "overseed"] },
   use: { type: "string", enum: ["path", "patio", "driveway"], description: "Paving: what the surface carries (driveway = cars)" },
   edging: { type: "boolean", description: "Paving: kerbs along the outline" },
+  bond: { type: "string", enum: [...PAVING_BONDS], description: "Paving: how the pavers are laid (running = offset rows, today's default)" },
+  boards: { type: "string", enum: [...DECK_BOARD_LAYOUTS], description: "Deck: how the boards are laid (straight, diagonal at 45°, frame = picture-frame border)" },
 };
+
+/** Every key `edit_sketch` / `set_option` understands, with the values each takes. */
+export const SET_OPTION_KEYS = [
+  "base", "direction", "boards", "pattern", "subfloor", "ceiling", "coats", "surface", "floor", "largeFormat", "insulation", "doubleLayer", "mode", "use", "edging", "bond",
+] as const;
+const SET_OPTION_DOC =
+  "set_option key/value: base (soil|gravel|concrete_slab), direction (x|z), boards (deck laying: straight|diagonal|frame), pattern (laminate: straight|diagonal), subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode (lawn: new|overseed); " +
+  "paving: use (path|patio|driveway), edging (true|false), bond (paver pattern: running|herringbone|basketweave|stack)";
 
 export const TOOL_DEFINITIONS = [
   {
@@ -143,7 +154,7 @@ export const TOOL_DEFINITIONS = [
       "Change the shape of the current project's sketch — the materials, quantities and price are recalculated from it, keeping the products the customer already chose. " +
       "Use for: resizing (resize), L/U shapes (add_zone attaches a rectangle to a side of an existing zone; remove_zone), deck height (set_height, metres) and steps (add_steps / remove_steps; count defaults to height ÷ 17 cm), " +
       "doors/windows/gates (add_opening / move_opening / remove_opening; fence gates: width 1 = pedestrian, 3 = driveway, on a segment index), fence corners (add_fence_segment with turn left/right/straight; set_segment_length; remove_fence_segment), " +
-      "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (set_option key/value: base, direction, pattern, subfloor, ceiling, coats, surface, floor, largeFormat, insulation, doubleLayer, mode; paving: use path/patio/driveway, edging true/false). " +
+      "wall-tile height per wall (set_wall_tiles, wall n/e/s/w or all, value in m; 0 = none), and options (" + SET_OPTION_DOC + "). The pattern options change the quantities and the drawing: herringbone ~10% spare pavers, basketweave ~7%, running/stack ~5%; a diagonal deck needs ~10% more boards and joists at 30 cm, a picture-frame deck adds border boards. " +
       "Place fixtures, lights and furniture where the customer says with add_item (item + one of: wall n/e/s/w with pos 0..1, near door/window/gate/steps/<item>, corner, or nothing = middle); move_item, rotate_item, remove_item by id or item kind. Items the store sells (WC, washbasin, shower, bathtub, mirror, towel radiator, lights, garden set, BBQ, planter, lounger, parasol) are added to the list automatically; sofas, beds etc. are drawn for context only. " +
       "undo reverts the last sketch change (alone, nothing else in the same call). Sides/walls: n = back, s = front, e = right, w = left as seen in the sketch. Zone ids and segment indexes are in the state section of your instructions. Set unused fields to null. Several edits can be sent at once.",
     strict: true,
@@ -172,7 +183,7 @@ export const TOOL_DEFINITIONS = [
               width: { type: ["number", "null"], description: "Width in m of steps, door, window or gate" },
               count: { type: ["integer", "null"], description: "Number of steps" },
               value: { type: ["number", "null"], description: "set_height (m above ground for decks; m for rooms/walls/fences), set_wall_tiles (m)" },
-              option: { type: ["string", "null"], description: "set_option value, e.g. \"gravel\", \"diagonal\", \"true\", \"3\"" },
+              option: { type: ["string", "null"], description: "set_option value, e.g. \"gravel\", \"diagonal\", \"frame\", \"herringbone\", \"basketweave\", \"true\", \"3\"" },
               kind: { type: ["string", "null"], enum: ["door", "window", "gate", null] },
               wall: { type: ["string", "null"], description: "Wall n/e/s/w (or 'all' for set_wall_tiles)" },
               pos: { type: ["number", "null"], description: "Position along the wall/segment, 0..1 (0.5 = middle)" },
@@ -180,7 +191,7 @@ export const TOOL_DEFINITIONS = [
               segment: { type: ["integer", "null"], description: "Fence segment index (0 = first)" },
               length: { type: ["number", "null"], description: "Fence segment length in m" },
               turn: { type: ["string", "null"], enum: ["left", "right", "straight", null] },
-              key: { type: ["string", "null"], description: "set_option key" },
+              key: { type: ["string", "null"], enum: [...SET_OPTION_KEYS, null], description: "set_option key" },
               item: { type: ["string", "null"], enum: [...ITEM_KINDS, null], description: "add_item/move_item/rotate_item/remove_item: what (for move/rotate/remove: id or kind)" },
               near: { type: ["string", "null"], description: "Place next to: door, window, gate, steps, or an item kind (e.g. sink)" },
               corner: { type: ["string", "null"], enum: ["ne", "nw", "se", "sw", null], description: "Place in a corner (n = back, s = front, e = right, w = left)" },

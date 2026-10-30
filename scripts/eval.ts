@@ -25,6 +25,8 @@ interface Scenario {
   expectCards?: Card["kind"][];
   expectText?: RegExp;
   forbidTools?: boolean;
+  /** Layout options the sketch must end up with (laying patterns: bond, boards). */
+  expectLayout?: Record<string, string>;
 }
 
 const SCENARIOS: Scenario[] = [
@@ -34,6 +36,8 @@ const SCENARIOS: Scenario[] = [
   { id: "fence-ro", member: "WL-RO-204518", lang: "ro", message: "Am nevoie de un gard din panouri de 20 m lungime, 1,8 m înălțime.", expectCards: ["project", "quote", "plan"] },
   { id: "lawn-ro", member: "WL-RO-204518", lang: "ro", message: "Vreau gazon nou pe 80 mp în spatele casei.", expectCards: ["project", "quote", "plan"] },
   { id: "paving-ro", member: "WL-RO-100231", lang: "ro", message: "Vreau o alee din pavele de 6 x 1,2 m prin grădină, cu borduri pe margini.", expectCards: ["project", "quote", "plan"] },
+  { id: "paving-herringbone-ro", member: "WL-RO-204518", lang: "ro", message: "Vreau o terasă din pavele de 4 x 3 m, cu pavelele în spic.", expectCards: ["project", "quote", "plan"], expectLayout: { bond: "herringbone" } },
+  { id: "deck-diagonal-en", member: "WL-RO-309877", lang: "en", message: "I'd like a 4 x 3 m wooden deck on the ground with diagonal boards and a picture-frame border.", expectCards: ["project", "quote", "plan"], expectLayout: { boards: "frame" } },
   { id: "laminate-noconsent", member: "WL-RO-411902", lang: "ro", message: "Vreau parchet laminat în living, 5 x 4 m, pe șapă de beton.", expectCards: ["project", "quote", "plan"] },
   { id: "vague-en", member: "WL-RO-309877", lang: "en", message: "I want to put new floors in my flat", expectText: /\b(dimension|size|m²|metres|meters|how big|length|width)\b/i },
   { id: "electric-ro", member: "WL-RO-100231", lang: "ro", message: "Vreau să mut priza din baie și să trag un circuit nou pentru boiler.", expectText: /(electrician|autorizat|specialist|profesionist)/i },
@@ -93,6 +97,10 @@ async function main() {
     if (fellBack) problems.push("the model failed — the offline fallback answered");
     for (const k of sc.expectCards ?? []) if (!cards.some((c) => c.kind === k)) problems.push(`missing card ${k}`);
     if (sc.expectText && !sc.expectText.test(text)) problems.push(`text does not match ${sc.expectText}`);
+    if (sc.expectLayout) {
+      const layout = [...cards].reverse().find((c): c is Extract<Card, { kind: "project" }> => c.kind === "project")?.project.layout as Record<string, unknown> | undefined;
+      for (const [k, v] of Object.entries(sc.expectLayout)) if (layout?.[k] !== v) problems.push(`layout ${k} is ${String(layout?.[k])}, expected ${v}`);
+    }
     if (sc.forbidTools && tools > 1) problems.push(`used ${tools} tools on an off-topic request`);
     if (sc.lang === "ro" && text && !/[ăâîșț]/i.test(text)) problems.push("reply is not Romanian");
     if (sc.lang === "en" && /[ăâîșț]/i.test(text.replace(/\b(Timișoara|București|Cluj-Napoca|Brașov|Constanța|Balotești)\b/g, ""))) problems.push("reply is not English");

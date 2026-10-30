@@ -294,6 +294,7 @@ export function MobilePanels(props: MobilePanelsProps) {
                 look={board.quote?.look}
                 lite={lite}
                 paused={tabs.tab !== "sketch"}
+                materials={board.quote && onChoose ? { choices: board.quote.choices, lines: board.quote.quote.lines, onChoose } : undefined}
               />
             </div>
             <AnimatePresence>{agentChange && <ChangeCard key={agentChange.id} change={agentChange.change} lang={lang} onClose={() => setDismissed(agentChange.id)} />}</AnimatePresence>

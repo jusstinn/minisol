@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Vec3 } from "../builders";
+import { area2, boundsOf, parsePrism } from "./prism";
+import type { PrismShape } from "./prism";
 import { BEVEL_RADIUS, isBevelShape } from "./shapes";
 import type { ShapeKind } from "./shapes";
 
@@ -93,7 +95,70 @@ function buildBladeGeometry(): THREE.BufferGeometry {
 
 export const UNIT_BLADE: THREE.BufferGeometry = buildBladeGeometry();
 
-const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "slats">, THREE.BufferGeometry> = {
+const prismCache = new Map<string, THREE.BufferGeometry>();
+
+/**
+ * A flat board with a convex outline (see `prism.ts`), unit-sized like the other shapes: the
+ * outline's bounding box is the -0.5..0.5 square and the thickness the -0.5..0.5 height, so
+ * `Scene.tsx`'s `mesh.scale.set(w, h, d)` (the part's bounding box) brings it to its real size
+ * and the build/edit animations work unchanged. Texture coordinates follow the grain direction
+ * (u along the board, v across it), each 0..1 over the outline, so the wood runs along a diagonal
+ * board and across the mitre of a frame board. Flat-shaded, one cached geometry per distinct outline.
+ */
+export function prismGeometryFor(shape: PrismShape): THREE.BufferGeometry {
+  const cached = prismCache.get(shape);
+  if (cached) return cached;
+  const spec = parsePrism(shape);
+  if (!spec) {
+    prismCache.set(shape, UNIT_BOX);
+    return UNIT_BOX;
+  }
+  const b = boundsOf(spec.points);
+  const w = Math.max(b.width, 1e-4);
+  const d = Math.max(b.depth, 1e-4);
+  // Clockwise seen from above (+y): the top fan then faces up and the sides face outwards.
+  const outline = spec.points.map(([x, z]) => [(x - b.cx) / w, (z - b.cz) / d] as [number, number]);
+  if (area2(outline) > 0) outline.reverse();
+  const gx = Math.cos(spec.grain);
+  const gz = Math.sin(spec.grain);
+  // Grain frame in the real (unscaled) outline, to get UVs that stay square on the board.
+  const real = outline.map(([x, z]) => [x * w, z * d] as [number, number]);
+  const us = real.map(([x, z]) => x * gx + z * gz);
+  const vs = real.map(([x, z]) => -x * gz + z * gx);
+  const [u0, u1, v0, v1] = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+  const uvOf = (i: number): [number, number] => [(us[i] - u0) / Math.max(u1 - u0, 1e-6), (vs[i] - v0) / Math.max(v1 - v0, 1e-6)];
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const tri = (a: [number, number, number], ia: number, bb: [number, number, number], ib: number, c: [number, number, number], ic: number) => {
+    pos.push(...a, ...bb, ...c);
+    uv.push(...uvOf(ia), ...uvOf(ib), ...uvOf(ic));
+  };
+  const n = outline.length;
+  const at = (i: number, y: number): [number, number, number] => [outline[i][0], y, outline[i][1]];
+  for (let i = 1; i < n - 1; i++) {
+    tri(at(0, 0.5), 0, at(i, 0.5), i, at(i + 1, 0.5), i + 1); // top
+    tri(at(0, -0.5), 0, at(i + 1, -0.5), i + 1, at(i, -0.5), i); // bottom
+  }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    tri(at(i, -0.5), i, at(j, -0.5), j, at(j, 0.5), j);
+    tri(at(i, -0.5), i, at(j, 0.5), j, at(i, 0.5), i);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  prismCache.set(shape, geo);
+  return geo;
+}
+
+/** Test/diagnostic hook: how many distinct prism geometries are cached. */
+export function prismCacheSize(): number {
+  return prismCache.size;
+}
+
+const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "slats" | PrismShape>, THREE.BufferGeometry> = {
   box: UNIT_BOX,
   pedestal: UNIT_PEDESTAL,
   postCap: UNIT_POST_CAP,
@@ -104,8 +169,11 @@ const UNIT_SHAPES: Record<Exclude<ShapeKind, "bevelFlat" | "bevelTile" | "bevelS
 
 /** The shared unit geometry for a non-bevel shape (bevels are built to real size — see below). */
 export function unitGeometryFor(shape: ShapeKind): THREE.BufferGeometry {
+  if (isPrismKind(shape)) return prismGeometryFor(shape);
   return isBevelShape(shape) || shape === "slats" ? UNIT_BOX : UNIT_SHAPES[shape];
 }
+
+const isPrismKind = (shape: ShapeKind): shape is PrismShape => shape.startsWith("prism:");
 
 const bevelCache = new Map<string, THREE.BufferGeometry>();
 

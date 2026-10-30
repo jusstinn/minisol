@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Card, ProjectSnapshot } from "@/agent/types";
+import type { Card, ProjectSnapshot, SessionState } from "@/agent/types";
 import type { Tenant } from "@/config/tenant";
 import { exposedEdges, fenceSegments } from "@/domain/layout";
 import type { Layout, SketchOp } from "@/domain/layout";
@@ -15,6 +15,7 @@ import { dec, unitText } from "@/lib/format";
 import { tr } from "@/lib/i18n";
 import type { UiSignal } from "@/lib/useAgent";
 import type { LiteGraphics } from "@/lib/useLiteGraphics";
+import ArMenu from "../blueprint/ArMenu";
 import { buildScene } from "../blueprint/builders";
 import CameraMenu from "../blueprint/CameraMenu";
 import { CAMERA_PRESETS } from "../blueprint/cameraPresets";
@@ -28,6 +29,8 @@ import { useUploads } from "../blueprint/uploads/useUploads";
 import { IconClock, IconClose, IconCube, IconGrid, IconLayers, IconPencil, IconReplay, IconRotate, IconSun, IconUndo, IconUsers, IconWarn } from "../ui/icons";
 import ChangeCard, { Rolling, signed } from "./ChangeCard";
 import SceneBoundary from "../blueprint/SceneBoundary";
+import MaterialsPicker from "./MaterialsPicker";
+import type { MaterialsControls } from "./MaterialsPicker";
 import { useSketchMode } from "../workspace/NextStepChips";
 
 const Scene = dynamic(() => import("../blueprint/Scene"), {
@@ -44,6 +47,8 @@ export interface SketchControls {
   error: string | null;
   clearError: () => void;
   canUndo: boolean;
+  /** The session as it is now (basket, store, quality) — what "AR on the phone" sends in its QR. */
+  getState?: () => SessionState;
 }
 
 
@@ -61,6 +66,7 @@ export default function BlueprintPanel({
   lite,
   paused,
   location,
+  materials,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -80,6 +86,8 @@ export default function BlueprintPanel({
   paused?: boolean;
   /** Where the "Simulare" sun scrubber computes solar position for (defaults to Bucharest). */
   location?: Location;
+  /** The list's per-job options, for the "Materiale" swatches in the toolbar. */
+  materials?: MaterialsControls;
 }) {
   const sketchMode = useSketchMode(tenant);
   const wantsSketch = Boolean(ui && (ui.command.view || ui.command.editor || ui.command.highlight || ui.command.replay || ui.command.panel === "sketch"));
@@ -108,6 +116,7 @@ export default function BlueprintPanel({
       lite={lite}
       paused={paused}
       location={location}
+      materials={materials}
     />
   );
 }
@@ -126,6 +135,7 @@ function SketchView({
   lite,
   paused,
   location = DEFAULT_LOCATION,
+  materials,
 }: {
   project: ProjectSnapshot;
   tenant: Tenant;
@@ -140,6 +150,7 @@ function SketchView({
   lite?: LiteGraphics;
   paused?: boolean;
   location?: Location;
+  materials?: MaterialsControls;
 }) {
   const en = lang === "en";
   const [mode, setMode] = useState<ViewMode>("blueprint");
@@ -441,6 +452,7 @@ function SketchView({
               <span className={inline ? "sr-only" : "hidden @6xl:inline"}>{tr("simulate", lang)}</span>
             </button>
             {up.button}
+            {materials && <MaterialsPicker {...materials} lang={lang} dark={dark} sheet={Boolean(inline)} />}
             <CameraMenu preset={cam.preset} onChoose={chooseCamera} dark={dark} lang={lang} />
             <PhotoRenderButton
               captureRef={captureRef}
@@ -459,6 +471,7 @@ function SketchView({
                 .map((d) => d.label)
                 .join(" × ")}
             />
+            {!inline && <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} getState={sketch?.getState} />}
             <RoundBtn dark={dark} onClick={() => setReplay((r) => r + 1)} title={en ? "Replay the build" : "Reia construcția"}>
               <IconReplay size={15} />
             </RoundBtn>
@@ -466,6 +479,12 @@ function SketchView({
               <IconRotate size={15} />
             </RoundBtn>
           </div>
+          {/* Phones: the row above already runs into the title, so AR gets the next row (left of the upload button). */}
+          {inline && (
+            <div className={canEdit ? "mr-[38px]" : ""}>
+              <ArMenu build={build} project={project} tenant={tenant} lang={lang} dark={dark} inline getState={sketch?.getState} />
+            </div>
+          )}
         </div>
 
         {/* what the last edit did to the 3D model */}

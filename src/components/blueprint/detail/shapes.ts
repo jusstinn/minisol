@@ -1,4 +1,5 @@
 import type { Part } from "../builders";
+import type { PrismShape } from "./prism";
 
 /**
  * How a part's own geometry looks in the REAL view, beyond a plain box — pure classification
@@ -12,7 +13,7 @@ import type { Part } from "../builders";
  * to a drawing that's supposed to read as construction lines, not a rendered product.
  */
 
-export type ShapeKind = "box" | "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "slats" | "pedestal" | "postCap" | "cylinder" | "cone" | "sphere";
+export type ShapeKind = "box" | "bevelFlat" | "bevelTile" | "bevelSoft" | "bevelCrisp" | "slats" | "pedestal" | "postCap" | "cylinder" | "cone" | "sphere" | PrismShape;
 
 const BEVEL_SHAPES: ReadonlySet<ShapeKind> = new Set(["bevelFlat", "bevelTile", "bevelSoft", "bevelCrisp"]);
 
