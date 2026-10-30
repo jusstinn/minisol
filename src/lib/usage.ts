@@ -59,6 +59,10 @@ export const USAGE_EVENTS = {
   budget_fit: { fit: e(["fits", "tier", "lean", "smaller", "over"]), applied: flag },
   /** "Randare foto": a high-resolution REAL-view PNG exported from the sketch. */
   render_exported: {},
+  /** The sketch's AR: started on a phone that can do it (ios Quick Look, android WebXR), or, on a computer, the QR that sends it to one. */
+  ar_opened: { platform: e(["ios", "android", "desktop"]) },
+  /** The 3D model (.glb) downloaded for a contractor or to keep. */
+  model_downloaded: {},
 } satisfies Record<string, Record<string, Prop>>;
 
 export type UsageName = keyof typeof USAGE_EVENTS;
