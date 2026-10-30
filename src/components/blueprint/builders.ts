@@ -258,7 +258,13 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
     const run = alongX ? z.w : z.d;
     const across = alongX ? z.d : z.w;
     const grid = pedestalGrid(run, across, { pitchAlong: DECK_JOIST_SPACING[boards] });
-    grid.points.forEach(({ i, j, u, v }, k) => {
+    // The edge supports and joists sit just inside the outline, under the boards' ends — not
+    // centred on it, half poking out past the deck (seen from above as bumps along the edge).
+    const supR = 0.05;
+    const inside = (t: number, len: number, r: number) => Math.min(Math.max(t, r), Math.max(r, len - r));
+    grid.points.forEach(({ i, j, u: u0, v: v0 }, k) => {
+      const u = inside(u0, run, supR);
+      const v = inside(v0, across, supR);
       const [px, pz] = alongX ? [z.x + u, z.z + v] : [z.x + v, z.z + u];
       parts.push({
         id: `${z.id}-sup-${i}-${j}`,
@@ -271,7 +277,8 @@ function deck(l: Extract<Layout, { type: "deck" }>, lang: Lang, look: Look): Bui
         finish: { kind: "metal" },
       });
     });
-    const joistPart = (id: string, u: number, delay: number): Part => {
+    const joistPart = (id: string, u0: number, delay: number): Part => {
+      const u = inside(u0, run, joistW / 2);
       const jp: Vec3 = alongX ? [z.x + u, supH + joistH / 2, z.z + across / 2] : [z.x + across / 2, supH + joistH / 2, z.z + u];
       return { id, layer: "deck_joist", pos: jp, size: alongX ? [joistW, joistH, across] : [across, joistH, joistW], color: joistColor, delay, grow: "drop", finish: joistFinish };
     };
@@ -569,7 +576,8 @@ function laminate(l: Extract<Layout, { type: "laminate_floor" }>, lang: Lang, lo
     }
   });
   // Skirting along the outline, transition profiles at doorways.
-  exposedEdges(l.zones).forEach((e, i) => {
+  const edges = exposedEdges(l.zones);
+  edges.forEach((e, i) => {
     const horizontal = e.side === "n" || e.side === "s";
     const len = horizontal ? Math.abs(e.x2 - e.x1) : Math.abs(e.z2 - e.z1);
     const inset = e.side === "n" || e.side === "w" ? 0.008 : -0.008;
@@ -907,15 +915,22 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
   const inside = (x: number, zz: number) => l.zones.some((z) => x > z.x + 1e-6 && x < z.x + z.w - 1e-6 && zz > z.z + 1e-6 && zz < z.z + z.d - 1e-6);
   const ring = l.edging ? kerbT + 0.05 : 0;
   const bedH = Math.max(0.05, top + 0.01 - kerbH);
-  exposedEdges(l.zones).forEach((e, i) => {
+  const edges = exposedEdges(l.zones);
+  edges.forEach((e, i) => {
     const horizontal = e.side === "n" || e.side === "s";
     const out = e.side === "n" || e.side === "w" ? -1 : 1;
     const [lo, hi] = horizontal ? [Math.min(e.x1, e.x2), Math.max(e.x1, e.x2)] : [Math.min(e.z1, e.z2), Math.max(e.z1, e.z2)];
     const line = (horizontal ? e.z1 : e.x1) + (out * kerbT) / 2;
     // Close outer corners (the kerb runs on past the end); stop at inner corners of an L.
     const at = (u: number) => (horizontal ? inside(u, line) : inside(line, u));
-    const a = at(lo - kerbT / 2) ? lo : lo - kerbT;
-    const b = at(hi + kerbT / 2) ? hi : hi + kerbT;
+    // Two zones flush on one side give two edges in a line: they just meet, end to end.
+    const continued = (u: number) =>
+      edges.some((o) => o !== e && o.side === e.side && Math.abs((horizontal ? o.z1 : o.x1) - (horizontal ? e.z1 : e.x1)) < 1e-6 && [o.x1, o.x2, o.z1, o.z2].some((v, k) => (horizontal ? k < 2 : k >= 2) && Math.abs(v - u) < 1e-6));
+    const endOf = (u: number, dir: -1 | 1, reach: number, inner: number) => (continued(u) ? u : at(u + (dir * kerbT) / 2) ? u - dir * inner : u + dir * reach);
+    // Corners: the n/s kerb fills the corner block, the e/w one butts against it — stopping short
+    // of an outer corner, pulling back at an inner one (two kerbs in one block would z-fight).
+    const a = endOf(lo, -1, horizontal ? kerbT : 0, horizontal ? 0 : kerbT);
+    const b = endOf(hi, 1, horizontal ? kerbT : 0, horizontal ? 0 : kerbT);
     const len = b - a;
     const mid = (a + b) / 2;
     const key = `${e.side}-${Math.round(e.x1 * 100)}-${Math.round(e.z1 * 100)}`;
@@ -926,9 +941,19 @@ function paving(l: Extract<Layout, { type: "paving" }>, lang: Lang, look: Look):
       const [bx, bz, bw, bd] = box((out * 0.03), kerbT + 0.08);
       parts.push({ id: `bed-${key}`, layer: "kerb_concrete", pos: [bx, (0.006 + bedH) / 2, bz], size: [bw, bedH - 0.006, bd], color: C.concrete, delay: 3.1 + i * 0.06, grow: "rise", finish: { kind: "concrete" } });
     }
-    const [sxp, szp, sw, sd] = box(out * (ring + 0.2 - kerbT / 2), 0.4);
-    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw + 0.8, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35, finish: { kind: "soil" } });
-    parts.push({ id: `turf-${key}`, layer: "structure", pos: [sxp, top - 0.002, szp], size: [sw + 0.8, 0.012, sd], color: C.lawnEdge, delay: 0, grow: "fade", context: true, opacity: 0.6 });
+    // The lawn strip outside the kerb, 40 cm wide. At an outer corner the n/s strip runs on to
+    // cover the corner square and the e/w strip stops where it begins; at an inner corner of an L
+    // it's the other way round: both pull back by the same amount, so the e/w strip fills the
+    // corner and neither lies over the other wing's kerb (two translucent strips overlapping
+    // would z-fight).
+    const reach = horizontal ? ring + 0.4 : ring;
+    const sa = endOf(lo, -1, reach, reach);
+    const sb = endOf(hi, 1, reach, reach);
+    const [sx0, sz0, sw0, sd0] = box(out * (ring + 0.2 - kerbT / 2), 0.4);
+    const [sxp, szp] = horizontal ? [(sa + sb) / 2, sz0] : [sx0, (sa + sb) / 2];
+    const [sw, sd] = horizontal ? [sb - sa, sd0] : [sw0, sb - sa];
+    parts.push({ id: `soil-${key}`, layer: "structure", pos: [sxp, top / 2 - 0.004, szp], size: [sw, top - 0.008, sd], color: C.soil, delay: 0, grow: "fade", context: true, opacity: 0.35, finish: { kind: "soil" } });
+    parts.push({ id: `turf-${key}`, layer: "structure", pos: [sxp, top - 0.002, szp], size: [sw, 0.012, sd], color: C.lawnEdge, delay: 0, grow: "fade", context: true, opacity: 0.6 });
   });
 
   return {

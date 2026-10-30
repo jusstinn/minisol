@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyOps, defaultLayout } from "@/domain/layout";
-import type { Layout } from "@/domain/layout";
+import type { Layout, SketchOp } from "@/domain/layout";
 import { PAVING_BONDS } from "@/domain/patterns";
 import type { Look } from "@/domain/look";
 import { buildLayout } from "../builders";
@@ -101,6 +101,40 @@ describe("paving(): every bond draws pavers that fill the outline without overla
       expect(n).toBeLessThan(900);
       expect(n).toBeGreaterThan(300);
     }
+  });
+});
+
+describe("paving(): the lawn strips around the outline", () => {
+  const strips = (l: Layout) => buildLayout(l, "ro").parts.filter((p) => p.id.startsWith("turf-"));
+  const cases: [string, Layout][] = [
+    ["path with edging", paving()],
+    ["patio without edging", set(defaultLayout("paving", { lengthM: 4, widthM: 3 }), "edging", "false")],
+    ["L-shaped path", applyOps(paving(), [{ op: "add_zone", side: "e", w: 1.2, d: 3, align: "end" } as SketchOp]).layout],
+  ];
+  it.each(cases)("%s: never laid over a paver, never overlapping each other", (_, l) => {
+    const zones = zoneRects(l);
+    const turf = strips(l);
+    expect(turf.length).toBeGreaterThanOrEqual(4);
+    for (const t of turf) {
+      const r = rectOf(t);
+      for (const z of zones) {
+        const dx = Math.min(r.x1, z.x1) - Math.max(r.x0, z.x0);
+        const dz = Math.min(r.z1, z.z1) - Math.max(r.z0, z.z0);
+        expect(dx > 1e-6 && dz > 1e-6, `${t.id} over the paving`).toBe(false);
+      }
+    }
+    for (let i = 0; i < turf.length; i++) for (let j = i + 1; j < turf.length; j++) expect(boxOverlap(turf[i], turf[j]), `${turf[i].id} × ${turf[j].id}`).toBeLessThan(1e-6);
+    // The kerbs meet end to end (two zones flush on one side) or at a corner, never doubled up.
+    const kerbs = partsOf(l, "paving_edging");
+    for (let i = 0; i < kerbs.length; i++) for (let j = i + 1; j < kerbs.length; j++) expect(boxOverlap(kerbs[i], kerbs[j]), `${kerbs[i].id} × ${kerbs[j].id}`).toBeLessThan(1e-6);
+  });
+});
+
+describe("deck(): the substructure stays under the boards", () => {
+  it.each(["straight", "diagonal", "frame"])("%s: no support or joist pokes out past the deck", (boards) => {
+    const l = set(deck(), "boards", boards);
+    const zones = zoneRects(l);
+    for (const layer of ["deck_support", "deck_joist"]) for (const p of partsOf(l, layer)) expect(within(rectOf(p), zones), `${p.id}`).toBe(true);
   });
 });
 
